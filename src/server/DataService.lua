@@ -1,0 +1,602 @@
+--!strict
+-- DataService: perfil persistente do jogador (schema v2).
+-- Garantias: retentativas com backoff, trava de sessão (um servidor por jogador), migração por reconcile,
+-- histórico de transações limitado, salvamento só quando houve mudança (ou para renovar a trava),
+-- liberação da trava ao sair, BindToClose paralelo. Em falha de leitura fora do Studio o jogador é expulso
+-- (nunca cria perfil padrão que sobrescreveria dados existentes).
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local DataStoreService = game:GetService("DataStoreService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Config = require(ReplicatedStorage.Shared.Config)
+local Catalog = require(ReplicatedStorage.Shared.Catalog)
+local CustomerRules = require(ReplicatedStorage.Shared.CustomerRules)
+
+local DataService = {}
+
+local SCHEMA_VERSION = 2
+local MAX_ATTEMPTS = 4
+local LOCK_TIMEOUT = 360 -- s; maior que 2 autosaves, para um servidor que caiu não prender o jogador para sempre
+local LOCK_WAIT_STEP = 3
+local LOCK_WAIT_MAX = 20 -- s esperando outro servidor liberar a trava (ajustável só em testes)
+local MAX_TRANSACTIONS = 50
+local MAX_ORDER_HISTORY = 30
+
+local Profiles: { [number]: any } = {}
+local Dirty: { [number]: boolean } = {}
+local Saving: { [number]: boolean } = {}
+local Removing: { [number]: boolean } = {} -- saída em andamento (grava e solta a trava); Load e BindToClose esperam
+local Store: any = nil
+local JobId: string = game.JobId ~= "" and game.JobId or "studio"
+local MemoryMode = false
+
+-- Inicialização do DataStore: falha em place não publicado. No Studio cai para modo memória (avisado).
+local function initStore()
+	local ok, result = pcall(function()
+		-- No Studio (mesmo com API Services ligado) usa uma chave de TESTE: nunca toca os perfis de produção.
+		return DataStoreService:GetDataStore(RunService:IsStudio() and (Config.DataStoreName .. "_STUDIO") or Config.DataStoreName)
+	end)
+	if ok then
+		Store = result
+		MemoryMode = false
+	else
+		Store = nil
+		MemoryMode = RunService:IsStudio()
+		warn("[DataService] DataStore indisponível:", result)
+		if MemoryMode then
+			warn("[DataService] MODO MEMÓRIA (Studio): progresso NÃO será salvo. Publique o place e habilite API Services.")
+		end
+	end
+end
+initStore()
+
+local function deepClone(value: any): any
+	if type(value) ~= "table" then
+		return value
+	end
+	local copy = {}
+	for k, v in pairs(value) do
+		copy[k] = deepClone(v)
+	end
+	return copy
+end
+
+local function makeDefaultData(): any
+	local skills = {}
+	for _, specialization in ipairs(Catalog.Specializations) do
+		skills[specialization] = 0
+	end
+	return {
+		SchemaVersion = SCHEMA_VERSION,
+		Coins = Config.StartingCoins,
+		Reputation = Config.StartingReputation,
+		SkillXP = skills,
+		Equipment = { BasicToolset = true },
+		Parts = { TirePatch = 3, Battery = 1, Fuse = 2 }, -- estoque inicial para os primeiros serviços
+		Transactions = {},
+		TotalEarned = 0,
+		PriceMultiplier = 1, -- preço da oficina em relação à tabela (0.7 a 1.5)
+		RatingCount = 0, -- avaliações recebidas dos clientes (1 a 5 estrelas)
+		RatingSum = 0,
+		RecentRatings = {}, -- últimas 10: { Stars, Service, At, CommentKey, Customer }
+		OrderHistory = {}, -- últimos serviços concluídos: { At, Vehicle, Customer, Service, Price, Stars }
+		Onboarding = { Done = false }, -- guia do 1º atendimento (servidor decide; salvo por jogador)
+	}
+end
+
+-- Completa campos ausentes, corrige tipos e migra versões antigas. Nunca descarta dados válidos.
+local function reconcile(data: any): any
+	local defaults = makeDefaultData()
+	if type(data) ~= "table" then
+		return defaults
+	end
+	if data.Onboarding == nil and ((type(data.RatingCount) == "number" and data.RatingCount > 0) or (type(data.TotalEarned) == "number" and data.TotalEarned > 0)) then
+		data.Onboarding = { Done = true } -- perfil antigo que já atendeu clientes não precisa do guia
+	end
+	for key, value in pairs(defaults) do
+		if data[key] == nil then
+			data[key] = value
+		end
+	end
+	if type(data.Coins) ~= "number" or data.Coins ~= data.Coins then
+		data.Coins = defaults.Coins
+	end
+	if type(data.Reputation) ~= "number" or data.Reputation ~= data.Reputation or data.Reputation == math.huge or data.Reputation == -math.huge then
+		data.Reputation = defaults.Reputation
+	end
+	if type(data.TotalEarned) ~= "number" or data.TotalEarned ~= data.TotalEarned or data.TotalEarned < 0 or data.TotalEarned == math.huge then
+		data.TotalEarned = 0
+	end
+	if type(data.SkillXP) ~= "table" then
+		data.SkillXP = defaults.SkillXP
+	end
+	for _, specialization in ipairs(Catalog.Specializations) do
+		if type(data.SkillXP[specialization]) ~= "number" then
+			data.SkillXP[specialization] = 0
+		end
+	end
+	if type(data.Equipment) ~= "table" then
+		data.Equipment = defaults.Equipment
+	end
+	data.Equipment.BasicToolset = true
+	for equipmentId in pairs(data.Equipment) do
+		if Catalog.Equipment[equipmentId] == nil then
+			data.Equipment[equipmentId] = nil -- item removido do catálogo
+		end
+	end
+	data.PriceMultiplier = type(data.PriceMultiplier) == "number" and CustomerRules.ClampPrice(data.PriceMultiplier) or 1
+	-- Avaliações: contadores coerentes (soma entre count e 5*count) e lista recente limpa
+	local rc = type(data.RatingCount) == "number" and data.RatingCount == data.RatingCount and math.max(0, math.floor(data.RatingCount)) or 0
+	local rs = type(data.RatingSum) == "number" and data.RatingSum == data.RatingSum and math.floor(data.RatingSum) or 0
+	data.RatingCount = rc
+	data.RatingSum = math.clamp(rs, rc, rc * 5)
+	if type(data.RecentRatings) ~= "table" then
+		data.RecentRatings = {}
+	end
+	local cleanRecent = {}
+	for _, entry in ipairs(data.RecentRatings) do
+		if type(entry) == "table" and type(entry.Stars) == "number" and entry.Stars >= 1 and entry.Stars <= 5 then
+			table.insert(cleanRecent, {
+				Stars = math.floor(entry.Stars),
+				Service = type(entry.Service) == "string" and string.sub(entry.Service, 1, 60) or "",
+				At = type(entry.At) == "number" and entry.At or 0,
+				CommentKey = type(entry.CommentKey) == "string" and string.sub(entry.CommentKey, 1, 40) or "",
+				Customer = type(entry.Customer) == "string" and string.sub(entry.Customer, 1, 30) or "",
+			})
+		end
+	end
+	while #cleanRecent > 10 do
+		table.remove(cleanRecent, 1)
+	end
+	data.RecentRatings = cleanRecent
+	if type(data.OrderHistory) ~= "table" then
+		data.OrderHistory = {}
+	end
+	local cleanHistory = {}
+	for _, entry in ipairs(data.OrderHistory) do
+		if type(entry) == "table" and type(entry.Price) == "number" and entry.Price == entry.Price then
+			table.insert(cleanHistory, {
+				At = type(entry.At) == "number" and entry.At or 0,
+				Vehicle = type(entry.Vehicle) == "string" and string.sub(entry.Vehicle, 1, 40) or "",
+				Customer = type(entry.Customer) == "string" and string.sub(entry.Customer, 1, 30) or "",
+				Service = type(entry.Service) == "string" and string.sub(entry.Service, 1, 60) or "",
+				Price = math.max(0, math.floor(entry.Price)),
+				Stars = type(entry.Stars) == "number" and math.clamp(math.floor(entry.Stars), 1, 5) or 0,
+			})
+		end
+	end
+	while #cleanHistory > MAX_ORDER_HISTORY do
+		table.remove(cleanHistory, 1)
+	end
+	data.OrderHistory = cleanHistory
+	if type(data.Parts) ~= "table" then
+		data.Parts = {}
+	end
+	for partId, count in pairs(data.Parts) do
+		if Catalog.Parts[partId] == nil or type(count) ~= "number" or count ~= count or count <= 0 then
+			data.Parts[partId] = nil -- peça removida do catálogo, ou valor inválido
+		else
+			data.Parts[partId] = math.floor(count)
+		end
+	end
+	if type(data.Transactions) ~= "table" then
+		data.Transactions = {}
+	end
+	if type(data.Onboarding) ~= "table" then
+		data.Onboarding = { Done = false }
+	end
+	data.Onboarding = { Done = data.Onboarding.Done == true }
+	data.SchemaVersion = SCHEMA_VERSION
+	return data
+end
+
+local function keyFor(userId: number): string
+	return "u_" .. tostring(userId)
+end
+
+local function lockedByOther(old: any): boolean
+	local s = old and old.Session
+	return type(s) == "table" and s.JobId ~= JobId and (os.time() - (s.At or 0)) < LOCK_TIMEOUT
+end
+
+-- Adquire a trava de sessão e devolve os dados armazenados. Retorna (ok, dados | motivo).
+local function acquire(userId: number): (boolean, any)
+	local key = keyFor(userId)
+	local waited = 0
+	local attempt = 0
+	while true do
+		local result: any = nil
+		local locked = false
+		local ok, err = pcall(function()
+			Store:UpdateAsync(key, function(old: any)
+				result, locked = nil, false
+				if lockedByOther(old) then
+					locked = true
+					return nil -- cancela a gravação
+				end
+				local data = old
+				if type(data) ~= "table" then
+					data = nil
+				end
+				result = data -- dados brutos (nil = jogador novo)
+				local out = data or {}
+				out.Session = { JobId = JobId, At = os.time() }
+				if data == nil then
+					out.NewPlayer = true
+					result = out
+				end
+				return out
+			end)
+		end)
+		if ok and locked then
+			if waited >= LOCK_WAIT_MAX then
+				return false, "sessão ativa em outro servidor"
+			end
+			task.wait(LOCK_WAIT_STEP)
+			waited += LOCK_WAIT_STEP
+		elseif ok then
+			return true, result
+		else
+			attempt += 1
+			if attempt >= MAX_ATTEMPTS then
+				return false, tostring(err)
+			end
+			task.wait(2 ^ attempt * 0.5)
+		end
+	end
+end
+
+-- Retorna (gravou, trava perdida). `lost` = outro servidor assumiu a sessão (o jogador não deve continuar jogando aqui).
+local function writeProfile(userId: number, release: boolean): (boolean, boolean)
+	local profile = Profiles[userId]
+	if not profile or not Store then
+		return true, false
+	end
+	local key = keyFor(userId)
+	for attempt = 1, MAX_ATTEMPTS do
+		local lost = false
+		local ok, err = pcall(function()
+			Store:UpdateAsync(key, function(old: any)
+				lost = false
+				if type(old) == "table" and old.Session and old.Session.JobId ~= JobId and lockedByOther(old) then
+					lost = true
+					return nil -- outro servidor assumiu: não sobrescrever
+				end
+				local data = deepClone(profile)
+				data.Session = if release then nil else { JobId = JobId, At = os.time() }
+				data.UpdatedAt = os.time()
+				return data
+			end)
+		end)
+		if ok and lost then
+			warn("[DataService] Trava de sessão perdida para", userId, "- gravação cancelada.")
+			return false, true
+		elseif ok then
+			Dirty[userId] = nil
+			return true, false
+		end
+		warn("[DataService] Falha ao salvar", userId, "tentativa", attempt, err)
+		if attempt < MAX_ATTEMPTS then
+			task.wait(2 ^ attempt * 0.5)
+		end
+	end
+	return false, false
+end
+
+-- ===== API pública =====
+
+function DataService.Get(player: Player): any
+	return Profiles[player.UserId]
+end
+
+function DataService.GetSkillLevel(player: Player, specialization: string): number
+	local profile = Profiles[player.UserId]
+	if not profile then
+		return 0
+	end
+	local xp = profile.SkillXP[specialization] or 0
+	return math.floor(xp / Catalog.SkillXPPerLevel) + 1
+end
+
+local function finite(value: any): boolean
+	return type(value) == "number" and value == value and value ~= math.huge and value ~= -math.huge
+end
+
+function DataService.AddSkillXP(player: Player, specialization: string, amount: number)
+	local profile = Profiles[player.UserId]
+	if not profile or profile.SkillXP[specialization] == nil or not finite(amount) then
+		return
+	end
+	profile.SkillXP[specialization] += math.max(0, math.floor(amount))
+	Dirty[player.UserId] = true
+end
+
+function DataService.AddCoins(player: Player, amount: number, reason: string?)
+	local profile = Profiles[player.UserId]
+	if not profile or not finite(amount) then
+		return
+	end
+	local delta = math.floor(amount)
+	local before = profile.Coins
+	profile.Coins = math.max(0, before + delta)
+	local applied = profile.Coins - before
+	if applied > 0 then
+		profile.TotalEarned += applied
+	end
+	if applied ~= 0 then
+		table.insert(profile.Transactions, {
+			At = os.time(),
+			Amount = applied,
+			Balance = profile.Coins,
+			Reason = reason or (applied > 0 and "Receita" or "Despesa"),
+		})
+		while #profile.Transactions > MAX_TRANSACTIONS do
+			table.remove(profile.Transactions, 1)
+		end
+	end
+	Dirty[player.UserId] = true
+end
+
+-- Encerra o guia do 1º atendimento. Com `bonus` (serviço concluído de verdade) paga uma única vez; pular não paga.
+-- Retorna as moedas pagas (0 se já estava encerrado).
+function DataService.CompleteOnboarding(player: Player, bonus: number): number
+	local profile = Profiles[player.UserId]
+	if not profile or profile.Onboarding.Done then
+		return 0
+	end
+	profile.Onboarding.Done = true
+	Dirty[player.UserId] = true
+	if bonus > 0 then
+		DataService.AddCoins(player, bonus, "Bônus do primeiro serviço")
+	end
+	return bonus
+end
+
+function DataService.AddReputation(player: Player, amount: number)
+	local profile = Profiles[player.UserId]
+	if not profile or not finite(amount) then
+		return
+	end
+	profile.Reputation = math.max(0, profile.Reputation + math.floor(amount))
+	Dirty[player.UserId] = true
+end
+
+function DataService.GrantEquipment(player: Player, equipmentId: string): boolean
+	local profile = Profiles[player.UserId]
+	if not profile or Catalog.Equipment[equipmentId] == nil then
+		return false
+	end
+	profile.Equipment[equipmentId] = true
+	Dirty[player.UserId] = true
+	return true
+end
+
+-- Registra a avaliação de um cliente (1 a 5). Devolve (quantidade, soma) ou nil se inválida/sem perfil.
+function DataService.AddRating(player: Player, stars: number, serviceName: string, extra: { CommentKey: string?, Customer: string? }?): (number?, number?)
+	local profile = Profiles[player.UserId]
+	if not profile or type(stars) ~= "number" or stars ~= stars or stars < 1 or stars > 5 then
+		return nil, nil
+	end
+	local s = math.floor(stars)
+	profile.RatingCount += 1
+	profile.RatingSum += s
+	table.insert(profile.RecentRatings, {
+		Stars = s,
+		Service = string.sub(serviceName, 1, 60),
+		At = os.time(),
+		CommentKey = extra and extra.CommentKey and string.sub(extra.CommentKey, 1, 40) or "",
+		Customer = extra and extra.Customer and string.sub(extra.Customer, 1, 30) or "",
+	})
+	while #profile.RecentRatings > 10 do
+		table.remove(profile.RecentRatings, 1)
+	end
+	Dirty[player.UserId] = true
+	return profile.RatingCount, profile.RatingSum
+end
+
+-- Histórico dos serviços concluídos (últimos MAX_ORDER_HISTORY), mostrado na aba Concluídas e no Perfil.
+function DataService.AddOrderHistory(player: Player, entry: { Vehicle: string, Customer: string, Service: string, Price: number, Stars: number })
+	local profile = Profiles[player.UserId]
+	if not profile or type(entry.Price) ~= "number" or entry.Price ~= entry.Price then
+		return
+	end
+	table.insert(profile.OrderHistory, {
+		At = os.time(),
+		Vehicle = string.sub(entry.Vehicle, 1, 40),
+		Customer = string.sub(entry.Customer, 1, 30),
+		Service = string.sub(entry.Service, 1, 60),
+		Price = math.max(0, math.floor(entry.Price)),
+		Stars = math.clamp(math.floor(entry.Stars), 1, 5),
+	})
+	while #profile.OrderHistory > MAX_ORDER_HISTORY do
+		table.remove(profile.OrderHistory, 1)
+	end
+	Dirty[player.UserId] = true
+end
+
+-- Preço da oficina: sempre normalizado por CustomerRules.ClampPrice (faixa e passo); devolve o valor aplicado.
+function DataService.SetPriceMultiplier(player: Player, value: number): number?
+	local profile = Profiles[player.UserId]
+	if not profile then
+		return nil
+	end
+	profile.PriceMultiplier = CustomerRules.ClampPrice(value)
+	Dirty[player.UserId] = true
+	return profile.PriceMultiplier
+end
+
+-- Estoque de peças ---------------------------------------------------------------------------------------
+function DataService.GetPartCount(player: Player, partId: string): number
+	local profile = Profiles[player.UserId]
+	return profile and profile.Parts[partId] or 0
+end
+
+function DataService.AddParts(player: Player, partId: string, amount: number): boolean
+	local profile = Profiles[player.UserId]
+	local n = math.floor(amount)
+	if not profile or Catalog.Parts[partId] == nil or n <= 0 then
+		return false
+	end
+	profile.Parts[partId] = (profile.Parts[partId] or 0) + n
+	Dirty[player.UserId] = true
+	return true
+end
+
+-- Devolve true se o estoque cobre TODAS as peças pedidas ({ [partId] = quantidade }).
+function DataService.HasParts(player: Player, needed: { [string]: number }?): boolean
+	local profile = Profiles[player.UserId]
+	if not profile then
+		return false
+	end
+	for partId, count in pairs(needed or {}) do
+		if (profile.Parts[partId] or 0) < count then
+			return false
+		end
+	end
+	return true
+end
+
+-- Tudo-ou-nada: só desconta se houver estoque para todas as peças (nunca fica meio pago).
+function DataService.TakeParts(player: Player, needed: { [string]: number }?): boolean
+	if not DataService.HasParts(player, needed) then
+		return false
+	end
+	local profile = Profiles[player.UserId]
+	for partId, count in pairs(needed or {}) do
+		local left = profile.Parts[partId] - count
+		profile.Parts[partId] = left > 0 and left or nil
+	end
+	Dirty[player.UserId] = true
+	return true
+end
+
+function DataService.MarkDirty(player: Player)
+	Dirty[player.UserId] = true
+end
+
+function DataService.IsMemoryMode(): boolean
+	return MemoryMode
+end
+
+function DataService.Load(player: Player)
+	local userId = player.UserId
+	if MemoryMode then
+		Profiles[userId] = reconcile(nil)
+		return
+	end
+	if not Store then
+		player:Kick("Serviço de dados indisponível. Tente novamente em instantes.")
+		return
+	end
+
+	while Removing[userId] or Saving[userId] do
+		task.wait(0.1) -- reentrada rápida: espera o salvamento anterior terminar (evita ler dado antigo)
+	end
+	local ok, result = acquire(userId)
+	if not ok then
+		warn("[DataService] Falha ao carregar dados de", userId, result)
+		player:Kick("Não foi possível carregar seus dados (" .. tostring(result) .. "). Tente entrar novamente.")
+		return
+	end
+
+	-- O jogador pode ter saído durante a espera: libera a trava e descarta.
+	if player.Parent ~= Players then
+		Profiles[userId] = reconcile(result)
+		writeProfile(userId, true)
+		Profiles[userId] = nil
+		return
+	end
+
+	local profile = reconcile(result)
+	profile.Session = nil
+	profile.NewPlayer = nil
+	Profiles[userId] = profile
+	Dirty[userId] = true -- grava a migração/perfil novo no primeiro autosave
+end
+
+function DataService.Save(player: Player): boolean
+	local userId = player.UserId
+	if MemoryMode or not Profiles[userId] then
+		return true
+	end
+	while Saving[userId] do
+		task.wait(0.1)
+	end
+	Saving[userId] = true
+	local ok, lost = writeProfile(userId, false)
+	Saving[userId] = nil
+	if lost then
+		-- outro servidor assumiu esta conta: continuar aqui perderia todo ganho em silêncio
+		player:Kick("Sua conta foi aberta em outro servidor. Entre novamente.")
+	end
+	return ok
+end
+
+function DataService.Remove(player: Player)
+	local userId = player.UserId
+	local profile = Profiles[userId]
+	Removing[userId] = true
+	if profile and not MemoryMode then
+		while Saving[userId] do
+			task.wait(0.1)
+		end
+		Saving[userId] = true
+		writeProfile(userId, true)
+		Saving[userId] = nil
+	end
+	if Profiles[userId] == profile then -- não apaga um perfil novo carregado depois
+		Profiles[userId] = nil
+		Dirty[userId] = nil
+	end
+	Removing[userId] = nil
+end
+
+function DataService.Start()
+	Players.PlayerAdded:Connect(DataService.Load)
+	Players.PlayerRemoving:Connect(DataService.Remove)
+
+	for _, player in ipairs(Players:GetPlayers()) do
+		task.spawn(DataService.Load, player)
+	end
+
+	task.spawn(function()
+		while true do
+			task.wait(Config.AutoSaveSeconds)
+			for _, player in ipairs(Players:GetPlayers()) do
+				task.spawn(DataService.Save, player) -- sempre grava: renova a trava de sessão
+			end
+		end
+	end)
+
+	game:BindToClose(function()
+		local pending = 0
+		for _, player in ipairs(Players:GetPlayers()) do
+			pending += 1
+			task.spawn(function()
+				DataService.Remove(player)
+				pending -= 1
+			end)
+		end
+		local started = os.clock()
+		while (pending > 0 or next(Removing) ~= nil) and os.clock() - started < 25 do -- inclui saídas já em andamento (último jogador)
+			task.wait(0.2)
+		end
+	end)
+end
+
+-- ===== Somente testes (tools/PersistenceTest.luau) =====
+function DataService._setStoreForTesting(store: any, jobId: string, lockWaitMax: number?)
+	Store = store
+	MemoryMode = false
+	JobId = jobId
+	if lockWaitMax then
+		LOCK_WAIT_MAX = lockWaitMax
+	end
+end
+
+function DataService._peekProfile(userId: number): any
+	return Profiles[userId]
+end
+
+return DataService

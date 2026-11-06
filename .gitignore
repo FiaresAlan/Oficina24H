@@ -1,0 +1,22 @@
+# Segredos: nunca versionar
+*.env
+.env*
+secrets*
+*.key
+*apikey*
+.claude/
+
+# Pacotes de assets brutos (grandes) e builds
+Oficina24H_Bairro_GLBS/
+Oficina24H_GLB_Starter/
+*.rbxl
+*.rbxlx
+*.rbxm
+*.rbxmx
+sourcemap.json
+
+# Repositório PÚBLICO: fora o que tem licença a confirmar ou é sigiloso (ver docs/ORIGEM_ASSETS.md)
+assets/hud_ref/
+assets/hud_sprites/
+docs/hud_comparacao.png
+.fwjelaa/product_doc.md

@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "roblox-studio": {
+      "command": "C:\\Users\\Administrador\\AppData\\Local\\Roblox\\mcp.bat",
+      "args": []
+    },
+    "blender": {
+      "command": "uvx",
+      "args": ["blender-mcp"]
+    }
+  }
+}

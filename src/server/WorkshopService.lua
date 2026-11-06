@@ -14,6 +14,7 @@ local WorkshopService = {}
 local PlotService = require(script.Parent.PlotService)
 local VehicleService = require(script.Parent.VehicleService)
 local CustomerArrivalService = require(script.Parent.CustomerArrivalService)
+local WorkshopSkin = require(script.Parent.WorkshopSkin)
 local EquipmentService = require(script.Parent.EquipmentService)
 
 local DataService: any
@@ -221,6 +222,7 @@ function WorkshopService.ClaimWorkshop(player: Player)
     }
 
     EquipmentService.Sync(player, profile.Equipment)
+    WorkshopSkin.Update(player, profile.TotalEarned or 0)
     updatePriceBoard(player)
     return true, "Oficina registrada."
 end
@@ -571,6 +573,7 @@ function WorkshopService.FinishRepair(player: Player, jobId: string, presses: an
     DataService.AddReputation(player, service.Reputation)
     local stars = rateService(player, job, service, defect, player, false, result.Quality)
     local bonus = DataService.CompleteOnboarding(player, Config.OnboardingBonus)
+    WorkshopService.UpdateSkin(player)
     if eventSender then
         eventSender(player, "RepairDone", {
             Bonus = bonus,
@@ -582,6 +585,18 @@ function WorkshopService.FinishRepair(player: Player, jobId: string, presses: an
     return true, "Serviço concluído. +" .. tostring(price + tip) .. " moedas (qualidade " .. tostring(result.Quality) .. "%), +" .. tostring(xp)
         .. " XP. Avaliação: " .. CustomerRules.StarsText(stars) .. " (" .. tostring(stars) .. ")"
         .. (bonus > 0 and (" Bônus do primeiro serviço: +" .. tostring(bonus) .. ".") or "")
+end
+
+-- Atualiza a fachada conforme o total ganho; avisa o jogador quando a oficina evolui de tipo.
+function WorkshopService.UpdateSkin(player: Player)
+    local profile = DataService.Get(player)
+    if not profile or not Workshops[player.UserId] then
+        return
+    end
+    local changed, name = WorkshopSkin.Update(player, profile.TotalEarned or 0)
+    if changed and eventSender then
+        eventSender(player, "Notice", { Message = "Sua oficina evoluiu: agora é " .. name .. "!", Success = true })
+    end
 end
 
 function WorkshopService.SkipOnboarding(player: Player)
@@ -961,6 +976,12 @@ function WorkshopService.Start()
     task.spawn(function()
         while true do
             task.wait(Config.JobRefreshSeconds)
+            for userId in pairs(Workshops) do
+                local ownerNow = Players:GetPlayerByUserId(userId)
+                if ownerNow then
+                    WorkshopService.UpdateSkin(ownerNow) -- ganhos de colaboração e mecânico NPC também contam
+                end
+            end
             for userId, session in pairs(Repairs) do
                 if os.clock() - session.StartedAt > RepairRules.MaxSessionSeconds + 5 then
                     Repairs[userId] = nil -- sessão esquecida não prende a ordem

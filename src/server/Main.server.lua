@@ -29,13 +29,17 @@ WorkshopService.Start()
 if game:GetService("RunService"):IsStudio() then
     local qa = Instance.new("BindableFunction")
     qa.Name = "QA"
-    qa.OnInvoke = function(command: any, player: any): any
+    qa.OnInvoke = function(command: any, player: any, arg: any): any
         if typeof(player) ~= "Instance" or not player:IsA("Player") then return "jogador inválido" end
         local profile = DataService.Get(player)
         if not profile then return "sem perfil" end
         if command == "NewPlayer" then
             profile.Onboarding = { Done = false }
             profile.Parts = { TirePatch = 3, Battery = 1, Fuse = 2 }
+            return "ok"
+        elseif command == "SetEarned" and type(arg) == "number" then
+            profile.TotalEarned = arg
+            WorkshopService.UpdateSkin(player)
             return "ok"
         elseif command == "AgeJobs" then
             return WorkshopService._ageJobsForTesting(player.UserId, 1000)

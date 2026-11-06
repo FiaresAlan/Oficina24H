@@ -1,0 +1,100 @@
+{
+  "source_dir": "C:\\Users\\Administrador\\Documents\\carros-main\\assets",
+  "nota": "length = comprimento real em metros (o VehicleService multiplica por 3,5 -> studs). flip = gira 180 graus para a frente ficar em +Y. tris = alvo apos a reducao.",
+  "cars": [
+    {
+      "name": "Hatch_Celta",
+      "id": "chevrolet-celta",
+      "length": 3.8,
+      "tris": 7000,
+      "flip": true
+    },
+    {
+      "name": "Hatch_Fiesta",
+      "id": "ford-fiesta",
+      "length": 3.9,
+      "tris": 10000,
+      "flip": true
+    },
+    {
+      "name": "Hatch_Prius",
+      "id": "toyota-prius",
+      "length": 4.5,
+      "tris": 12000
+    },
+    {
+      "name": "Hatch_Yaris",
+      "id": "toyota-yaris",
+      "length": 3.95,
+      "tris": 10000
+    },
+    {
+      "name": "Sedan_City",
+      "id": "honda-city",
+      "length": 4.45,
+      "tris": 11000,
+      "flip": true
+    },
+    {
+      "name": "SUV_Wrangler",
+      "id": "jeep-wrangler",
+      "length": 4.1,
+      "tris": 6000,
+      "flip": true
+    },
+    {
+      "name": "SUV_Velar",
+      "id": "land-rover-range-rover-velar",
+      "length": 4.8,
+      "tris": 12000
+    },
+    {
+      "name": "Picape_Dakota",
+      "id": "dodge-dakota",
+      "length": 5.2,
+      "tris": 3800,
+      "flip": true
+    },
+    {
+      "name": "Sedan_Generico80",
+      "id": "generico-sedan-80",
+      "length": 5.0,
+      "tris": 12000
+    },
+    {
+      "name": "Sedan_Europeu80",
+      "id": "europeu-80s",
+      "length": 3.9,
+      "tris": 12000,
+      "flip": true
+    },
+    {
+      "name": "Sedan_2005",
+      "id": "sedan-2005",
+      "length": 4.5,
+      "tris": 12000,
+      "flip": true
+    },
+    {
+      "name": "Picape_Chevy63",
+      "id": "chevrolet-low-poly",
+      "length": 4.9,
+      "tris": 12000,
+      "flip": true
+    },
+    {
+      "name": "Picape_FordA",
+      "id": "ford-model-pickup",
+      "length": 4.2,
+      "tris": 12000,
+      "flip": true
+    },
+    {
+      "name": "Picape_Carry",
+      "id": "suzuki-carry-pickup",
+      "length": 3.4,
+      "tris": 12000,
+      "flip": true
+    }
+  ]
+}

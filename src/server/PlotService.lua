@@ -116,6 +116,10 @@ function PlotService.Release(player: Player)
 	if equipment then
 		equipment:Destroy() -- os equipamentos pertencem ao perfil do jogador, não ao lote
 	end
+	local skin = plot:FindFirstChild("Skin")
+	if skin then
+		skin:Destroy() -- a fachada (tipo da oficina) também é do jogador: o próximo dono começa como oficina de bairro
+	end
 	plot:SetAttribute("OwnerUserId", 0)
 	plot:SetAttribute("OwnerName", nil)
 	local priceText = plot:FindFirstChild("PriceText", true)

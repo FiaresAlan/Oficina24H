@@ -21,7 +21,7 @@ local LANE_Z = 10 -- faixa do lado do lote (a rua principal vai de z=-20 a z=20)
 local SIDEWALK_Z = 24
 local DRIVE_DISTANCE = 130
 local DRIVE_SECONDS = 3.5
-local CAR_FLIP = 0 -- 0 ou math.pi: ajusta a frente do modelo (conferido no teste visual)
+local CAR_FLIP = math.pi -- os modelos novos têm a frente em +Z; com a rotação de 90° isso daria frente para leste, e o carro chega indo para oeste
 local SLOT_SHIFT = { 0, 20, -20 } -- até 3 clientes por oficina, lado a lado no meio-fio
 
 type State = {

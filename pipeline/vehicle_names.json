@@ -1,0 +1,16 @@
+{
+ "Hatch_Celta": "Hatch_A",
+ "Hatch_Fiesta": "Hatch_B",
+ "Hatch_Prius": "Hatch_C",
+ "Hatch_Yaris": "Hatch_D",
+ "Sedan_City": "Sedan_A",
+ "Sedan_Generico80": "Sedan_B",
+ "Sedan_Europeu80": "Sedan_C",
+ "Sedan_2005": "Sedan_D",
+ "SUV_Wrangler": "SUV_A",
+ "SUV_Velar": "SUV_B",
+ "Picape_Dakota": "Picape_A",
+ "Picape_Chevy63": "Picape_B",
+ "Picape_FordA": "Picape_C",
+ "Picape_Carry": "Picape_D"
+}

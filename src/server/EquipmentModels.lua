@@ -1,7 +1,20 @@
 --!strict
 -- Modelos procedurais (Parts) dos equipamentos do Catalog. Sem upload, sem licença, versionados em código.
 -- Cada função devolve um Model com PrimaryPart "Base" apoiado no piso (origem no centro da base, base em y=0).
+local ServerStorage = game:GetService("ServerStorage")
 local EquipmentModels = {}
+
+-- Modelo 3D real (pacote de oficina CC0, tratado no Blender) em ServerStorage.Assets.Equipamentos["Eq_<Id>"], se existir.
+-- A frente do asset é o LookVector; o jogo posiciona equipamentos com a frente em +Z, então giramos 180 graus uma vez aqui.
+local function realModel(equipmentId: string): Model?
+	local assets = ServerStorage:FindFirstChild("Assets")
+	local folder = assets and assets:FindFirstChild("Equipamentos")
+	local template = folder and folder:FindFirstChild("Eq_" .. equipmentId)
+	if template and template:IsA("Model") then
+		return template
+	end
+	return nil
+end
 
 local function part(parent: Instance, name: string, size: Vector3, offset: CFrame, color: Color3, material: Enum.Material?, shape: Enum.PartType?): Part
 	local p = Instance.new("Part")
@@ -149,11 +162,20 @@ builders.AlignmentRig = function(m) -- alinhador: dois pratos giratórios e mast
 end
 
 function EquipmentModels.Has(equipmentId: string): boolean
-	return builders[equipmentId] ~= nil
+	return builders[equipmentId] ~= nil or realModel(equipmentId) ~= nil
 end
 
 -- Constrói o modelo na origem; quem chama posiciona com PivotTo.
 function EquipmentModels.Build(equipmentId: string): Model?
+	local real = realModel(equipmentId)
+	if real then
+		local copy = real:Clone()
+		copy.Name = "Eq_" .. equipmentId
+		copy:PivotTo(CFrame.Angles(0, math.pi, 0))
+		copy.WorldPivot = CFrame.new()
+		copy:SetAttribute("EquipmentId", equipmentId)
+		return copy
+	end
 	local build = builders[equipmentId]
 	if not build then
 		return nil

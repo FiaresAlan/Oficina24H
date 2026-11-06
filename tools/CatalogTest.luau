@@ -91,6 +91,24 @@ local function varietyFor(equip: { [string]: boolean }): number
 	end
 	return n
 end
+local function tierAt(total: number): number
+	local t = Catalog.WorkshopTier(total)
+	return t
+end
+check("tipo de oficina: níveis 1-3 = bairro, 4-6 = centro, 7+ = premium",
+	tierAt(0) == 1 and tierAt(899) == 1 and tierAt(900) == 2 and tierAt(3599) == 2 and tierAt(3600) == 3 and tierAt(1e9) == 3,
+	tierAt(0) .. "/" .. tierAt(899) .. "/" .. tierAt(900) .. "/" .. tierAt(3600))
+check("tipo de oficina: nunca diminui com mais ganhos", (function()
+	local last = 0
+	for total = 0, 20000, 50 do
+		local t = tierAt(total)
+		if t < last then return false end
+		last = t
+	end
+	return true
+end)())
+check("tipo de oficina: nome por tipo", select(2, Catalog.WorkshopTier(0)) == "Oficina de bairro" and select(2, Catalog.WorkshopTier(5000)) == "Oficina premium")
+check("tipo de oficina: dados inválidos não quebram", tierAt(-5) == 1 and tierAt(0 / 0) >= 1)
 check("variedade de serviços cresce com equipamento", varietyFor(allEquip) > varietyFor(newEquip), varietyFor(allEquip) .. "/" .. varietyFor(newEquip))
 
 -- Todo equipamento comprável libera pelo menos um serviço (senão seria dinheiro jogado fora)

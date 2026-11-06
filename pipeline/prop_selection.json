@@ -1,0 +1,346 @@
+{
+ "props": [
+  {
+   "name": "Rua_Poste",
+   "file": "C:/Users/Administrador/Desktop/OFICINA24h/_assets_work/downloads/kits/shuriken-town-streets/town-streets/town-streetlight-set.glb",
+   "scale": 1.0,
+   "max_tris": 8000
+  },
+  {
+   "name": "Rua_Mobiliario",
+   "file": "C:/Users/Administrador/Desktop/OFICINA24h/_assets_work/downloads/kits/shuriken-town-streets/town-streets/suburban-street-props.glb",
+   "scale": 1.0,
+   "max_tris": 8000
+  },
+  {
+   "name": "Rua_Semaforo",
+   "file": "C:/Users/Administrador/Desktop/OFICINA24h/_assets_work/downloads/kits/shuriken-city/city/low-poly-traffic-props.glb",
+   "scale": 1.0,
+   "max_tris": 8000
+  },
+  {
+   "name": "Rua_PontoOnibus",
+   "file": "C:/Users/Administrador/Desktop/OFICINA24h/_assets_work/downloads/kits/shuriken-town-streets/town-streets/town-bus-stop.glb",
+   "scale": 1.0,
+   "max_tris": 8000
+  },
+  {
+   "name": "Rua_Cacamba",
+   "file": "C:/Users/Administrador/Desktop/OFICINA24h/_assets_work/downloads/kits/shuriken-city/city/city-dumpster.glb",
+   "scale": 1.0,
+   "max_tris": 8000
+  },
+  {
+   "name": "Rua_Praca",
+   "file": "C:/Users/Administrador/Desktop/OFICINA24h/_assets_work/downloads/kits/shuriken-city/city/low-poly-park-props.glb",
+   "scale": 1.0,
+   "max_tris": 8000
+  },
+  {
+   "name": "Rua_Jardineira",
+   "file": "C:/Users/Administrador/Desktop/OFICINA24h/_assets_work/downloads/kits/shuriken-town-streets/town-streets/town-flower-bed-set.glb",
+   "scale": 1.0,
+   "max_tris": 8000
+  },
+  {
+   "name": "Rua_Maquina",
+   "file": "C:/Users/Administrador/Desktop/OFICINA24h/_assets_work/downloads/kits/shuriken-city/city/street-vending-machine.glb",
+   "scale": 1.0,
+   "max_tris": 8000
+  },
+  {
+   "name": "Rua_Outdoor",
+   "file": "C:/Users/Administrador/Desktop/OFICINA24h/_assets_work/downloads/kits/shuriken-city/city/roadside-billboard.glb",
+   "scale": 1.0,
+   "max_tris": 8000
+  },
+  {
+   "name": "Rua_Telefone",
+   "file": "C:/Users/Administrador/Desktop/OFICINA24h/_assets_work/downloads/kits/shuriken-city/city/red-phone-booth.glb",
+   "scale": 1.0,
+   "max_tris": 8000
+  },
+  {
+   "name": "Loja_Galeria",
+   "file": "C:/Users/Administrador/Desktop/OFICINA24h/_assets_work/downloads/kits/shuriken-town-streets/town-streets/town-strip-mall-plaza.glb",
+   "scale": 1.0,
+   "max_tris": 8000
+  },
+  {
+   "name": "Loja_LavaRapido",
+   "file": "C:/Users/Administrador/Desktop/OFICINA24h/_assets_work/downloads/kits/shuriken-town-streets/town-streets/town-car-wash.glb",
+   "scale": 1.0,
+   "max_tris": 8000
+  },
+  {
+   "name": "Loja_Posto",
+   "file": "C:/Users/Administrador/Desktop/OFICINA24h/_assets_work/downloads/kits/shuriken-town-streets/town-streets/gas-station-pump-island.glb",
+   "scale": 1.0,
+   "max_tris": 8000
+  },
+  {
+   "name": "Loja_Esquina",
+   "file": "C:/Users/Administrador/Desktop/OFICINA24h/_assets_work/downloads/kits/shuriken-city/city/low-poly-corner-shop.glb",
+   "scale": 1.0,
+   "max_tris": 8000
+  },
+  {
+   "name": "Loja_Cafe",
+   "file": "C:/Users/Administrador/Desktop/OFICINA24h/_assets_work/downloads/kits/shuriken-city/city/low-poly-city-cafe.glb",
+   "scale": 1.0,
+   "max_tris": 8000
+  },
+  {
+   "name": "Loja_Banca",
+   "file": "C:/Users/Administrador/Desktop/OFICINA24h/_assets_work/downloads/kits/shuriken-city/city/green-newsstand-kiosk.glb",
+   "scale": 1.0,
+   "max_tris": 8000
+  },
+  {
+   "name": "Loja_Estacionamento",
+   "file": "C:/Users/Administrador/Desktop/OFICINA24h/_assets_work/downloads/kits/shuriken-town-streets/town-streets/parking-lot-kit.glb",
+   "scale": 1.0,
+   "max_tris": 8000
+  },
+  {
+   "name": "Casa_Familia",
+   "file": "C:/Users/Administrador/Desktop/OFICINA24h/_assets_work/downloads/kits/shuriken-houses/houses/suburban-family-house.glb",
+   "scale": 1.0,
+   "max_tris": 8000
+  },
+  {
+   "name": "Casa_Inicial",
+   "file": "C:/Users/Administrador/Desktop/OFICINA24h/_assets_work/downloads/kits/shuriken-houses/houses/cozy-starter-house.glb",
+   "scale": 1.0,
+   "max_tris": 8000
+  },
+  {
+   "name": "Casa_Terrea",
+   "file": "C:/Users/Administrador/Desktop/OFICINA24h/_assets_work/downloads/kits/shuriken-houses/houses/ranch-bungalow.glb",
+   "scale": 1.0,
+   "max_tris": 8000
+  },
+  {
+   "name": "Casa_Villa",
+   "file": "C:/Users/Administrador/Desktop/OFICINA24h/_assets_work/downloads/kits/shuriken-houses/houses/modern-flat-roof-villa.glb",
+   "scale": 1.0,
+   "max_tris": 8000
+  },
+  {
+   "name": "Casa_Sobrado",
+   "file": "C:/Users/Administrador/Desktop/OFICINA24h/_assets_work/downloads/kits/shuriken-houses/houses/modern-grey-townhome.glb",
+   "scale": 1.0,
+   "max_tris": 8000
+  },
+  {
+   "name": "Casa_Duplex",
+   "file": "C:/Users/Administrador/Desktop/OFICINA24h/_assets_work/downloads/kits/shuriken-houses/houses/sage-and-coral-duplex.glb",
+   "scale": 1.0,
+   "max_tris": 8000
+  },
+  {
+   "name": "Predio_Apartamentos",
+   "file": "C:/Users/Administrador/Desktop/OFICINA24h/_assets_work/downloads/kits/shuriken-city/city/brick-city-apartment.glb",
+   "scale": 1.0,
+   "max_tris": 8000
+  },
+  {
+   "name": "Casa_Garagem",
+   "file": "C:/Users/Administrador/Desktop/OFICINA24h/_assets_work/downloads/kits/shuriken-houses/houses/detached-garage.glb",
+   "scale": 1.0,
+   "max_tris": 8000
+  },
+  {
+   "name": "Rua_Boasvindas",
+   "file": "C:/Users/Administrador/Desktop/OFICINA24h/_assets_work/downloads/kits/shuriken-town-streets/town-streets/town-welcome-sign.glb",
+   "scale": 1.0,
+   "max_tris": 8000
+  },
+  {
+   "name": "Eq_SuspensionLift",
+   "file": "C:/Users/Administrador/Desktop/OFICINA24h/_assets_work/downloads/3dassets_garage/33999.glb",
+   "scale": 3.5,
+   "max_tris": 3000
+  },
+  {
+   "name": "Eq_AlignmentRig",
+   "file": "C:/Users/Administrador/Desktop/OFICINA24h/_assets_work/downloads/3dassets_garage/34001.glb",
+   "scale": 3.5,
+   "max_tris": 3000
+  },
+  {
+   "name": "Eq_BasicToolset",
+   "file": "C:/Users/Administrador/Desktop/OFICINA24h/_assets_work/downloads/3dassets_garage/34005.glb",
+   "scale": 3.5,
+   "max_tris": 3000
+  },
+  {
+   "name": "Eq_EngineBench",
+   "file": "C:/Users/Administrador/Desktop/OFICINA24h/_assets_work/downloads/3dassets_garage/34008.glb",
+   "scale": 3.5,
+   "max_tris": 3000
+  },
+  {
+   "name": "Eq_Jack",
+   "file": "C:/Users/Administrador/Desktop/OFICINA24h/_assets_work/downloads/3dassets_garage/34010.glb",
+   "scale": 3.5,
+   "max_tris": 3000
+  },
+  {
+   "name": "Eq_Compressor",
+   "file": "C:/Users/Administrador/Desktop/OFICINA24h/_assets_work/downloads/3dassets_garage/34012.glb",
+   "scale": 3.5,
+   "max_tris": 3000
+  },
+  {
+   "name": "Eq_Scanner",
+   "file": "C:/Users/Administrador/Desktop/OFICINA24h/_assets_work/downloads/3dassets_garage/34016.glb",
+   "scale": 3.5,
+   "max_tris": 3000
+  },
+  {
+   "name": "Eq_ElectricalBench",
+   "file": "C:/Users/Administrador/Desktop/OFICINA24h/_assets_work/downloads/3dassets_garage/34017.glb",
+   "scale": 3.5,
+   "max_tris": 3000
+  },
+  {
+   "name": "Eq_TireMachine",
+   "file": "C:/Users/Administrador/Desktop/OFICINA24h/_assets_work/downloads/3dassets_garage/34020.glb",
+   "scale": 3.5,
+   "max_tris": 3000
+  },
+  {
+   "name": "Eq_Balancer",
+   "file": "C:/Users/Administrador/Desktop/OFICINA24h/_assets_work/downloads/3dassets_garage/34021.glb",
+   "scale": 3.5,
+   "max_tris": 3000
+  },
+  {
+   "name": "Eq_BodyworkKit",
+   "file": "C:/Users/Administrador/Desktop/OFICINA24h/_assets_work/downloads/3dassets_garage/34025.glb",
+   "scale": 3.5,
+   "max_tris": 3000
+  },
+  {
+   "name": "Of_PilhaPneus",
+   "file": "C:/Users/Administrador/Desktop/OFICINA24h/_assets_work/downloads/3dassets_garage/34019.glb",
+   "scale": 3.5,
+   "max_tris": 3000
+  },
+  {
+   "name": "Of_Placa",
+   "file": "C:/Users/Administrador/Desktop/OFICINA24h/_assets_work/downloads/3dassets_garage/34034.glb",
+   "scale": 3.5,
+   "max_tris": 3000
+  },
+  {
+   "name": "Of_PisoMolhado",
+   "file": "C:/Users/Administrador/Desktop/OFICINA24h/_assets_work/downloads/3dassets_garage/34036.glb",
+   "scale": 3.5,
+   "max_tris": 3000
+  },
+  {
+   "name": "Of_Extintor",
+   "file": "C:/Users/Administrador/Desktop/OFICINA24h/_assets_work/downloads/3dassets_garage/34039.glb",
+   "scale": 3.5,
+   "max_tris": 3000
+  },
+  {
+   "name": "Of_Lixeira",
+   "file": "C:/Users/Administrador/Desktop/OFICINA24h/_assets_work/downloads/3dassets_garage/34035.glb",
+   "scale": 3.5,
+   "max_tris": 3000
+  },
+  {
+   "name": "Of_Barril",
+   "file": "C:/Users/Administrador/Desktop/OFICINA24h/_assets_work/downloads/3dassets_garage/34024.glb",
+   "scale": 3.5,
+   "max_tris": 3000
+  },
+  {
+   "name": "Of_Galao",
+   "file": "C:/Users/Administrador/Desktop/OFICINA24h/_assets_work/downloads/3dassets_garage/34044.glb",
+   "scale": 3.5,
+   "max_tris": 3000
+  },
+  {
+   "name": "Of_CaixaOleo",
+   "file": "C:/Users/Administrador/Desktop/OFICINA24h/_assets_work/downloads/3dassets_garage/34045.glb",
+   "scale": 3.5,
+   "max_tris": 3000
+  },
+  {
+   "name": "Of_Bancada",
+   "file": "C:/Users/Administrador/Desktop/OFICINA24h/_assets_work/downloads/3dassets_garage/34026.glb",
+   "scale": 3.5,
+   "max_tris": 3000
+  },
+  {
+   "name": "Of_Prateleira",
+   "file": "C:/Users/Administrador/Desktop/OFICINA24h/_assets_work/downloads/3dassets_garage/34027.glb",
+   "scale": 3.5,
+   "max_tris": 3000
+  },
+  {
+   "name": "Of_Recepcao",
+   "file": "C:/Users/Administrador/Desktop/OFICINA24h/_assets_work/downloads/3dassets_garage/34029.glb",
+   "scale": 3.5,
+   "max_tris": 3000
+  },
+  {
+   "name": "Of_BancoEspera",
+   "file": "C:/Users/Administrador/Desktop/OFICINA24h/_assets_work/downloads/3dassets_garage/34030.glb",
+   "scale": 3.5,
+   "max_tris": 3000
+  },
+  {
+   "name": "Of_Cafe",
+   "file": "C:/Users/Administrador/Desktop/OFICINA24h/_assets_work/downloads/3dassets_garage/34031.glb",
+   "scale": 3.5,
+   "max_tris": 3000
+  },
+  {
+   "name": "Of_CarrinhoFerramenta",
+   "file": "C:/Users/Administrador/Desktop/OFICINA24h/_assets_work/downloads/3dassets_garage/34007.glb",
+   "scale": 3.5,
+   "max_tris": 3000
+  },
+  {
+   "name": "Of_Elevador",
+   "file": "C:/Users/Administrador/Desktop/OFICINA24h/_assets_work/downloads/3dassets_garage/34000.glb",
+   "scale": 3.5,
+   "max_tris": 3000
+  },
+  {
+   "name": "Of_LavaPecas",
+   "file": "C:/Users/Administrador/Desktop/OFICINA24h/_assets_work/downloads/3dassets_garage/34022.glb",
+   "scale": 3.5,
+   "max_tris": 3000
+  },
+  {
+   "name": "Of_Relogio",
+   "file": "C:/Users/Administrador/Desktop/OFICINA24h/_assets_work/downloads/3dassets_garage/34042.glb",
+   "scale": 3.5,
+   "max_tris": 3000
+  },
+  {
+   "name": "Of_Portao",
+   "file": "C:/Users/Administrador/Desktop/OFICINA24h/_assets_work/downloads/3dassets_garage/33998.glb",
+   "scale": 3.5,
+   "max_tris": 3000
+  },
+  {
+   "name": "Of_KitMedico",
+   "file": "C:/Users/Administrador/Desktop/OFICINA24h/_assets_work/downloads/3dassets_garage/34040.glb",
+   "scale": 3.5,
+   "max_tris": 3000
+  },
+  {
+   "name": "Of_QuadroChaves",
+   "file": "C:/Users/Administrador/Desktop/OFICINA24h/_assets_work/downloads/3dassets_garage/34032.glb",
+   "scale": 3.5,
+   "max_tris": 3000
+  }
+ ]
+}

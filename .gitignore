@@ -20,3 +20,7 @@ assets/hud_ref/
 assets/hud_sprites/
 docs/hud_comparacao.png
 .fwjelaa/product_doc.md
+
+# Área de trabalho de assets (GLBs de terceiros, prévias, downloads): não versionar
+_assets_work/
+pipeline/asset_ids_antigos.json

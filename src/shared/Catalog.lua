@@ -24,6 +24,25 @@ function Catalog.BusinessProgress(totalEarned: number): (number, number, number,
     return level, total, (level - 1) ^ 2 * 100, level ^ 2 * 100
 end
 
+-- Tipo visual da oficina, derivado do MESMO nível empresarial (não existe sistema de progressão paralelo; só muda a aparência):
+-- 1 = Oficina de bairro (níveis 1-3), 2 = Centro automotivo (4-6), 3 = Oficina premium/performance (7+).
+Catalog.WorkshopTiers = {
+    { Id = 1, Name = "Oficina de bairro", MinLevel = 1 },
+    { Id = 2, Name = "Centro automotivo", MinLevel = 4 },
+    { Id = 3, Name = "Oficina premium", MinLevel = 7 },
+} :: { { Id: number, Name: string, MinLevel: number } }
+
+function Catalog.WorkshopTier(totalEarned: number): (number, string)
+    local level = Catalog.BusinessLevel(totalEarned)
+    local tier = Catalog.WorkshopTiers[1]
+    for _, candidate in ipairs(Catalog.WorkshopTiers) do
+        if level >= candidate.MinLevel then
+            tier = candidate
+        end
+    end
+    return tier.Id, tier.Name
+end
+
 Catalog.Equipment = {
     BasicToolset = { DisplayName = "Kit de ferramentas", Cost = 0 },
     Jack = { DisplayName = "Macaco hidráulico", Cost = 100 },
@@ -310,17 +329,30 @@ end
 Catalog.CustomerNames = { "Marcos", "Ana", "Carlos", "Beatriz", "João", "Luiza", "Pedro", "Camila", "Rafael", "Fernanda", "Tiago", "Juliana" }
 
 -- Nome exibido do veículo -> modelo em ServerStorage.Assets.Veiculos (usado pelo VehicleService e pelas miniaturas 3D).
--- Não há picape nos assets disponíveis; o compacto serve de substituto (limitação registrada em docs/PROGRESSO.md).
+-- 14 modelos SEM marca (emblemas, placas e letreiros removidos no Blender; origem em docs/ORIGEM_ASSETS.md).
+-- Categorias: 4 hatch, 4 sedã, 2 SUV (limitação: só 2 SUVs sem marca ficaram bons), 4 picape.
 Catalog.VehicleModels = {
-    ["Hatch compacto"] = "Veiculo_Hatch",
-    ["Sedã urbano"] = "Veiculo_Sedan",
-    ["Picape leve"] = "Veiculo_Compacto",
+    ["Hatch compacto"] = "Veiculo_Hatch_A",
+    ["Hatch azul"] = "Veiculo_Hatch_B",
+    ["Hatch híbrido"] = "Veiculo_Hatch_C",
+    ["Hatch esportivo"] = "Veiculo_Hatch_D",
+    ["Sedã executivo"] = "Veiculo_Sedan_A",
+    ["Sedã clássico"] = "Veiculo_Sedan_B",
+    ["Compacto retrô"] = "Veiculo_Sedan_C",
+    ["Sedã médio"] = "Veiculo_Sedan_D",
+    ["Jipe 4x4"] = "Veiculo_SUV_A",
+    ["SUV premium"] = "Veiculo_SUV_B",
+    ["Picape cabine estendida"] = "Veiculo_Picape_A",
+    ["Picape antiga"] = "Veiculo_Picape_B",
+    ["Picape de fazenda"] = "Veiculo_Picape_C",
+    ["Caminhonete de carga"] = "Veiculo_Picape_D",
 } :: { [string]: string }
 
 Catalog.VehicleNames = {
-    "Hatch compacto",
-    "Sedã urbano",
-    "Picape leve",
+    "Hatch compacto", "Hatch azul", "Hatch híbrido", "Hatch esportivo",
+    "Sedã executivo", "Sedã clássico", "Compacto retrô", "Sedã médio",
+    "Jipe 4x4", "SUV premium",
+    "Picape cabine estendida", "Picape antiga", "Picape de fazenda", "Caminhonete de carga",
 }
 
 return Catalog

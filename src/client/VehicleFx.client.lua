@@ -445,7 +445,7 @@ RunService.RenderStepped:Connect(function(dt: number)
 		if #fx.Wheels > 0 then
 			local front = frontWheel(fx)
 			for _, g in ipairs(fx.Wheels) do
-				local spin = -forward / g.Radius -- cada roda gira pelo próprio raio
+				local spin = forward / g.Radius -- cada roda gira pelo próprio raio (sentido corrigido: para frente)
 				local axle = g.Axle
 				local extra = CFrame.identity
 				if g == front then

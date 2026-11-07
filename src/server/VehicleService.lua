@@ -333,8 +333,7 @@ function VehicleService.Spawn(owner: Player, job: any): (boolean, string)
 	bay:SetAttribute("JobId", job.Id)
 	local bayLocal = frame:PointToObjectSpace(bay.Position)
 	local handoff = CustomerArrivalService.Claim(job.Id)
-	local annex = bay:GetAttribute("Anexo") == true
-	local path = LotPath.Enter(frame, handoff and handoff.SlotX or nil, bayLocal.X, bayLocal.Z, annex)
+	local path = LotPath.Enter(frame, handoff and handoff.SlotX or nil, bayLocal.X, bayLocal.Z)
 	local car: Model?, npc: Model?, animator: NpcKit.NpcAnimator? = nil, nil, nil
 	if handoff then
 		car, npc, animator = handoff.Car, handoff.Npc, handoff.Animator
@@ -464,9 +463,8 @@ function VehicleService.Despawn(jobId: string, instant: boolean?)
 		task.wait(0.4)
 		local bayLocal = theFrame:PointToObjectSpace(theBay.Position)
 		local root = car.PrimaryPart :: BasePart
-		local annex = theBay:GetAttribute("Anexo") == true
-		local back, offFromX = LotPath.BackOut(theFrame, bayLocal.X, bayLocal.Z, annex)
-		LotPath.Drive(root, back, annex and LotPath.YardSpeed or LotPath.YardSpeed * 0.7, true)
+		local back, offFromX = LotPath.BackOut(theFrame, bayLocal.X, bayLocal.Z)
+		LotPath.Drive(root, back, LotPath.YardSpeed * 0.7, true)
 		release()
 		if car.Parent then
 			task.wait(0.3)

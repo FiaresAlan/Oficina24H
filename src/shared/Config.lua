@@ -29,7 +29,8 @@ Config.ShopDistance = 40 -- studs até o prédio da Loja de Autopeças do bairro
 -- Mochila: peças que o jogador carrega (para reparos fora da oficina no futuro); o resto fica na prateleira.
 Config.BagCapacity = 12
 
--- Expansão da oficina: anexo com mais um box (Bay3). Preço por nível (índice = nível comprado).
+-- (antigo) anexo da expansão: só para devolver o dinheiro de quem comprou. A ampliação agora é por nível do prédio
+-- (shared/WorkshopLevels), comprada na Construtora do bairro.
 Config.ExpansionCosts = { 1500 }
 
 -- Funcionários (mecânicos NPC fixos): contratação + salário pago a cada PaydaySeconds; fazem o serviço sozinhos
@@ -38,7 +39,7 @@ Config.EmployeeHireCost = 300
 Config.EmployeeSalary = 60
 Config.PaydaySeconds = 300
 Config.MaxEmployees = 2
-Config.EmployeeWorkSeconds = 40 -- tempo que um funcionário leva em um serviço
+Config.EmployeeWorkSeconds = 60 -- funcionário é mais lento que o jogador (e só pega carro quando há 2+ esperando)
 Config.EmployeeQuality = 72 -- qualidade (%) do serviço feito por funcionário
 
 -- Oficinas rivais (NPC) ocupam lotes livres para o bairro não parecer vazio; sempre sobra lote para quem entra.

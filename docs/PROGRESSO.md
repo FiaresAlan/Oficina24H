@@ -487,3 +487,41 @@ perto demais (o HUD mostra um por vez: quadro foi para o fundo e alcance caiu pa
 - **Testes:** CatalogTest ganhou checagens de estações, placa, anexo e configurações (rodar no Studio).
 - **Pendente:** ouvir os sons no jogo (ids públicos; não dá para conferir áudio pelo Studio via MCP), testar no celular,
   2 jogadores reais disputando lotes com rivais.
+
+## 2026-11-07 — Lote 3: 4 níveis de oficina, Construtora, equipamentos interativos, som ambiente e música
+Ideias do Alan, avaliadas e ajustadas (validação e balanceamento pelo dono do projeto):
+- **4 níveis de prédio** (`shared/WorkshopLevels.lua`), cada um maior que o anterior, montados pelo servidor com
+  materiais de verdade (tijolo, concreto, metal ondulado, vidro), portas de enrolar, letreiro com LED na cor do nível,
+  luminárias, sala lateral (prateleira), **sala dos fundos com os equipamentos** e pátio de asfalto com portões
+  **ENTRADA** (x = 40) e **SAÍDA** (x = 31). Os carros entram pelo portão, circulam no pátio e entram de frente em
+  qualquer box; saem de ré para a fileira de saída e vão pelo portão de saída (testado com o box mais distante).
+
+| Nível | Prédio | Boxes | Moedas | Nível da oficina | Reputação | XP (soma das habilidades) | Equip. instalados | Cabem equip. | Funcionários |
+|---|---|---|---|---|---|---|---|---|---|
+| 0 | Garagem de bairro | 1 | — | — | — | — | — | 3 | 0 |
+| 1 | Oficina | 2 | 1.500 | 4 | 20 | 8 | 3 | 5 | 0 |
+| 2 | Centro automotivo | 4 | 6.000 | 8 | 70 | 14 | 5 | 8 | 1 |
+| 3 | Oficina premium | 6 | 18.000 | 13 | 160 | 22 | 8 | 12 | 2 |
+
+  Estimativa: nível 1 em ~8 serviços, nível 2 em ~25, nível 3 em ~60 (serviço médio ~200 moedas, 1–6 de reputação e
+  22–90 XP). O próprio prédio limita quantos equipamentos cabem: crescer o prédio é o que libera os serviços maiores.
+  Ordens abertas = boxes + 1. Perfis antigos (que já atendiam) começam no nível 1; quem comprou o anexo antigo recebeu
+  as 1.500 moedas de volta (o anexo deixou de existir).
+- **Construtora** (o bloco liso "Distribuidora" do bairro virou prédio com vitrine, toldo e letreiro): prompt
+  "Ampliar oficina" abre a tela com o prédio atual, a próxima obra e os requisitos em verde/vermelho; a obra só
+  acontece com os boxes vazios. A Loja de Autopeças também ganhou fachada de verdade.
+- **Funcionários** só a partir do nível 2 (quadro de funcionários aparece no prédio): 1 no nível 2, 2 no nível 3.
+  Equilíbrio: o mecânico NPC só pega um carro quando há **2 ou mais** esperando (sempre sobra trabalho para o jogador)
+  e leva 60 s. Contratar jogadores continua pelo convite de colaboração por ordem (já existia).
+- **Equipamentos interativos:** cada máquina comprada aparece na sala dos fundos com o prompt **"Usar"**; reparo que
+  precisa de máquina começa nela (o jogador vai até a desmontadora, o scanner, a bancada...). Ferramenta de mão (kit
+  básico) continua no próprio carro. Comprar equipamento além do que cabe pede ampliação.
+- **Som ambiente e música** (`client/AmbientAudio`): cidade de dia na rua, galpão industrial dentro da oficina (troca
+  sozinho ao entrar/sair), playlist de 6 faixas licenciadas (APM Music: funk, hip-hop, chill) com botão ♪.
+- **Correção:** rodas giravam para trás.
+- **Rivais:** prédio pelo mesmo critério dos jogadores (nível 0–3 pelo faturamento).
+- **Testes:** 787 verificações (CatalogTest com os níveis: boxes, tamanhos, alcance do pátio, requisitos, espaço de
+  equipamentos). Play no Studio: prédio nível 2 com 4 boxes, carro entrando pelo portão no box mais distante e saindo
+  pelo portão de saída, tela da Construtora, compra de equipamento na loja e "Usar" na máquina.
+- **Pendente:** ouvir as músicas/ambiente no jogo (ids licenciados; o MCP não reproduz áudio), celular, revisar a
+  aparência dos 4 níveis em foto lado a lado, prédio do nível 3 com 2 funcionários em ação.

@@ -40,7 +40,7 @@ end
 for id, e in pairs(Catalog.Equipment) do
 	check("equipamento " .. id .. ": custo >= 0", e.Cost >= 0)
 	check("equipamento " .. id .. ": modelo físico existe", EquipmentModels.Has(id))
-	check("equipamento " .. id .. ": espaço (slot) definido", EquipmentService.GetSlot(id) ~= nil)
+	check("equipamento " .. id .. ": tem lugar na ordem da sala dos fundos", table.find(EquipmentService.Order, id) ~= nil)
 end
 
 -- Peças: existem, têm custo, e o serviço dá margem (receita >= 1,5x o custo das peças)
@@ -118,70 +118,51 @@ for id, e in pairs(Catalog.Equipment) do
 	if e.Cost > 0 then check("equipamento " .. id .. " é exigido por algum defeito", used[id] == true) end
 end
 
--- Dois slots nunca no mesmo lugar
-local seen = {}
-for id in pairs(Catalog.Equipment) do
-	local s = EquipmentService.GetSlot(id)
-	if s then
-		local key = s.x .. "," .. s.z
-		check("slot de " .. id .. " é único", seen[key] == nil, key)
-		seen[key] = id
-	end
-end
-
--- Layout: vagas dentro do prédio, equipamentos sem sobreposição entre si nem com vagas, os internos dentro das paredes
+-- Níveis da oficina (shared/WorkshopLevels): 1/2/4/6 boxes, prédios cada vez maiores, requisitos crescentes,
+-- equipamentos cabendo na sala dos fundos, nada no caminho dos carros
 do
-	local Layout = require(sharedClone.Layout)
-	local function rect(cx, cz, w, d) return { x0 = cx - w / 2, x1 = cx + w / 2, z0 = cz - d / 2, z1 = cz + d / 2 } end
-	local function overlap(a, b) return a.x0 < b.x1 and b.x0 < a.x1 and a.z0 < b.z1 and b.z0 < a.z1 end
-	local I = Layout.Interior
-	local rects = {}
-	for i, bay in ipairs(Layout.Bays) do
-		local r = rect(bay.x, bay.z, bay.w, bay.d)
-		check("vaga " .. i .. " dentro do prédio", r.x0 >= I.x0 and r.x1 <= I.x1 and r.z0 >= I.z0 and r.z1 <= I.z1)
-		for _, other in ipairs(rects) do check("vagas não se sobrepõem", not overlap(r, other.r)) end
-		table.insert(rects, { id = "vaga" .. i, r = r })
-	end
-	for id in pairs(Catalog.Equipment) do
-		local s = Layout.Slots[id]
-		local model = s and EquipmentModels.Build(id)
-		if s and model then
-			local cf, size = model:GetBoundingBox()
-			local off = cf.Position - model:GetPivot().Position
-			local rotated = math.abs(s.rot) % 180 == 90
-			local w, d = rotated and size.Z or size.X, rotated and size.X or size.Z
-			local ox, oz = off.X, off.Z
-			if rotated then ox, oz = off.Z, off.X end
-			local r = rect(s.x + ox, s.z + oz, w, d)
-			local inside = r.x0 >= I.x0 - 0.01 and r.x1 <= I.x1 + 0.01 and r.z0 >= I.z0 and r.z1 <= I.z1
-			local isOutside = r.x1 < -22.5 or r.x0 > 22.5 or r.z1 < 4.5 or r.z0 > 35.5
-			check("equipamento " .. id .. " totalmente dentro ou totalmente fora do prédio", inside or isOutside, string.format("x %.1f..%.1f z %.1f..%.1f", r.x0, r.x1, r.z0, r.z1))
-			for _, other in ipairs(rects) do
-				check("equipamento " .. id .. " não bate em " .. other.id, not overlap(r, other.r))
-			end
-			table.insert(rects, { id = id, r = r })
-			model:Destroy()
-		end
-	end
-end
-
--- Estações físicas, placa, anexo da expansão: nada no caminho dos carros nem em cima de equipamento
-do
-	local Layout = require(sharedClone.Layout)
-	local A, I, D, S = Layout.Annex, Layout.Interior, Layout.Driveway, Layout.Sign
-	for id, s in pairs(Layout.Slots) do
-		check("equipamento " .. id .. " fora do anexo", not (s.x > A.x0 - 3 and s.x < A.x1 + 3 and s.z > A.z0 - 3 and s.z < A.z1 + 3), s.x .. "," .. s.z)
-	end
-	for name, s in pairs(Layout.Stations) do
-		check("estação " .. name .. " dentro do prédio", s.x >= I.x0 - 1 and s.x <= I.x1 + 1 and s.z >= I.z0 and s.z <= I.z1 + 0.5)
-	end
-	check("placa 3D fora do corredor dos carros", S.x + 7 < D.x0 or S.x - 7 > D.x1)
-	check("placa 3D fora do anexo", S.x - 7 > A.x1 or S.x + 7 < A.x0)
-	local b = Layout.AnnexBay
-	check("box do anexo dentro do anexo", b.x - b.w / 2 >= A.x0 and b.x + b.w / 2 <= A.x1 and b.z - b.d / 2 >= A.z0 and b.z + b.d / 2 <= A.z1)
+	local WL = require(sharedClone.WorkshopLevels)
 	local Config = require(sharedClone.Config)
-	check("expansão tem preço", #Config.ExpansionCosts >= 1 and Config.ExpansionCosts[1] > 0)
-	check("funcionário: salário e contratação positivos", Config.EmployeeSalary > 0 and Config.EmployeeHireCost > 0 and Config.MaxEmployees >= 1)
+	local expected = { [0] = 1, [1] = 2, [2] = 4, [3] = 6 }
+	local prevWidth, prevCost = 0, -1
+	for level = 0, WL.MaxLevel do
+		local L = WL.Levels[level]
+		check("nível " .. level .. ": " .. expected[level] .. " boxes", #L.Bays == expected[level], #L.Bays)
+		check("nível " .. level .. ": prédio maior que o anterior", L.X1 - L.X0 > prevWidth, L.X1 - L.X0)
+		check("nível " .. level .. ": custa mais que o anterior", L.Cost > prevCost, L.Cost)
+		prevWidth, prevCost = L.X1 - L.X0, L.Cost
+		check("nível " .. level .. ": prédio dentro do lote", L.X0 >= -45 and L.X1 <= 45)
+		local half = WL.BayWidth / 2
+		for i, x in ipairs(L.Bays) do
+			check(string.format("nível %d box %d dentro do prédio", level, i), x - half >= L.X0 + 1 and x + half <= L.X1 - 1)
+			check(string.format("nível %d box %d alcançável pelo pátio", level, i), x + 2 * WL.YardTurn <= WL.GateIn and x - WL.YardTurn <= WL.GateOut - WL.YardTurn)
+			for j, y in ipairs(L.Bays) do
+				if j > i then
+					check(string.format("nível %d boxes %d e %d não se sobrepõem", level, i, j), math.abs(x - y) >= WL.BayWidth + 1)
+				end
+			end
+		end
+		local slots = WL.EquipmentSlots(level)
+		check("nível " .. level .. ": cabe pelo menos o pedido para o próximo nível", level == WL.MaxLevel or #slots >= WL.Levels[level + 1].MinEquipment, #slots)
+		check("nível " .. level .. ": sala dos fundos atrás dos boxes", WL.EquipmentZ - 3 > WL.BayZ + WL.BayDepth / 2)
+	end
+	check("nível máximo cabe todos os equipamentos", WL.MaxEquipment(WL.MaxLevel) >= #EquipmentService.Order)
+	check("funcionários só a partir do nível 2", WL.Levels[0].MaxEmployees == 0 and WL.Levels[1].MaxEmployees == 0 and WL.Levels[2].MaxEmployees >= 1)
+	check("limite de funcionários do jogo cobre o maior prédio", Config.MaxEmployees >= WL.Levels[WL.MaxLevel].MaxEmployees)
+	-- requisitos: com tudo zerado não compra; com tudo no mínimo compra; faltando uma coisa não compra
+	local L1 = WL.Levels[1]
+	local enough = { Coins = L1.Cost, BusinessLevel = L1.MinBusinessLevel, Reputation = L1.MinReputation, SkillTotal = L1.MinSkillTotal, Equipment = L1.MinEquipment }
+	check("Check: requisitos mínimos compram", (WL.Check(1, enough)))
+	local missing = table.clone(enough)
+	missing.Reputation -= 1
+	check("Check: faltando reputação não compra", not (WL.Check(1, missing)))
+	check("Check: tudo zerado não compra", not (WL.Check(2, { Coins = 0, BusinessLevel = 1, Reputation = 0, SkillTotal = 5, Equipment = 1 })))
+	-- placa 3D fora dos portões e das fileiras do pátio
+	local Layout = require(sharedClone.Layout)
+	local S = Layout.Sign
+	check("placa 3D longe dos portões", S.x + 8 < WL.GateOut - 4.4)
+	check("placa 3D abaixo da fileira de saída", S.z + 1.5 < WL.ExitRowZ - 4.4)
+	check("funcionário: salário e contratação positivos", Config.EmployeeSalary > 0 and Config.EmployeeHireCost > 0)
 	check("rivais sempre deixam lote livre", Config.RivalKeepFreePlots >= 1)
 end
 
@@ -267,8 +248,8 @@ end
 
 -- Veículos: todo nome tem modelo no ServerStorage com Raiz, Casco (colisão), banco do motorista e tamanho que cabe na vaga
 do
-	local Layout = require(game.ReplicatedStorage.Shared.Layout)
-	local bay = Layout.Bays[1]
+	local WL = require(game.ReplicatedStorage.Shared.WorkshopLevels)
+	local bay = { w = WL.BayWidth, d = WL.BayDepth }
 	local folder = game.ServerStorage:FindFirstChild("Assets") and game.ServerStorage.Assets:FindFirstChild("Veiculos")
 	local all = table.clone(Catalog.VehicleNames)
 	for _, n in ipairs(Catalog.VipVehicleNames) do table.insert(all, n) end

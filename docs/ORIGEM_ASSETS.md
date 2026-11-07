@@ -117,3 +117,9 @@ motor "New Gen Car Idle Engine" (126560668123605, 4CIoud), "Electric_sparking2 l
 "Electric Buzzing" (74799822173480, Appapffhhh), "steam hiss loop" (130730262452898, sting_avenue37) e, da biblioteca
 ProSoundEffects licenciada pela Roblox: "Air Wrench 4" (9113078798), "Ratchet Wrench Gear Winding 3" (9118047781),
 "Hydraulic Pallet Lift 1" (9114852843). Se algum id deixar de ser público, o jogo segue sem aquele som.
+
+## Som ambiente e música (2026-11-07)
+`src/shared/SoundIds.lua`. Ambiente da biblioteca ProSoundEffects (licenciada pela Roblox): "City Day Ambience 3"
+(9112759095), "Small Town Ambience 1" (9112874053), "Industrial Ambience Reverberant Interior 2" (9114872503).
+Música da APM Music (licenciada pela Roblox, criador APMOfficial): Funky Disco Beats (9038367768), Moving Round The
+Block (9047105108), Funky (A) (1840434670), Lo-fi Chill A (9043887091), Blue Motel (9044512739), Poolside (9046863253).

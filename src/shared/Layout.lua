@@ -17,7 +17,7 @@ Layout.Bays = {
 Layout.Driveway = { x0 = -1.5, x1 = 21.5, z0 = -45, z1 = 8 }
 
 -- Placa e entrada do lote (fora do corredor dos carros e do caminho do anexo): lado direito da frente.
-Layout.Sign = { x = 33, z = -40.5 }
+Layout.Sign = { x = -14, z = -40.5 } -- frente esquerda: fora dos portões (x 31/40) e das fileiras do pátio
 
 -- Estações físicas dentro do prédio (y = altura do centro; yaw: 0 = de frente para a rua).
 Layout.Stations = {

@@ -115,9 +115,9 @@ local function arc(pts: { Vector2 }, bayX: number, reverse: boolean)
 	end
 end
 
--- Caminho interno do anexo (Layout.AnnexRoute): do fim da curva do corredor principal (mainX, LaneZ + R) até o box do
--- anexo. Sobe pelo corredor, vira para -X em turnZ e entra no anexo de frente (+Z).
-local Layout = require(game:GetService("ReplicatedStorage").Shared.Layout)
+-- Pátio da oficina (shared/WorkshopLevels): entra pelo portão da direita (GateIn), segue pela fileira de entrada até a
+-- frente do box e entra de frente; para sair dá ré até a fileira de saída e segue pelo portão de saída (GateOut).
+local WorkshopLevels = require(game:GetService("ReplicatedStorage").Shared.WorkshopLevels)
 
 local function arcPts(pts: { Vector2 }, cx: number, cz: number, r: number, a0: number, a1: number)
 	local n = 10
@@ -127,16 +127,6 @@ local function arcPts(pts: { Vector2 }, cx: number, cz: number, r: number, a0: n
 	end
 end
 
-local function annexRoute(pts: { Vector2 }, bayX: number, bayZ: number)
-	local route = Layout.AnnexRoute
-	local r, mx, tz = route.radius, route.mainX, route.turnZ
-	table.insert(pts, Vector2.new(mx, tz - r))
-	arcPts(pts, mx - r, tz - r, r, 0, math.pi / 2) -- vira para -X
-	table.insert(pts, Vector2.new(bayX + r, tz))
-	arcPts(pts, bayX + r, tz + r, r, -math.pi / 2, -math.pi) -- vira para +Z, entrando no anexo
-	table.insert(pts, Vector2.new(bayX, bayZ))
-end
-
 -- Chegada: surge longe na faixa e encosta no meio-fio na vaga `slotX`.
 function LotPath.Arrival(frame: CFrame, slotX: number): { Vector3 }
 	local pts = { Vector2.new(slotX - LotPath.StreetSpan, LotPath.LaneZ), Vector2.new(slotX - 18, LotPath.LaneZ) }
@@ -144,53 +134,45 @@ function LotPath.Arrival(frame: CFrame, slotX: number): { Vector3 }
 	return toWorld(frame, pts)
 end
 
--- Do meio-fio (ou de longe, se `slotX` for nil) até a vaga da oficina, entrando de frente.
--- `annex` = o box fica no anexo: entra pelo corredor principal e segue o caminho interno.
-function LotPath.Enter(frame: CFrame, slotX: number?, bayX: number, bayZ: number, annex: boolean?): { Vector3 }
-	local R = LotPath.TurnRadius
-	local gateX = annex and Layout.AnnexRoute.mainX or bayX
+-- Do meio-fio (ou de longe, se `slotX` for nil) até o box `bayX`, entrando de frente pelo portão e pelo pátio.
+function LotPath.Enter(frame: CFrame, slotX: number?, bayX: number, bayZ: number): { Vector3 }
+	local R, r = LotPath.TurnRadius, WorkshopLevels.YardTurn
+	local gate, row = WorkshopLevels.GateIn, WorkshopLevels.EntryRowZ
 	local pts: { Vector2 }
 	if slotX then
 		pts = { Vector2.new(slotX, LotPath.ParkZ) }
-		sCurve(pts, slotX, LotPath.ParkZ, math.min(slotX + 14, gateX - R), LotPath.LaneZ)
+		sCurve(pts, slotX, LotPath.ParkZ, math.min(slotX + 14, gate - R), LotPath.LaneZ)
 	else
-		pts = { Vector2.new(gateX - R - LotPath.StreetSpan, LotPath.LaneZ) }
+		pts = { Vector2.new(gate - R - LotPath.StreetSpan, LotPath.LaneZ) }
 	end
-	table.insert(pts, Vector2.new(gateX - R, LotPath.LaneZ))
-	arc(pts, gateX, false)
-	if annex then
-		annexRoute(pts, bayX, bayZ)
-	else
-		table.insert(pts, Vector2.new(bayX, bayZ))
-	end
+	table.insert(pts, Vector2.new(gate - R, LotPath.LaneZ))
+	arc(pts, gate, false) -- entra no lote pelo portão
+	table.insert(pts, Vector2.new(gate, row - r))
+	arcPts(pts, gate - r, row - r, r, 0, math.pi / 2) -- vira para -X na fileira de entrada
+	table.insert(pts, Vector2.new(bayX + r, row))
+	arcPts(pts, bayX + r, row + r, r, -math.pi / 2, -math.pi) -- vira para +Z, de frente para o box
+	table.insert(pts, Vector2.new(bayX, bayZ))
 	return toWorld(frame, pts)
 end
 
--- Saída da vaga: dá ré até a faixa (terminando de frente para +X) ... Retorna também o x de onde segue pela faixa.
-function LotPath.BackOut(frame: CFrame, bayX: number, bayZ: number, annex: boolean?): ({ Vector3 }, number)
-	local R = LotPath.TurnRadius
-	local pts: { Vector2 }
-	local gateX = bayX
-	if annex then
-		-- o mesmo caminho interno, de ré, até o corredor principal
-		gateX = Layout.AnnexRoute.mainX
-		local forward: { Vector2 } = {}
-		annexRoute(forward, bayX, bayZ)
-		pts = {}
-		for i = #forward, 1, -1 do
-			table.insert(pts, forward[i])
-		end
-		table.insert(pts, Vector2.new(gateX, LotPath.LaneZ + R))
-	else
-		pts = { Vector2.new(bayX, bayZ), Vector2.new(bayX, LotPath.LaneZ + R) }
-	end
-	arc(pts, gateX, true)
-	return toWorld(frame, pts), gateX - R
+-- Saída do box: dá ré até a fileira de saída, terminando de frente para +X. Retorna também o x onde termina.
+function LotPath.BackOut(frame: CFrame, bayX: number, bayZ: number): ({ Vector3 }, number)
+	local r, row = WorkshopLevels.YardTurn, WorkshopLevels.ExitRowZ
+	local pts = { Vector2.new(bayX, bayZ), Vector2.new(bayX, row + r) }
+	arcPts(pts, bayX - r, row + r, r, 0, -math.pi / 2)
+	return toWorld(frame, pts), bayX - r
 end
 
--- ... e segue pela faixa até sumir.
+-- ... e segue de frente pela fileira de saída, sai pelo portão de saída e vai embora pela rua.
 function LotPath.DriveOff(frame: CFrame, fromX: number): { Vector3 }
-	return toWorld(frame, { Vector2.new(fromX, LotPath.LaneZ), Vector2.new(fromX + LotPath.StreetSpan, LotPath.LaneZ) })
+	local R, r = LotPath.TurnRadius, WorkshopLevels.YardTurn
+	local gate, row = WorkshopLevels.GateOut, WorkshopLevels.ExitRowZ
+	local pts = { Vector2.new(fromX, row), Vector2.new(gate - r, row) }
+	arcPts(pts, gate - r, row - r, r, math.pi / 2, 0) -- vira para -Z (rumo à rua)
+	table.insert(pts, Vector2.new(gate, LotPath.LaneZ + R))
+	arcPts(pts, gate + R, LotPath.LaneZ + R, R, math.pi, 3 * math.pi / 2) -- entra na faixa rumo a +X
+	table.insert(pts, Vector2.new(gate + R + LotPath.StreetSpan, LotPath.LaneZ))
+	return toWorld(frame, pts)
 end
 
 -- Sai do meio-fio direto para a rua (cliente dispensado ou que cansou de esperar).

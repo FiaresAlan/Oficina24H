@@ -8,13 +8,13 @@ local JobRules = require(ReplicatedStorage.Shared.JobRules)
 local CustomerRules = require(ReplicatedStorage.Shared.CustomerRules)
 local RepairRules = require(ReplicatedStorage.Shared.RepairRules)
 local DiagnosisRules = require(ReplicatedStorage.Shared.DiagnosisRules)
+local WorkshopLevels = require(ReplicatedStorage.Shared.WorkshopLevels)
 
 local WorkshopService = {}
 
 local PlotService = require(script.Parent.PlotService)
 local VehicleService = require(script.Parent.VehicleService)
 local CustomerArrivalService = require(script.Parent.CustomerArrivalService)
-local WorkshopSkin = require(script.Parent.WorkshopSkin)
 local EquipmentService = require(script.Parent.EquipmentService)
 local StationService = require(script.Parent.StationService)
 local CustomerNpcService = require(script.Parent.CustomerNpcService)
@@ -46,6 +46,7 @@ local updatePriceBoard: (Player) -> () -- definido adiante; declarado aqui porqu
 local syncStaffRef: (Player) -> () -- definido adiante (funcionários)
 local refreshPlotDisplays: () -> () -- definido adiante (placa 3D e TV)
 local rankingEntriesRef: () -> { any } -- definido adiante (ranking com rivais)
+local upgradeInfoRef: (Player, any) -> any -- definido adiante (Construtora)
 local Workshops: {[number]: any} = {}
 local Jobs: {[string]: any} = {}
 local Invites: {[string]: any} = {}
@@ -68,6 +69,28 @@ end
 
 local function getWorkshop(player: Player)
     return Workshops[player.UserId]
+end
+
+-- Nível do prédio (shared/WorkshopLevels) e contagem de equipamentos do jogador.
+local function workshopLevel(player: Player): number
+    local profile = DataService and DataService.Get(player)
+    return profile and profile.WorkshopLevel or 0
+end
+local function equipmentCount(owned: { [string]: boolean }?): number
+    local n = 0
+    for _, has in pairs(owned or {}) do
+        if has then
+            n += 1
+        end
+    end
+    return n
+end
+local function skillTotal(player: Player): number
+    local total = 0
+    for _, specialization in ipairs(Catalog.Specializations) do
+        total += DataService.GetSkillLevel(player, specialization)
+    end
+    return total
 end
 
 local function ownsEquipment(workshop: any, equipmentId: string): boolean
@@ -265,11 +288,10 @@ function WorkshopService.ClaimWorkshop(player: Player)
         CreatedAt = os.time(),
     }
 
-    EquipmentService.Sync(player, profile.Equipment)
-    WorkshopSkin.Update(player, profile.TotalEarned or 0)
     if plot then
-        StationService.ApplyExpansion(plot, profile.Expansion or 0)
+        StationService.ApplyLevel(plot, profile.WorkshopLevel or 0, player.DisplayName)
     end
+    EquipmentService.Sync(player, profile.Equipment)
     task.defer(function()
         syncStaffRef(player)
         refreshPlotDisplays()
@@ -365,6 +387,7 @@ function WorkshopService.GetSnapshot(player: Player)
         Ranking = CustomerRules.Rank(ranking),
         Profile = profile,
         HasWorkshop = workshop ~= nil,
+        Workshop = (workshop and profile) and upgradeInfoRef(player, profile) or nil,
         WorkshopName = workshop and workshop.Name or nil,
         Jobs = jobs,
         CollabJobs = collabJobs,
@@ -391,7 +414,7 @@ end
 function WorkshopService.GenerateCustomer(player: Player)
     local workshop = getWorkshop(player)
     if not workshop then return false, "Registre uma oficina primeiro." end
-    if getOpenJobCount(player.UserId) >= Config.MaxOpenJobsPerWorkshop then
+    if getOpenJobCount(player.UserId) >= WorkshopLevels.MaxOpenJobs(workshopLevel(player)) then
         return false, "Sua oficina já atingiu o limite de ordens abertas."
     end
     -- Sem isso o botão permitiria farmar dinheiro sem limite; clientes também chegam sozinhos (Start).
@@ -566,14 +589,29 @@ local function checkRepairable(player: Player, jobId: string): (boolean, string,
     if not job.Diagnosed then
         return false, "Faça o diagnóstico antes do reparo.", nil, nil, nil
     end
-    if not VehicleService.IsNear(player, job.Id, Config.InteractDistance) then
-        return false, "Aproxime-se do veículo para reparar.", nil, nil, nil
-    end
     local workshop = getWorkshop(player)
     local defect = Catalog.Defects[job.DefectId]
     local service = Catalog.Services[job.ServiceId]
     if not workshop or not ownsEquipment(workshop, defect.RequiredEquipment) then
-        return false, "Sua oficina não possui o equipamento necessário: " .. defect.RequiredEquipment, nil, nil, nil
+        local equipment = Catalog.Equipment[defect.RequiredEquipment]
+        return false, "Sua oficina não possui o equipamento necessário: " .. (equipment and equipment.DisplayName or defect.RequiredEquipment), nil, nil, nil
+    end
+    if not VehicleService.IsParked(job.Id) then
+        return false, "Espere o carro estacionar no box.", nil, nil, nil
+    end
+    -- Ferramenta de mão: reparo no carro. Máquina: o jogador usa a máquina na sala dos fundos (prompt "Usar").
+    if defect.RequiredEquipment == "BasicToolset" then
+        if not VehicleService.IsNear(player, job.Id, Config.InteractDistance) then
+            return false, "Aproxime-se do veículo para reparar.", nil, nil, nil
+        end
+    else
+        local plot = PlotService.GetPlot(player)
+        local pos = plot and EquipmentService.Position(plot, defect.RequiredEquipment)
+        local character = player.Character
+        local hrp = character and character:FindFirstChild("HumanoidRootPart")
+        if not pos or not hrp or not hrp:IsA("BasePart") or (hrp.Position - pos).Magnitude > 12 then
+            return false, "Use o equipamento " .. Catalog.Equipment[defect.RequiredEquipment].DisplayName .. " na sala dos fundos da oficina.", nil, nil, nil
+        end
     end
     local level = DataService.GetSkillLevel(player, defect.Specialization)
     if level < defect.RequiredLevel then
@@ -684,10 +722,7 @@ function WorkshopService.UpdateSkin(player: Player)
     if not profile or not Workshops[player.UserId] then
         return
     end
-    local changed, name = WorkshopSkin.Update(player, profile.TotalEarned or 0)
-    if changed and eventSender then
-        eventSender(player, "Notice", { Message = "Sua oficina evoluiu: agora é " .. name .. "!", Success = true })
-    end
+    -- A aparência agora vem do nível comprado na Construtora (StationService.ApplyLevel); nada a fazer aqui.
 end
 
 function WorkshopService.SkipOnboarding(player: Player)
@@ -706,10 +741,13 @@ function WorkshopService.BuyEquipment(player: Player, equipmentId: string)
     if not profile or profile.Coins < equipment.Cost then
         return false, "Moedas insuficientes."
     end
+    if equipmentCount(profile.Equipment) >= WorkshopLevels.MaxEquipment(profile.WorkshopLevel or 0) then
+        return false, "Não cabe mais equipamento no seu prédio: amplie a oficina na Construtora."
+    end
 
     DataService.AddCoins(player, -equipment.Cost, "Compra: " .. equipment.DisplayName)
     DataService.GrantEquipment(player, equipmentId)
-    EquipmentService.Add(player, equipmentId)
+    EquipmentService.Add(player, profile.Equipment, equipmentId)
     return true, equipment.DisplayName .. " comprado."
 end
 
@@ -784,6 +822,13 @@ function WorkshopService.Checkout(player: Player, items: any)
     if profile.Coins < total then
         return false, "Moedas insuficientes."
     end
+    local newCount = 0
+    for _ in pairs(equipmentIds) do
+        newCount += 1
+    end
+    if newCount > 0 and equipmentCount(profile.Equipment) + newCount > WorkshopLevels.MaxEquipment(profile.WorkshopLevel or 0) then
+        return false, "Não cabe tanto equipamento no seu prédio: amplie a oficina na Construtora."
+    end
     -- tudo validado: aplica sem yield entre a checagem e a gravação
     DataService.AddCoins(player, -total, "Loja de peças")
     for partId, quantity in pairs(partQuantities) do
@@ -791,7 +836,7 @@ function WorkshopService.Checkout(player: Player, items: any)
     end
     for equipmentId in pairs(equipmentIds) do
         DataService.GrantEquipment(player, equipmentId)
-        EquipmentService.Add(player, equipmentId)
+        EquipmentService.Add(player, profile.Equipment, equipmentId)
     end
     return true, string.format("Compra concluída: %d moedas.", total)
 end
@@ -1048,7 +1093,7 @@ function WorkshopService.DispatchCustomers(arrivals: number?, rand: (() -> numbe
                 ServiceableCount = JobRules.ServiceableCountIn(specialization, e.Levels, e.Profile.Equipment),
                 Rating = CustomerRules.AverageRating(e.Profile.RatingSum or 0, e.Profile.RatingCount or 0),
                 OpenJobs = getOpenJobCount(e.Owner.UserId),
-                Capacity = Config.MaxOpenJobsPerWorkshop,
+                Capacity = WorkshopLevels.MaxOpenJobs(e.Profile.WorkshopLevel or 0),
                 Distance = e.Distance,
             }
         end
@@ -1084,26 +1129,78 @@ function WorkshopService.MoveBag(player: Player, partId: string, quantity: numbe
     return DataService.MoveBag(player, partId, quantity, toBag)
 end
 
--- Expansão: anexo com mais um box (Bay3). Comprada no prompt da área de expansão.
-function WorkshopService.BuyExpansion(player: Player)
+-- Construtora do bairro: amplia o prédio para o próximo nível (WorkshopLevels.Check: moedas, nível, reputação, XP e
+-- equipamentos). Só com os boxes vazios (a obra não derruba carro de cliente) e estando na Construtora.
+function WorkshopService.UpgradeWorkshop(player: Player)
     local profile = DataService.Get(player)
     local plot = PlotService.GetPlot(player)
     if not profile or not plot or not getWorkshop(player) then
         return false, "Registre sua oficina primeiro."
     end
-    local level = profile.Expansion or 0
-    local cost = Config.ExpansionCosts[level + 1]
-    if not cost then
-        return false, "Sua oficina já está no tamanho máximo."
+    if not StationService.NearConstrutora(player) then
+        return false, "Vá até a Construtora do bairro para ampliar a oficina."
     end
-    if profile.Coins < cost then
-        return false, string.format("A expansão custa %d moedas.", cost)
+    local level = profile.WorkshopLevel or 0
+    if level >= WorkshopLevels.MaxLevel then
+        return false, "Sua oficina já é a maior do bairro!"
     end
-    DataService.AddCoins(player, -cost, "Expansão da oficina")
-    DataService.SetExpansion(player, level + 1)
-    StationService.ApplyExpansion(plot, level + 1)
-    return true, "Oficina expandida! O Box 3 do anexo já recebe clientes."
+    local ok = WorkshopLevels.Check(level + 1, {
+        Coins = profile.Coins,
+        BusinessLevel = Catalog.BusinessLevel(profile.TotalEarned or 0),
+        Reputation = profile.Reputation,
+        SkillTotal = skillTotal(player),
+        Equipment = equipmentCount(profile.Equipment),
+    })
+    if not ok then
+        return false, "Ainda faltam requisitos para a ampliação (veja a lista na Construtora)."
+    end
+    for _, job in pairs(Jobs) do
+        if job.OwnerUserId == player.UserId and job.Status == "InProgress" then
+            return false, "Termine os serviços em andamento: a obra precisa dos boxes vazios."
+        end
+    end
+    for _, child in ipairs(plot:GetChildren()) do
+        if child:IsA("BasePart") and child.Name:match("^Bay%d+$") and child:GetAttribute("JobId") ~= nil then
+            return false, "Espere o último carro sair do box para começar a obra."
+        end
+    end
+    local next = WorkshopLevels.Levels[level + 1]
+    DataService.AddCoins(player, -next.Cost, "Ampliação da oficina: " .. next.Name)
+    DataService.SetWorkshopLevel(player, level + 1)
+    StationService.ApplyLevel(plot, level + 1, player.DisplayName)
+    EquipmentService.Sync(player, profile.Equipment)
+    syncStaffRef(player)
+    refreshPlotDisplays()
+    return true, string.format("Obra concluída! Agora você tem um %s com %d boxes.", next.Name, #next.Bays)
 end
+
+-- Situação da ampliação para a tela da Construtora (vai no snapshot).
+local function upgradeInfo(player: Player, profile: any): any
+    local level = profile.WorkshopLevel or 0
+    local current = WorkshopLevels.Levels[level]
+    local info: any = {
+        Level = level,
+        Name = current.Name,
+        Bays = #current.Bays,
+        MaxEquipment = WorkshopLevels.MaxEquipment(level),
+        Equipment = equipmentCount(profile.Equipment),
+        MaxEmployees = current.MaxEmployees,
+    }
+    local next = WorkshopLevels.Levels[level + 1]
+    if next then
+        local ok, rows = WorkshopLevels.Check(level + 1, {
+            Coins = profile.Coins,
+            BusinessLevel = Catalog.BusinessLevel(profile.TotalEarned or 0),
+            Reputation = profile.Reputation,
+            SkillTotal = skillTotal(player),
+            Equipment = equipmentCount(profile.Equipment),
+        })
+        info.Next = { Level = level + 1, Name = next.Name, Bays = #next.Bays, Cost = next.Cost, CanBuy = ok, Rows = rows, MaxEmployees = next.MaxEmployees }
+    end
+    return info
+end
+WorkshopService._upgradeInfo = upgradeInfo
+upgradeInfoRef = upgradeInfo
 
 -- Funcionários ---------------------------------------------------------------------------------------------------
 
@@ -1155,8 +1252,12 @@ function WorkshopService.HireEmployee(player: Player)
     if not profile or not getWorkshop(player) then
         return false, "Registre sua oficina primeiro."
     end
-    if (profile.Employees or 0) >= Config.MaxEmployees then
-        return false, string.format("Sua equipe já tem %d mecânicos.", Config.MaxEmployees)
+    local maxEmployees = WorkshopLevels.Levels[profile.WorkshopLevel or 0].MaxEmployees
+    if maxEmployees <= 0 then
+        return false, "Funcionários só a partir do Centro automotivo (4 boxes). Amplie na Construtora."
+    end
+    if (profile.Employees or 0) >= maxEmployees then
+        return false, string.format("Seu prédio comporta %d mecânico(s). Amplie para contratar mais.", maxEmployees)
     end
     if profile.Coins < Config.EmployeeHireCost then
         return false, string.format("Contratar custa %d moedas.", Config.EmployeeHireCost)
@@ -1281,7 +1382,16 @@ local function staffTick()
             for _ in pairs(entry.Busy) do
                 working += 1
             end
-            if working < #entry.Npcs then
+            -- Equilíbrio: o funcionário só pega um carro quando há pelo menos 2 esperando atendimento (sobra um para o
+            -- jogador). Assim a equipe ajuda a dar conta do movimento, mas não joga sozinha.
+            local waiting = 0
+            for jobId, job in pairs(Jobs) do
+                if job.OwnerUserId == userId and job.Status == "InProgress" and not entry.Busy[jobId] and not job.CollaboratorUserId
+                    and VehicleService.IsParked(jobId) and not (Repairs[userId] and Repairs[userId].JobId == jobId) then
+                    waiting += 1
+                end
+            end
+            if working < #entry.Npcs and waiting >= 2 then
                 for jobId, job in pairs(Jobs) do
                     if working >= #entry.Npcs then
                         break
@@ -1311,6 +1421,23 @@ local function staffTick()
             end
         end
     end
+end
+
+-- "Usar <equipamento>" na sala dos fundos: começa o reparo da ordem do jogador que precisa desta máquina.
+function WorkshopService.UseEquipment(player: Player, equipmentId: string)
+    local chosen: any = nil
+    for _, job in pairs(Jobs) do
+        if job.OwnerUserId == player.UserId and job.Status == "InProgress" and job.AssignedWorkerUserId == player.UserId
+            and Catalog.Defects[job.DefectId].RequiredEquipment == equipmentId then
+            if job.Diagnosed and (not chosen or (job.AcceptedAt or 0) < (chosen.AcceptedAt or 0)) then
+                chosen = job
+            end
+        end
+    end
+    if not chosen then
+        return false, "Nenhum carro diagnosticado precisa de " .. Catalog.Equipment[equipmentId].DisplayName .. " agora."
+    end
+    return WorkshopService.StartRepair(player, chosen.Id, false)
 end
 
 -- Placa 3D e TV de ordens de cada oficina (e dos rivais), com a posição no ranking geral.

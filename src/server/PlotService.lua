@@ -135,7 +135,7 @@ function PlotService.Release(player: Player)
 		priceText.Text = "OFICINA\nLIVRE"
 	end
 	setSign(plot, "LOTE " .. tostring(plot:GetAttribute("PlotId")) .. " - LIVRE")
-	StationService.ApplyExpansion(plot, 0) -- o anexo é do jogador
+	StationService.ApplyLevel(plot, 0) -- o prédio é do jogador: o lote livre volta à garagem de bairro
 	StationService.SetSign(plot, { Title = "LOTE LIVRE", Name = "Vire dono deste terreno!", Line1 = "", Line2 = "", Line3 = "" })
 	setSpawn(plot, false)
 	player.RespawnLocation = nil

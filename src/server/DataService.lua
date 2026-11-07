@@ -83,7 +83,8 @@ local function makeDefaultData(): any
 		OrderHistory = {}, -- últimos serviços concluídos: { At, Vehicle, Customer, Service, Price, Stars }
 		Onboarding = { Done = false }, -- guia do 1º atendimento (servidor decide; salvo por jogador)
 		Bag = {}, -- peças na mochila do jogador (o resto fica na prateleira da oficina = Parts)
-		Expansion = 0, -- níveis de expansão comprados (anexo com mais boxes)
+		Expansion = 0, -- (antigo: anexo; migrado para WorkshopLevel)
+		WorkshopLevel = 0, -- nível do prédio (shared/WorkshopLevels: 0 = 1 box ... 3 = 6 boxes)
 		Employees = 0, -- mecânicos NPC contratados
 	}
 end
@@ -96,6 +97,10 @@ local function reconcile(data: any): any
 	end
 	if data.Onboarding == nil and ((type(data.RatingCount) == "number" and data.RatingCount > 0) or (type(data.TotalEarned) == "number" and data.TotalEarned > 0)) then
 		data.Onboarding = { Done = true } -- perfil antigo que já atendeu clientes não precisa do guia
+	end
+	-- perfil de antes dos níveis do prédio: quem já atendia clientes tinha 2 boxes (nível 1)
+	if data.WorkshopLevel == nil then
+		data.WorkshopLevel = (type(data.TotalEarned) == "number" and data.TotalEarned > 0) and 1 or 0
 	end
 	for key, value in pairs(defaults) do
 		if data[key] == nil then
@@ -209,7 +214,16 @@ local function reconcile(data: any): any
 	local function intIn(v: any, lo: number, hi: number): number
 		return type(v) == "number" and v == v and math.clamp(math.floor(v), lo, hi) or lo
 	end
-	data.Expansion = intIn(data.Expansion, 0, #Config.ExpansionCosts)
+	-- Nível do prédio. Perfis antigos (já tinham 2 boxes) começam no nível 1; quem comprou o anexo antigo recebe o
+	-- dinheiro de volta (o anexo deixou de existir).
+	data.WorkshopLevel = intIn(data.WorkshopLevel, 0, 3)
+	local oldExpansion = intIn(data.Expansion, 0, #Config.ExpansionCosts)
+	if oldExpansion > 0 then
+		for i = 1, oldExpansion do
+			data.Coins += Config.ExpansionCosts[i] or 0
+		end
+	end
+	data.Expansion = 0
 	data.Employees = intIn(data.Employees, 0, Config.MaxEmployees)
 	if type(data.Transactions) ~= "table" then
 		data.Transactions = {}
@@ -539,6 +553,14 @@ function DataService.SetExpansion(player: Player, level: number)
 	local profile = DataService.Get(player)
 	if profile then
 		profile.Expansion = math.clamp(math.floor(level), 0, #Config.ExpansionCosts)
+		DataService.MarkDirty(player)
+	end
+end
+
+function DataService.SetWorkshopLevel(player: Player, level: number)
+	local profile = DataService.Get(player)
+	if profile then
+		profile.WorkshopLevel = math.clamp(math.floor(level), 0, 3)
 		DataService.MarkDirty(player)
 	end
 end

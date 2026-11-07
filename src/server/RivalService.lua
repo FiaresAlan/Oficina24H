@@ -11,8 +11,8 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Config = require(ReplicatedStorage.Shared.Config)
 local Catalog = require(ReplicatedStorage.Shared.Catalog)
 local CustomerRules = require(ReplicatedStorage.Shared.CustomerRules)
+local WorkshopLevels = require(ReplicatedStorage.Shared.WorkshopLevels)
 local StationService = require(script.Parent.StationService)
-local WorkshopSkin = require(script.Parent.WorkshopSkin)
 local CustomerArrivalService = require(script.Parent.CustomerArrivalService)
 local NpcKit = require(script.Parent.NpcKit)
 local LotPath = require(script.Parent.LotPath)
@@ -75,7 +75,18 @@ local function refreshSign(r: Rival, rank: number?)
 		Line3 = rank and string.format("#%d no servidor", rank) or "Aberta 24 horas",
 		Color = tierColor(tier),
 	})
-	WorkshopSkin.Apply(r.Plot, tier)
+	-- mesmo critério dos jogadores: o nível do prédio acompanha o nível da oficina (faturamento)
+	local business = Catalog.BusinessLevel(r.TotalEarned)
+	local level = 0
+	for candidate = 1, WorkshopLevels.MaxLevel do
+		if business >= WorkshopLevels.Levels[candidate].MinBusinessLevel then
+			level = candidate
+		end
+	end
+	local _ = tier
+	if StationService.LevelOf(r.Plot) ~= level and next(r.Busy) == nil then
+		StationService.ApplyLevel(r.Plot, level, r.Name) -- prédio do rival cresce com o faturamento
+	end
 end
 
 -- Mecânico do rival: fica em pé perto do portão; vai até o carro enquanto trabalha.
@@ -145,16 +156,13 @@ local function evict(r: Rival)
 			c:Destroy()
 		end
 	end
-	for i = 1, 2 do
+	for i = 1, 6 do
 		local bay = r.Plot:FindFirstChild("Bay" .. i)
 		if bay and bay:IsA("BasePart") and StationService.IsBusy(bay) then
 			task.spawn(StationService.Lift, bay, nil, false)
 		end
 	end
-	local skin = r.Plot:FindFirstChild("Skin")
-	if skin then
-		skin:Destroy()
-	end
+	StationService.ApplyLevel(r.Plot, 0)
 	r.Plot:SetAttribute("RivalId", nil)
 	r.Plot:SetAttribute("OwnerName", nil)
 	r.Plot:SetAttribute("OwnerUserId", 0)
@@ -208,7 +216,7 @@ function RivalService.Serve(rivalId: number)
 	rival.RatingSum += math.random(3, 5)
 	local root = StationService.FrameOf(rival.Plot)
 	local bay: BasePart? = nil
-	for i = 1, 2 do
+	for i = 1, 6 do
 		local candidate = rival.Plot:FindFirstChild("Bay" .. i)
 		if candidate and candidate:IsA("BasePart") and not rival.Busy[candidate.Name] then
 			bay = candidate

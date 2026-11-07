@@ -49,6 +49,14 @@ if game:GetService("RunService"):IsStudio() then
         elseif command == "Coins" and type(arg) == "number" then
             DataService.AddCoins(player, arg, "QA (Studio)")
             return profile.Coins
+        elseif command == "WorkshopLevel" and type(arg) == "number" then
+            DataService.SetWorkshopLevel(player, arg)
+            local plot = PlotService.GetPlot(player)
+            if plot then
+                StationService.ApplyLevel(plot, profile.WorkshopLevel, player.DisplayName)
+                EquipmentService.Sync(player, profile.Equipment)
+            end
+            return profile.WorkshopLevel
         elseif command == "AgeJobs" then
             return WorkshopService._ageJobsForTesting(player.UserId, 1000)
         elseif command == "Profile" then
@@ -62,7 +70,7 @@ end
 -- Limitador por JOGADOR e por AÇÃO (uma ação rápida não descarta outra diferente). Só ações conhecidas entram na tabela.
 local lastActionAt: {[number]: {[string]: number}} = {}
 local KNOWN_ACTIONS: {[string]: boolean} = {}
-for _, name in ipairs({ "ClaimWorkshop", "GenerateCustomer", "DeclineJob", "AcceptJob", "DiagnoseJob", "CompleteJob", "FinishRepair", "RepairPrefs", "CancelRepair", "SkipOnboarding", "BuyEquipment", "SetPrice", "BuyPart", "Checkout", "HireNpc", "InviteWorker", "CompleteCollaborativeJob", "RespondInvite", "MoveBag" }) do
+for _, name in ipairs({ "ClaimWorkshop", "GenerateCustomer", "DeclineJob", "AcceptJob", "DiagnoseJob", "CompleteJob", "FinishRepair", "RepairPrefs", "CancelRepair", "SkipOnboarding", "BuyEquipment", "SetPrice", "BuyPart", "Checkout", "HireNpc", "InviteWorker", "CompleteCollaborativeJob", "RespondInvite", "MoveBag", "UpgradeWorkshop" }) do
     KNOWN_ACTIONS[name] = true
 end
 
@@ -130,6 +138,15 @@ local function onPrompt(player: Player, jobId: string, kind: string)
     sendResult(player, ok, message)
 end
 VehicleService.SetInteractionHandler(onPrompt)
+-- "Usar <equipamento>" na sala dos fundos (reparos que precisam de máquina).
+EquipmentService.SetUseHandler(function(player: Player, equipmentId: string)
+    local nowClock = os.clock()
+    if nowClock - (lastInteractAt[player.UserId] or 0) < 0.5 then return end
+    lastInteractAt[player.UserId] = nowClock
+    snapshotCache[player.UserId] = nil
+    local ok, message = WorkshopService.UseEquipment(player, equipmentId)
+    sendResult(player, ok, message)
+end)
 -- Estações físicas do lote (StationService): contratar/demitir mecânico e expandir a oficina pelos prompts.
 -- "Ver ordens" e "Abrir estoque" só abrem telas no cliente (o servidor valida a distância nas ações).
 StationService.SetPromptHandler(function(player: Player, _plot: Instance, action: string)
@@ -142,8 +159,6 @@ StationService.SetPromptHandler(function(player: Player, _plot: Instance, action
         ok, message = WorkshopService.HireEmployee(player)
     elseif action == "Demitir" then
         ok, message = WorkshopService.FireEmployee(player)
-    elseif action == "Expandir" then
-        ok, message = WorkshopService.BuyExpansion(player)
     else
         return
     end
@@ -209,6 +224,8 @@ actionEvent.OnServerEvent:Connect(function(player: Player, action: any, payload:
         success, message = WorkshopService.SetPrice(player, payload.Multiplier)
     elseif action == "BuyPart" and type(payload.PartId) == "string" and type(payload.Quantity) == "number" then
         success, message = WorkshopService.BuyPart(player, payload.PartId, payload.Quantity)
+    elseif action == "UpgradeWorkshop" then
+        success, message = WorkshopService.UpgradeWorkshop(player)
     elseif action == "MoveBag" and type(payload.PartId) == "string" and type(payload.Quantity) == "number" and type(payload.ToBag) == "boolean" then
         success, message = WorkshopService.MoveBag(player, payload.PartId, payload.Quantity, payload.ToBag)
     elseif action == "Checkout" and type(payload.Items) == "table" then

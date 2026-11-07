@@ -4,12 +4,15 @@
 --     quadro de funcionários (prompts "Contratar"/"Demitir");
 --   * placa 3D da oficina (totem) que se atualiza sozinha com nível, nota, clientes atendidos e posição no servidor;
 --   * plataforma elevatória em cada box (o carro sobe durante o reparo);
---   * anexo da expansão (Bay3) quando comprado.
--- Posições no espaço local do lote (shared/Layout). Prompts das estações só aparecem para o dono (atributo OwnerUserId).
+--   * o PRÉDIO da oficina conforme o nível (shared/WorkshopLevels: 1, 2, 4 ou 6 boxes), com materiais de verdade
+--     (tijolo, concreto, metal, vidro), portas de enrolar, letreiro, luzes, sala dos fundos dos equipamentos e o pátio
+--     com portões de entrada e saída.
+-- Posições no espaço local do lote. Prompts das estações só aparecem para o dono (atributo OwnerUserId).
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
 
 local Layout = require(ReplicatedStorage.Shared.Layout)
+local WorkshopLevels = require(ReplicatedStorage.Shared.WorkshopLevels)
 local Config = require(ReplicatedStorage.Shared.Config)
 
 local StationService = {}
@@ -105,11 +108,23 @@ local function text(parent: Instance, name: string, pos: UDim2, size: UDim2, col
 end
 
 -- Estações dentro do prédio ------------------------------------------------------------------------------------
-local function buildStations(plot: Instance, root: CFrame): Folder
+type Spec = { x: number, y: number, z: number, yaw: number }
+local function stationSpecs(level: number): { Orders: Spec, Stock: Spec, Staff: Spec? }
+	local L = WorkshopLevels.Levels[level] or WorkshopLevels.Levels[0]
+	local back = WorkshopLevels.BackWallZ - 0.7
+	return {
+		Orders = { x = L.X0 + 5.5, y = 9, z = back, yaw = 0 }, -- TV na parede do fundo, acima dos equipamentos
+		Stock = { x = L.X0 + 1.4, y = 0, z = 18, yaw = -90 }, -- prateleira na sala lateral, de frente para dentro
+		Staff = L.MaxEmployees > 0 and { x = L.X1 - 5, y = 8.5, z = back, yaw = 0 } or nil,
+	}
+end
+
+local function buildStations(plot: Instance, root: CFrame, level: number): Folder
+	local specs = stationSpecs(level)
 	local folder = Instance.new("Folder")
 	folder.Name = "Estacoes"
 	-- TV de ordens: tela grande na parede do fundo
-	local s = Layout.Stations.Orders
+	local s = specs.Orders
 	local tvCf = root * CFrame.new(s.x, s.y, s.z) * CFrame.Angles(0, math.rad(s.yaw), 0)
 	local tv = part(folder, "TV_Ordens", Vector3.new(8, 4.6, 0.4), tvCf, DARK, Enum.Material.SmoothPlastic)
 	part(folder, "TV_Moldura", Vector3.new(8.4, 5, 0.3), tvCf * CFrame.new(0, 0, 0.12), Color3.fromRGB(12, 12, 16))
@@ -118,7 +133,7 @@ local function buildStations(plot: Instance, root: CFrame): Folder
 	text(screen, "Lista", UDim2.fromScale(0.04, 0.3), UDim2.fromScale(0.92, 0.65), Color3.new(1, 1, 1), Enum.Font.GothamBold, "Nenhum cliente esperando.")
 	addPrompt(tv, plot, "Ordens", "Ver ordens", "TV da oficina", 0, "orders")
 	-- Prateleira do estoque
-	local k = Layout.Stations.Stock
+	local k = specs.Stock
 	local shelfCf = root * CFrame.new(k.x, 0, k.z) * CFrame.Angles(0, math.rad(k.yaw), 0)
 	local shelf = Instance.new("Model")
 	shelf.Name = "Prateleira"
@@ -142,8 +157,12 @@ local function buildStations(plot: Instance, root: CFrame): Folder
 	local tagFace = label(tag, Enum.NormalId.Back, "Texto")
 	text(tagFace, "T", UDim2.fromScale(0, 0), UDim2.fromScale(1, 1), DARK, Enum.Font.GothamBlack, "ESTOQUE")
 	shelf.Parent = folder
-	-- Quadro de funcionários
-	local f = Layout.Stations.Staff
+	-- Quadro de funcionários (só a partir do Centro automotivo, nível 2)
+	local f = specs.Staff
+	if not f then
+		folder.Parent = plot
+		return folder
+	end
 	local boardCf = root * CFrame.new(f.x, f.y, f.z) * CFrame.Angles(0, math.rad(f.yaw), 0)
 	local board = part(folder, "QuadroFuncionarios", Vector3.new(4.5, 3.2, 0.25), boardCf, Color3.fromRGB(40, 90, 60))
 	local boardFace = label(board, Enum.NormalId.Front, "Texto")
@@ -349,96 +368,278 @@ function StationService.IsLifted(bay: BasePart): boolean
 	return lift ~= nil and (tonumber(lift:GetAttribute("Altura")) or 0) > 0
 end
 
--- Expansão: anexo com o Bay3 -----------------------------------------------------------------------------------
--- Placa "Área de expansão" com o prompt de compra (some quando o anexo é construído).
-local function expansionSign(plot: Instance, root: CFrame)
-	if plot:FindFirstChild("PlacaExpansao") then
-		return
+-- Prédio da oficina por nível ----------------------------------------------------------------------------------
+local BRICK = Color3.fromRGB(176, 92, 70)
+local PLASTER = Color3.fromRGB(232, 226, 214)
+local CONCRETE = Color3.fromRGB(150, 150, 152)
+local ROOF = Color3.fromRGB(62, 66, 76)
+local DOOR = Color3.fromRGB(196, 200, 206)
+
+local function buildBuilding(plot: Instance, root: CFrame, level: number, ownerName: string?): Model
+	local L = WorkshopLevels.Levels[level] or WorkshopLevels.Levels[0]
+	local m = Instance.new("Model")
+	m.Name = "Predio"
+	m:SetAttribute("Nivel", level)
+	local x0, x1, z0, z1, h = L.X0, L.X1, WorkshopLevels.FrontZ, WorkshopLevels.BackWallZ, L.Height
+	local w, d, cx, cz = x1 - x0, z1 - z0, (x0 + x1) / 2, (z0 + z1) / 2
+	local function at(x: number, y: number, z: number): CFrame
+		return root * CFrame.new(x, y, z)
 	end
-	local b = Layout.AnnexBay
-	local sign = Instance.new("Model")
-	sign.Name = "PlacaExpansao"
-	local cf = root * CFrame.new(b.x, 0, Layout.Annex.z0 + 4)
-	part(sign, "Poste", Vector3.new(0.5, 5, 0.5), cf * CFrame.new(0, 2.5, 0), STEEL, Enum.Material.Metal)
-	local board = part(sign, "Placa", Vector3.new(7, 3.4, 0.3), cf * CFrame.new(0, 5.6, 0), Color3.fromRGB(20, 110, 70))
-	for _, face in ipairs({ Enum.NormalId.Front, Enum.NormalId.Back }) do
-		local f = label(board, face, "Texto" .. face.Name, 30)
-		text(f, "T", UDim2.fromScale(0.05, 0.06), UDim2.fromScale(0.9, 0.4), Color3.new(1, 1, 1), Enum.Font.GothamBlack, "ÁREA DE EXPANSÃO")
-		text(f, "C", UDim2.fromScale(0.05, 0.52), UDim2.fromScale(0.9, 0.4), YELLOW, Enum.Font.GothamBold,
-			string.format("Box 3 coberto: %d moedas", Config.ExpansionCosts[1] or 0))
+	-- piso de concreto polido
+	part(m, "Piso", Vector3.new(w, 0.3, d), at(cx, 0.15, cz), Color3.fromRGB(176, 178, 182), Enum.Material.Concrete)
+	-- paredes de tijolo (fundo e laterais) com rodapé de concreto
+	part(m, "Fundo", Vector3.new(w, h, 1), at(cx, h / 2, z1 - 0.5), BRICK, Enum.Material.Brick)
+	part(m, "LateralEsq", Vector3.new(1, h, d), at(x0 + 0.5, h / 2, cz), BRICK, Enum.Material.Brick)
+	part(m, "LateralDir", Vector3.new(1, h, d), at(x1 - 0.5, h / 2, cz), BRICK, Enum.Material.Brick)
+	for _, spec in ipairs({ { cx, z1 - 1.05, w, 0.1 }, { x0 + 1.05, cz, 0.1, d }, { x1 - 1.05, cz, 0.1, d } }) do
+		local skirt = part(m, "Rodape", Vector3.new(spec[3], 1.2, spec[4]), at(spec[1], 0.6, spec[2]), CONCRETE, Enum.Material.Concrete)
+		skirt.CanCollide = false
 	end
-	-- marcação no chão do futuro box
-	local floor = part(sign, "Marcacao", Vector3.new(b.w, 0.06, b.d), root * CFrame.new(b.x, 0.05, b.z), YELLOW, Enum.Material.SmoothPlastic)
-	floor.Transparency = 0.75
-	floor.CanCollide = false
-	addPrompt(board, plot, "Expandir", "Expandir oficina", string.format("%d moedas", Config.ExpansionCosts[1] or 0), 1.5)
-	sign.Parent = plot
+	-- mureta amarela separando os boxes da sala dos fundos (equipamentos)
+	local backRoomZ = WorkshopLevels.BayZ + WorkshopLevels.BayDepth / 2 + 0.3
+	for _, x in ipairs(L.Bays) do
+		part(m, "Mureta", Vector3.new(WorkshopLevels.BayWidth - 1, 1.1, 0.4), at(x, 0.85, backRoomZ), Color3.fromRGB(255, 196, 40), Enum.Material.SmoothPlastic)
+	end
+	-- fachada: sala lateral de reboco com vitrine, pilares de concreto entre os boxes, portas de enrolar recolhidas
+	local firstBay = L.Bays[1] - WorkshopLevels.BayWidth / 2 - 1
+	part(m, "FachadaSala", Vector3.new(firstBay - x0, h, 1), at((x0 + firstBay) / 2, h / 2, z0 + 0.5), PLASTER, Enum.Material.Plaster)
+	local glass = part(m, "Vitrine", Vector3.new(math.max(2, firstBay - x0 - 4), 4, 0.3), at((x0 + firstBay) / 2, 3.2, z0 - 0.05), Color3.fromRGB(150, 200, 230), Enum.Material.Glass)
+	glass.Transparency = 0.45
+	glass.CanCollide = false
+	local edges = { firstBay }
+	for _, x in ipairs(L.Bays) do
+		table.insert(edges, x + WorkshopLevels.BayWidth / 2 + 1)
+	end
+	for i, ex in ipairs(edges) do
+		local px = i == 1 and ex + 0.5 or ex - 0.5
+		part(m, "Pilar", Vector3.new(1.4, h, 1.4), at(px, h / 2, z0 + 0.5), CONCRETE, Enum.Material.Concrete)
+	end
+	for _, x in ipairs(L.Bays) do
+		local doorTop = h - 2.4
+		part(m, "PortaCaixa", Vector3.new(WorkshopLevels.BayWidth + 1, 1.2, 1.2), at(x, doorTop - 0.6, z0 + 0.5), DOOR, Enum.Material.CorrodedMetal)
+		for k = 0, 2 do
+			part(m, "PortaRipa", Vector3.new(WorkshopLevels.BayWidth + 1, 0.25, 0.3), at(x, doorTop - 1.5 - k * 0.5, z0 + 0.2), DOOR, Enum.Material.DiamondPlate).CanCollide = false
+		end
+		part(m, "FaixaChao", Vector3.new(WorkshopLevels.BayWidth, 0.32, 0.5), at(x, 0.16, z0 + 0.2), Color3.fromRGB(255, 196, 40), Enum.Material.SmoothPlastic)
+	end
+	-- viga do letreiro com LED na cor do nível
+	local beam = part(m, "Letreiro", Vector3.new(w, 2.4, 1.2), at(cx, h - 1.2, z0 + 0.5), Color3.fromRGB(30, 34, 44), Enum.Material.Metal)
+	part(m, "LedLetreiro", Vector3.new(w, 0.25, 1.3), at(cx, h - 2.45, z0 + 0.5), L.Color, Enum.Material.Neon).CanCollide = false
+	local face = label(beam, Enum.NormalId.Front, "Texto", 24)
+	text(face, "T", UDim2.fromScale(0.02, 0.08), UDim2.fromScale(0.96, 0.84), Color3.new(1, 1, 1), Enum.Font.GothamBlack,
+		string.upper(ownerName and ("Oficina de " .. ownerName) or L.Name) .. "  ·  " .. string.upper(L.Name))
+	-- telhado de metal com platibanda
+	part(m, "Telhado", Vector3.new(w + 1.4, 0.6, d + 1.4), at(cx, h + 0.3, cz), ROOF, Enum.Material.CorrodedMetal)
+	part(m, "Platibanda", Vector3.new(w + 1.6, 1, 0.6), at(cx, h + 1.1, z0 - 0.2), Color3.fromRGB(40, 44, 54), Enum.Material.Metal)
+	-- iluminação: luminária por box (luz em boxes alternados, sem sombra: leve no celular)
+	for i, x in ipairs(L.Bays) do
+		local lamp = part(m, "Luminaria", Vector3.new(6, 0.2, 1), at(x, h - 0.25, WorkshopLevels.BayZ), Color3.fromRGB(255, 246, 225), Enum.Material.Neon)
+		lamp.CanCollide = false
+		if i % 2 == 1 then
+			local light = Instance.new("PointLight")
+			light.Range = 20
+			light.Brightness = 1.1
+			light.Shadows = false
+			light.Parent = lamp
+		end
+	end
+	part(m, "LuminariaFundos", Vector3.new(math.min(w - 2, 30), 0.2, 1), at(cx, h - 0.25, 38), Color3.fromRGB(255, 246, 225), Enum.Material.Neon).CanCollide = false
+	-- pátio de asfalto com placas e setas de ENTRADA / SAÍDA
+	local yard = part(m, "Patio", Vector3.new(90, 0.06, z0 + 45), at(0, 0.03, (z0 - 45) / 2), Color3.fromRGB(60, 62, 66), Enum.Material.Asphalt)
+	yard.CanCollide = false
+	for _, spec in ipairs({ { WorkshopLevels.GateIn, "ENTRADA", Color3.fromRGB(70, 200, 110), 5 }, { WorkshopLevels.GateOut, "SAÍDA", Color3.fromRGB(230, 90, 70), -5 } }) do
+		local post = part(m, "PortaoPoste", Vector3.new(0.4, 4, 0.4), at(spec[1] + spec[4], 2, -43), Color3.fromRGB(40, 44, 54), Enum.Material.Metal)
+		local plate = part(m, "PortaoPlaca", Vector3.new(4.5, 1.4, 0.2), post.CFrame * CFrame.new(0, 2.4, 0), spec[3], Enum.Material.SmoothPlastic)
+		for _, f in ipairs({ Enum.NormalId.Front, Enum.NormalId.Back }) do
+			text(label(plate, f, "T" .. f.Name, 40), "T", UDim2.fromScale(0, 0), UDim2.fromScale(1, 1), Color3.new(1, 1, 1), Enum.Font.GothamBlack, spec[2])
+		end
+		for k = 0, 2 do
+			local arrow = part(m, "Seta", Vector3.new(1, 0.08, 3), at(spec[1], 0.08, -40 + k * 9) * CFrame.Angles(0, spec[2] == "ENTRADA" and 0 or math.pi, 0), Color3.new(1, 1, 1), Enum.Material.SmoothPlastic)
+			arrow.CanCollide = false
+		end
+	end
+	m.Parent = plot
+	return m
 end
 
-function StationService.ApplyExpansion(plot: Instance, level: number)
-	local existing = plot:FindFirstChild("Anexo")
-	local bay3 = plot:FindFirstChild("Bay3")
+local function rebuildBays(plot: Instance, root: CFrame, level: number)
+	for _, child in ipairs(plot:GetChildren()) do
+		if child:IsA("BasePart") and child.Name:match("^Bay%d+$") then
+			child:Destroy()
+		end
+	end
+	local L = WorkshopLevels.Levels[level] or WorkshopLevels.Levels[0]
+	-- Bay1 = o mais perto do portão de entrada (maior x): é o primeiro a ser ocupado
+	local xs = table.clone(L.Bays)
+	table.sort(xs, function(a, b)
+		return a > b
+	end)
+	for i, x in ipairs(xs) do
+		local bay = Instance.new("Part")
+		bay.Name = "Bay" .. i
+		bay.Anchored = true
+		bay.CanCollide = false
+		bay.CanQuery = false
+		bay.Size = Vector3.new(WorkshopLevels.BayWidth, 0.1, WorkshopLevels.BayDepth)
+		bay.CFrame = root * CFrame.new(x, 0.35, WorkshopLevels.BayZ)
+		bay.Color = Color3.fromRGB(70, 110, 160)
+		bay.Material = Enum.Material.SmoothPlastic
+		bay.Transparency = 0.5
+		bay.Parent = plot
+		buildLift(bay)
+	end
+end
+
+local function syncOwner(plot: Instance)
+	local owner = plot:GetAttribute("OwnerUserId") or 0
+	for _, holder in ipairs({ plot:FindFirstChild("Estacoes"), plot:FindFirstChild("Equipment") }) do
+		for _, d in ipairs(holder and holder:GetDescendants() or {}) do
+			if d:IsA("ProximityPrompt") then
+				d:SetAttribute("OwnerUserId", owner)
+				d.Enabled = owner ~= 0 and owner ~= -1
+			end
+		end
+	end
+end
+StationService.SyncOwner = syncOwner
+
+-- Monta (ou refaz) o lote no nível dado: prédio, boxes com elevador e estações. Só chamar com os boxes livres.
+function StationService.ApplyLevel(plot: Instance, level: number, ownerName: string?)
 	local root = frameOf(plot)
 	if not root then
 		return
 	end
-	if level < 1 then
-		if existing then
-			existing:Destroy()
+	for _, name in ipairs({ "Predio", "Estacoes", "Oficina", "Skin", "Anexo", "PlacaExpansao" }) do
+		local old = plot:FindFirstChild(name)
+		if old then
+			old:Destroy()
 		end
-		if bay3 then
-			bay3:Destroy()
-		end
-		expansionSign(plot, root)
+	end
+	plot:SetAttribute("Nivel", level)
+	buildBuilding(plot, root, level, ownerName)
+	rebuildBays(plot, root, level)
+	buildStations(plot, root, level)
+	syncOwner(plot)
+end
+
+function StationService.LevelOf(plot: Instance): number
+	return tonumber(plot:GetAttribute("Nivel")) or 0
+end
+
+-- Prédios públicos do bairro (Loja de Autopeças e Construtora) ---------------------------------------------------
+-- Os blocos lisos de PublicAreas viram colisores invisíveis e ganham uma fachada de verdade (tijolo, vitrine, toldo,
+-- letreiro iluminado). A frente é o lado voltado para a rua principal (z = 0).
+local function storefront(block: BasePart, title: string, subtitle: string, color: Color3)
+	if block.Parent and block.Parent:FindFirstChild("Fachada_" .. block.Name) then
 		return
 	end
-	local oldSign = plot:FindFirstChild("PlacaExpansao")
-	if oldSign then
-		oldSign:Destroy()
+	local m = Instance.new("Model")
+	m.Name = "Fachada_" .. block.Name
+	local size = block.Size
+	local face = block.Position.Z < 0 and 1 or -1 -- direção da rua
+	local base = CFrame.lookAt(Vector3.new(block.Position.X, block.Position.Y - size.Y / 2, block.Position.Z),
+		Vector3.new(block.Position.X, block.Position.Y - size.Y / 2, block.Position.Z + face))
+	-- no referencial `base`, -Z local = rua (LookVector)
+	local w, d, h = size.X, size.Z, size.Y
+	local function at(x: number, y: number, z: number): CFrame
+		return base * CFrame.new(x, y, z)
 	end
-	if existing then
+	part(m, "Parede", Vector3.new(w, h, 1), at(0, h / 2, d / 2 - 0.5), BRICK, Enum.Material.Brick)
+	part(m, "ParedeE", Vector3.new(1, h, d), at(-w / 2 + 0.5, h / 2, 0), BRICK, Enum.Material.Brick)
+	part(m, "ParedeD", Vector3.new(1, h, d), at(w / 2 - 0.5, h / 2, 0), BRICK, Enum.Material.Brick)
+	part(m, "Telhado", Vector3.new(w + 1, 0.8, d + 1), at(0, h + 0.4, 0), ROOF, Enum.Material.Metal)
+	part(m, "Platibanda", Vector3.new(w + 1.2, 2.4, 0.8), at(0, h + 1.2, -d / 2), Color3.fromRGB(36, 40, 50), Enum.Material.Metal)
+	-- fachada: base de concreto, vitrines com caixilhos e porta
+	part(m, "Soco", Vector3.new(w, 1.2, 1), at(0, 0.6, -d / 2 + 0.5), CONCRETE, Enum.Material.Concrete)
+	part(m, "Topo", Vector3.new(w, h - 9, 1), at(0, 9 + (h - 9) / 2, -d / 2 + 0.5), PLASTER, Enum.Material.Plaster)
+	local panes = math.max(3, math.floor(w / 9))
+	local paneW = w / panes
+	for i = 1, panes do
+		local x = -w / 2 + paneW * (i - 0.5)
+		local glass = part(m, "Vidro", Vector3.new(paneW - 0.6, 7.8, 0.3), at(x, 5.1, -d / 2 + 0.5), Color3.fromRGB(140, 190, 220), Enum.Material.Glass)
+		glass.Transparency = 0.35
+		part(m, "Caixilho", Vector3.new(0.5, 7.8, 0.6), at(-w / 2 + paneW * i, 5.1, -d / 2 + 0.5), Color3.fromRGB(40, 44, 54), Enum.Material.Metal)
+	end
+	-- toldo listrado e letreiro iluminado
+	for i = 0, math.floor(w / 3) - 1 do
+		local stripe = part(m, "Toldo", Vector3.new(3, 0.25, 3.4), at(-w / 2 + 1.5 + i * 3, 9.2, -d / 2 - 1.4) * CFrame.Angles(math.rad(-12), 0, 0),
+			i % 2 == 0 and color or Color3.fromRGB(245, 245, 245), Enum.Material.Fabric)
+		stripe.CanCollide = false
+	end
+	local sign = part(m, "Letreiro", Vector3.new(math.min(w - 4, 34), 3.2, 0.6), at(0, h - 1.6, -d / 2 - 0.2), Color3.fromRGB(28, 31, 38), Enum.Material.SmoothPlastic)
+	local gui = label(sign, Enum.NormalId.Front, "Texto", 26)
+	text(gui, "T", UDim2.fromScale(0.03, 0.05), UDim2.fromScale(0.94, 0.6), color, Enum.Font.GothamBlack, title)
+	text(gui, "S", UDim2.fromScale(0.03, 0.66), UDim2.fromScale(0.94, 0.3), Color3.new(1, 1, 1), Enum.Font.GothamBold, subtitle)
+	local glow = Instance.new("SurfaceLight")
+	glow.Face = Enum.NormalId.Front
+	glow.Range = 14
+	glow.Brightness = 1.4
+	glow.Color = color
+	glow.Parent = sign
+	m.Parent = block.Parent
+	-- o bloco antigo vira só colisor (e âncora dos prompts)
+	block.Transparency = 1
+	for _, d2 in ipairs(block:GetChildren()) do
+		if d2:IsA("SurfaceGui") or d2:IsA("Decal") then
+			d2:Destroy()
+		end
+	end
+end
+
+local function construtoraBlock(): BasePart?
+	local areas = workspace:FindFirstChild("PublicAreas")
+	local block = areas and areas:FindFirstChild("DistribuidoraEquipamentos")
+	return block and block:IsA("BasePart") and block or nil
+end
+
+function StationService.NearConstrutora(player: Player): boolean
+	local block = construtoraBlock()
+	local character = player.Character
+	local hrp = character and character:FindFirstChild("HumanoidRootPart")
+	if not block then
+		return true -- sem o prédio (testes no Edit) não bloqueia
+	end
+	if not hrp or not hrp:IsA("BasePart") then
+		return false
+	end
+	local rel = block.CFrame:PointToObjectSpace(hrp.Position)
+	local half = block.Size / 2
+	local dx = math.max(math.abs(rel.X) - half.X, 0)
+	local dz = math.max(math.abs(rel.Z) - half.Z, 0)
+	return math.sqrt(dx * dx + dz * dz) <= Config.ShopDistance
+end
+
+local function buildPublicAreas()
+	local areas = workspace:FindFirstChild("PublicAreas")
+	if not areas then
 		return
 	end
-	local a = Layout.Annex
-	local anexo = Instance.new("Model")
-	anexo.Name = "Anexo"
-	local cx, cz = (a.x0 + a.x1) / 2, (a.z0 + a.z1) / 2
-	local w, d, h = a.x1 - a.x0, a.z1 - a.z0, 12
-	local wall = Color3.fromRGB(226, 222, 212)
-	part(anexo, "Piso", Vector3.new(w, 0.3, d), root * CFrame.new(cx, 0.15, cz), Color3.fromRGB(150, 150, 150), Enum.Material.Concrete)
-	part(anexo, "Fundo", Vector3.new(w, h, 1), root * CFrame.new(cx, h / 2, a.z1 - 0.5), wall, Enum.Material.Brick)
-	part(anexo, "Lateral", Vector3.new(1, h, d), root * CFrame.new(a.x0 + 0.5, h / 2, cz), wall, Enum.Material.Brick)
-	part(anexo, "Teto", Vector3.new(w + 1, 0.6, d + 1), root * CFrame.new(cx, h + 0.3, cz), Color3.fromRGB(70, 76, 88), Enum.Material.Metal)
-	local frontBeam = part(anexo, "Viga", Vector3.new(w, 2.2, 1), root * CFrame.new(cx, h - 1.1, a.z0 + 0.5), YELLOW, Enum.Material.SmoothPlastic)
-	local face = label(frontBeam, Enum.NormalId.Front, "Texto", 30)
-	text(face, "T", UDim2.fromScale(0, 0), UDim2.fromScale(1, 1), DARK, Enum.Font.GothamBlack, "BOX 3 · ANEXO")
-	local lamp = part(anexo, "Luminaria", Vector3.new(8, 0.3, 1), root * CFrame.new(cx, h - 0.3, cz), Color3.fromRGB(255, 245, 220), Enum.Material.Neon)
-	local light = Instance.new("PointLight")
-	light.Range = 22
-	light.Brightness = 1.2
-	light.Shadows = false
-	light.Parent = lamp
-	anexo.Parent = plot
-	if not bay3 then
-		local b = Layout.AnnexBay
-		local bay = Instance.new("Part")
-		bay.Name = "Bay3"
-		bay.Anchored = true
-		bay.CanCollide = false
-		bay.Size = Vector3.new(b.w, 0.1, b.d)
-		bay.CFrame = root * CFrame.new(b.x, 0.35, b.z)
-		bay.Color = Color3.fromRGB(255, 200, 60)
-		bay.Material = Enum.Material.SmoothPlastic
-		bay.Transparency = 0.6
-		bay:SetAttribute("Anexo", true)
-		bay.Parent = plot
-		buildLift(bay)
+	local shop = areas:FindFirstChild("LojaAutopecas")
+	if shop and shop:IsA("BasePart") then
+		storefront(shop, "AUTOPEÇAS 24H", "Peças e equipamentos para a sua oficina", Color3.fromRGB(255, 196, 40))
+	end
+	local block = construtoraBlock()
+	if block then
+		storefront(block, "CONSTRUTORA", "Amplie sua oficina: 2, 4 e 6 boxes", Color3.fromRGB(80, 200, 120))
+		if not block:FindFirstChild("ConstrutoraPrompt") then
+			local prompt = Instance.new("ProximityPrompt")
+			prompt.Name = "ConstrutoraPrompt"
+			prompt.ActionText = "Ampliar oficina"
+			prompt.ObjectText = "Construtora"
+			prompt.HoldDuration = 0.3
+			prompt.MaxActivationDistance = block.Size.Z / 2 + 16 -- medido do centro do prédio: alcança a calçada da frente
+			prompt.RequiresLineOfSight = false
+			prompt.Style = Enum.ProximityPromptStyle.Custom
+			prompt:SetAttribute("OpensPanel", "construtora")
+			prompt.Parent = block
+		end
 	end
 end
 
 -- Montagem inicial de todos os lotes (idempotente): estações, totem, elevadores, tamanho das vagas, placa antiga
 -- escondida. Também acompanha a troca de dono para o HUD mostrar os prompts só para quem é dono.
 function StationService.Start()
+	buildPublicAreas()
 	local plots = workspace:FindFirstChild("Plots")
 	if not plots then
 		return
@@ -446,12 +647,10 @@ function StationService.Start()
 	for _, plot in ipairs(plots:GetChildren()) do
 		local root = frameOf(plot)
 		if root then
-			for i, spec in ipairs(Layout.Bays) do
-				local bay = plot:FindFirstChild("Bay" .. i)
-				if bay and bay:IsA("BasePart") then
-					bay.Size = Vector3.new(spec.w, bay.Size.Y, spec.d)
-					buildLift(bay)
-				end
+			local zone = plot:FindFirstChild("ExpansionZone")
+			if zone and zone:IsA("BasePart") then
+				zone.Transparency = 1
+				zone.CanCollide = false
 			end
 			-- a placa antiga e a entrada saem do caminho; o totem novo assume
 			for _, name in ipairs({ "Sign", "Entry" }) do
@@ -470,28 +669,16 @@ function StationService.Start()
 					end
 				end
 			end
-			if not plot:FindFirstChild("Estacoes") then
-				buildStations(plot, root)
+			if not plot:FindFirstChild("Predio") then
+				StationService.ApplyLevel(plot, 0) -- lote livre mostra a garagem de bairro
 			end
 			if not plot:FindFirstChild("Totem") then
 				buildSign(plot, root)
 			end
-			if not plot:FindFirstChild("Anexo") then
-				StationService.ApplyExpansion(plot, 0)
-			end
-			local function syncOwner()
-				local owner = plot:GetAttribute("OwnerUserId") or 0
-				for _, holder in ipairs({ plot:FindFirstChild("Estacoes"), plot:FindFirstChild("PlacaExpansao") }) do
-					for _, d in ipairs(holder and holder:GetDescendants() or {}) do
-						if d:IsA("ProximityPrompt") then
-							d:SetAttribute("OwnerUserId", owner)
-							d.Enabled = owner ~= 0 and owner ~= -1
-						end
-					end
-				end
-			end
-			plot:GetAttributeChangedSignal("OwnerUserId"):Connect(syncOwner)
-			syncOwner()
+			plot:GetAttributeChangedSignal("OwnerUserId"):Connect(function()
+				syncOwner(plot)
+			end)
+			syncOwner(plot)
 		end
 	end
 end
@@ -499,7 +686,7 @@ end
 -- Posição (mundo) de uma estação do lote: "Orders" | "Stock" | "Staff".
 function StationService.StationPosition(plot: Instance, kind: string): Vector3?
 	local root = frameOf(plot)
-	local s = (Layout.Stations :: any)[kind]
+	local s = (stationSpecs(StationService.LevelOf(plot)) :: any)[kind]
 	if not root or not s then
 		return nil
 	end

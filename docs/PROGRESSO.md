@@ -556,3 +556,5 @@ Detalhes em `docs/AUDITORIA_GERAL.md`. Resumo:
   tela na hora.
 - **Testes**: 843 verificações (contratos, liga e rotas no ProgressTest). Play: contrato "Locadora do Bairro 4 reparos
   de funilaria" com carro da frota chegando, faixa na tela, liga no snapshot, sem erros no console.
+- **Bônus de amigo**: jogando no mesmo servidor que um amigo do Roblox, todo serviço paga +10% (aviso ao ativar,
+  atributo `BonusAmigo` no jogador). Conferido em Play solo (sem bônus, sem erros); com amigo real falta testar.

@@ -62,7 +62,7 @@ Implementado nesta rodada:
    moedas na virada da semana, selo na placa e top 10 global (OrderedDataStore por semana).
 4. **Projeto de restauração**: comprar uma sucata de preço fixo na Construtora, restaurar em 5 etapas (minijogo +
    peças), vender por 2,2× o investido ou expor na vitrine.
-5. **Social**: +10% jogando no mesmo servidor que um amigo; "Curtir oficina" (+1 reputação, limite diário); visitar
+5. **Social**: ~~+10% jogando no mesmo servidor que um amigo~~ **feito**; "Curtir oficina" (+1 reputação, limite diário); visitar
    oficina pelo ranking da praça; conquistas como Badges.
 
 ## 5. Monetização (conforme regras de 2026 — conferir antes de publicar)

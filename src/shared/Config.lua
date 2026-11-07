@@ -64,4 +64,7 @@ Config.RegularReferralVisit = 3 -- na 3ª visita o freguês indica um cliente VI
 Config.ContractEverySeconds = 1200 -- 20 min entre contratos (depois de cumprir ou perder)
 Config.ContractFirstDelaySeconds = 360 -- o 1º chega 6 min depois de terminar o guia
 
+-- Bônus de amigo: jogar no mesmo servidor que um amigo do Roblox paga +10% em todo serviço.
+Config.FriendPayMultiplier = 1.1
+
 return Config

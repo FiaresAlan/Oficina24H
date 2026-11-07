@@ -311,6 +311,47 @@ local function pullLeague()
 	leagueTopWeek = week
 end
 
+-- Bônus de amigo --------------------------------------------------------------------------------------------------
+-- Jogar no mesmo servidor que um amigo do Roblox: +10% em todo serviço (motivo para convidar amigos).
+local friendCache: { [string]: boolean } = {}
+local friendBonus: { [Player]: boolean } = {}
+
+local function areFriends(a: Player, b: Player): boolean
+	local key = a.UserId < b.UserId and (a.UserId .. ":" .. b.UserId) or (b.UserId .. ":" .. a.UserId)
+	if friendCache[key] == nil then
+		local ok, result = pcall(function()
+			return a:IsFriendsWith(b.UserId)
+		end)
+		if not ok then
+			return false -- tenta de novo na próxima volta
+		end
+		friendCache[key] = result == true
+	end
+	return friendCache[key]
+end
+
+local function refreshFriends()
+	local players = Players:GetPlayers()
+	for _, p in ipairs(players) do
+		local has = false
+		for _, other in ipairs(players) do
+			if other ~= p and other.UserId > 0 and p.UserId > 0 and areFriends(p, other) then
+				has = true
+				break
+			end
+		end
+		if has and not friendBonus[p] and notify then
+			notify(p, string.format("👥 Bônus de amigo: jogando com um amigo, todo serviço paga +%d%%!", math.floor((Config.FriendPayMultiplier - 1) * 100 + 0.5)), true)
+		end
+		friendBonus[p] = has or nil
+		p:SetAttribute("BonusAmigo", has or nil)
+	end
+end
+
+function ProgressService.FriendMultiplier(player: Player): number
+	return friendBonus[player] and Config.FriendPayMultiplier or 1
+end
+
 -- Hora do Rush ---------------------------------------------------------------------------------------------------
 local rushUntil = 0
 local nextRushAt = os.time() + Config.RushFirstDelaySeconds
@@ -372,6 +413,8 @@ function ProgressService.Start()
 		-- grava a pontuação de quem está saindo (se o perfil ainda estiver na memória; senão vale a última gravação)
 		local profile = leagueDirty[player] and DataService.Get(player)
 		leagueDirty[player] = nil
+		friendBonus[player] = nil
+		task.defer(refreshFriends) -- quem ficou pode ter perdido o amigo
 		if profile and profile.League.Week == ProgressRules.Week(os.time()) then
 			local store, points = leagueStore(profile.League.Week), profile.League.Points
 			if store then
@@ -380,6 +423,9 @@ function ProgressService.Start()
 				end)
 			end
 		end
+	end)
+	Players.PlayerAdded:Connect(function()
+		task.delay(10, refreshFriends)
 	end)
 	-- ranking global da liga: grava a cada 2 min (só quem pontuou) e lê o top 10 a cada 3 min
 	task.spawn(function()

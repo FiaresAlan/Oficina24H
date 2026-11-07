@@ -833,7 +833,8 @@ function WorkshopService.FinishRepair(player: Player, jobId: string, presses: an
     VehicleService.Despawn(job.Id)
     local basePrice = job.Price or service.Reward
     local combo = comboMultiplier(player.UserId)
-    local price = math.floor(basePrice * RepairRules.PayMultiplier(result.Quality) * combo + 0.5)
+    local friend = ProgressService.FriendMultiplier(player) -- jogando com amigo: +10%
+    local price = math.floor(basePrice * RepairRules.PayMultiplier(result.Quality) * combo * friend + 0.5)
     if result.Quality >= COMBO_MIN_QUALITY then
         Combo[player.UserId] = (Combo[player.UserId] or 0) + 1
     else
@@ -861,7 +862,7 @@ function WorkshopService.FinishRepair(player: Player, jobId: string, presses: an
     end
     funnel(player, "Repaired")
     return true, "Serviço concluído. +" .. tostring(price + tip) .. " moedas (qualidade " .. tostring(result.Quality) .. "%"
-        .. (combo > 1 and string.format(", combo x%.1f", combo) or "") .. "), +" .. tostring(xp)
+        .. (combo > 1 and string.format(", combo x%.1f", combo) or "") .. (friend > 1 and ", bônus de amigo" or "") .. "), +" .. tostring(xp)
         .. " XP. Avaliação: " .. CustomerRules.StarsText(stars) .. " (" .. tostring(stars) .. ")"
         .. (bonus > 0 and (" Bônus do primeiro serviço: +" .. tostring(bonus) .. ".") or "")
 end

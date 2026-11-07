@@ -275,20 +275,25 @@ function NpcKit.Say(npc: Model, text: string, seconds: number?, accent: Color3?)
 	if old then
 		old:Destroy()
 	end
+	-- Balão pequeno, em studs (encolhe com a distância) e só visível de perto: não tapa a visão.
 	local gui = Instance.new("BillboardGui")
 	gui.Name = "Speech"
-	gui.Size = UDim2.fromOffset(260, 64)
-	gui.StudsOffset = Vector3.new(0, 4.4, 0)
-	gui.MaxDistance = 70
+	gui.Size = UDim2.fromScale(5.2, 1.25)
+	gui.StudsOffset = Vector3.new(0, 2.4, 0)
+	gui.MaxDistance = 26
+	gui.LightInfluence = 0
 	local label = Instance.new("TextLabel")
 	label.Size = UDim2.fromScale(1, 1)
 	label.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-	label.BackgroundTransparency = 0.05
+	label.BackgroundTransparency = 0.1
 	label.TextColor3 = Color3.fromRGB(20, 30, 50)
 	label.Font = Enum.Font.BuilderSansBold
 	label.TextScaled = true
 	label.TextWrapped = true
 	label.Text = text
+	local limit = Instance.new("UITextSizeConstraint")
+	limit.MaxTextSize = 18
+	limit.Parent = label
 	local corner = Instance.new("UICorner")
 	corner.CornerRadius = UDim.new(0, 12)
 	corner.Parent = label
@@ -313,8 +318,19 @@ function NpcKit.Say(npc: Model, text: string, seconds: number?, accent: Color3?)
 	end
 end
 
--- Etiqueta com o nome do cliente (e coroa dourada quando é VIP), sempre visível de perto.
+-- Nome do cliente sobre a cabeça: usa o nome nativo do Humanoid (um só nome; antes aparecia o nome do modelo E uma
+-- etiqueta). VIP ganha a estrela no nome e uma etiqueta dourada pequena.
 function NpcKit.NameTag(npc: Model, text: string, vip: boolean)
+	local humanoid = npc:FindFirstChildOfClass("Humanoid")
+	if humanoid then
+		humanoid.DisplayName = vip and ("★ " .. text) or text
+		humanoid.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.Viewer
+		humanoid.NameDisplayDistance = 30
+		humanoid.HealthDisplayType = Enum.HumanoidHealthDisplayType.AlwaysOff
+	end
+	if not vip then
+		return
+	end
 	local head = npc:FindFirstChild("Head")
 	if not head or not head:IsA("BasePart") then
 		return
@@ -325,16 +341,16 @@ function NpcKit.NameTag(npc: Model, text: string, vip: boolean)
 	end
 	local gui = Instance.new("BillboardGui")
 	gui.Name = "NameTag"
-	gui.Size = UDim2.fromOffset(180, 26)
-	gui.StudsOffset = Vector3.new(0, 1.5, 0)
-	gui.MaxDistance = 45
+	gui.Size = UDim2.fromScale(1.6, 0.45)
+	gui.StudsOffset = Vector3.new(0, 1.2, 0)
+	gui.MaxDistance = 30
 	gui.AlwaysOnTop = false
 	local label = Instance.new("TextLabel")
 	label.Size = UDim2.fromScale(1, 1)
 	label.BackgroundTransparency = 1
 	label.Font = Enum.Font.BuilderSansBold
 	label.TextScaled = true
-	label.Text = vip and ("★ VIP · " .. text) or text
+	label.Text = "VIP"
 	label.TextColor3 = vip and Color3.fromRGB(255, 205, 60) or Color3.fromRGB(255, 255, 255)
 	local stroke = Instance.new("UIStroke")
 	stroke.Color = Color3.fromRGB(20, 20, 30)

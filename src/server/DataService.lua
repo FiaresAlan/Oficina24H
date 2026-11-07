@@ -82,6 +82,9 @@ local function makeDefaultData(): any
 		RecentRatings = {}, -- últimas 10: { Stars, Service, At, CommentKey, Customer }
 		OrderHistory = {}, -- últimos serviços concluídos: { At, Vehicle, Customer, Service, Price, Stars }
 		Onboarding = { Done = false }, -- guia do 1º atendimento (servidor decide; salvo por jogador)
+		Bag = {}, -- peças na mochila do jogador (o resto fica na prateleira da oficina = Parts)
+		Expansion = 0, -- níveis de expansão comprados (anexo com mais boxes)
+		Employees = 0, -- mecânicos NPC contratados
 	}
 end
 
@@ -180,6 +183,34 @@ local function reconcile(data: any): any
 			data.Parts[partId] = math.floor(count)
 		end
 	end
+	if type(data.Bag) ~= "table" then
+		data.Bag = {}
+	end
+	local bagTotal = 0
+	for partId, count in pairs(data.Bag) do
+		if Catalog.Parts[partId] == nil or type(count) ~= "number" or count ~= count or count <= 0 then
+			data.Bag[partId] = nil
+		else
+			data.Bag[partId] = math.floor(count)
+			bagTotal += data.Bag[partId]
+		end
+	end
+	if bagTotal > Config.BagCapacity then
+		-- mochila acima do limite (limite mudou): o excesso volta para a prateleira, nada se perde
+		for partId, count in pairs(data.Bag) do
+			local excess = math.min(count, bagTotal - Config.BagCapacity)
+			if excess > 0 then
+				data.Bag[partId] = count - excess > 0 and count - excess or nil
+				data.Parts[partId] = (data.Parts[partId] or 0) + excess
+				bagTotal -= excess
+			end
+		end
+	end
+	local function intIn(v: any, lo: number, hi: number): number
+		return type(v) == "number" and v == v and math.clamp(math.floor(v), lo, hi) or lo
+	end
+	data.Expansion = intIn(data.Expansion, 0, #Config.ExpansionCosts)
+	data.Employees = intIn(data.Employees, 0, Config.MaxEmployees)
 	if type(data.Transactions) ~= "table" then
 		data.Transactions = {}
 	end
@@ -469,6 +500,55 @@ function DataService.TakeParts(player: Player, needed: { [string]: number }?): b
 	end
 	Dirty[player.UserId] = true
 	return true
+end
+
+-- Mochila: move `amount` peças entre a prateleira (Parts) e a mochila (Bag). `toBag` = pegar da prateleira.
+-- Retorna (ok, mensagem). Respeita o limite Config.BagCapacity.
+function DataService.MoveBag(player: Player, partId: string, amount: number, toBag: boolean): (boolean, string)
+	local profile = DataService.Get(player)
+	-- inteiro finito entre 1 e a capacidade (NaN/inf/fração vindos do cliente são recusados)
+	if type(amount) ~= "number" or amount ~= amount or amount % 1 ~= 0 or amount < 1 or amount > Config.BagCapacity then
+		return false, "Pedido inválido."
+	end
+	local n = amount
+	if not profile or Catalog.Parts[partId] == nil then
+		return false, "Pedido inválido."
+	end
+	local from = toBag and profile.Parts or profile.Bag
+	local to = toBag and profile.Bag or profile.Parts
+	if (from[partId] or 0) < n then
+		return false, toBag and "Não há peças suficientes na prateleira." or "Não há peças suficientes na mochila."
+	end
+	if toBag then
+		local total = 0
+		for _, c in pairs(profile.Bag) do
+			total += c
+		end
+		if total + n > Config.BagCapacity then
+			return false, string.format("A mochila leva no máximo %d peças.", Config.BagCapacity)
+		end
+	end
+	from[partId] = from[partId] - n > 0 and from[partId] - n or nil
+	to[partId] = (to[partId] or 0) + n
+	DataService.MarkDirty(player)
+	return true, string.format("%dx %s %s.", n, Catalog.Parts[partId].DisplayName, toBag and "na mochila" or "na prateleira")
+end
+
+-- Expansão e funcionários (valores validados por quem chama; aqui só grava com limites).
+function DataService.SetExpansion(player: Player, level: number)
+	local profile = DataService.Get(player)
+	if profile then
+		profile.Expansion = math.clamp(math.floor(level), 0, #Config.ExpansionCosts)
+		DataService.MarkDirty(player)
+	end
+end
+
+function DataService.SetEmployees(player: Player, count: number)
+	local profile = DataService.Get(player)
+	if profile then
+		profile.Employees = math.clamp(math.floor(count), 0, Config.MaxEmployees)
+		DataService.MarkDirty(player)
+	end
 end
 
 function DataService.MarkDirty(player: Player)

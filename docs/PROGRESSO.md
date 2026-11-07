@@ -452,3 +452,38 @@ Pedido do PO: carros semi-realistas com logo (só sem placa), NPCs comuns da Rob
 - **Vagas:** profundidade 18 → 22 (picapes de 20,5).
 - **Testes:** 807 verificações passam (Catalog 592 com gênero, VIP e veículos). Play testado no Studio: chegada, espera na calçada, aceitar, entrada na vaga, cliente desce, abandonar → ré e saída, dispensar no meio-fio → saída.
 - **Não feito / não testado:** a garagem `ONLY+GRAGE.fbx` (94 MB) dos Downloads não foi importada (Blender fechado e pesada demais para celular; o prédio atual com equipamentos CC0 continua). Movimento do carro é feito pelo servidor (pode parecer menos suave com rede ruim). Não testado em celular nem com 2 jogadores reais. Os logos de marcas são risco de moderação (decisão do PO).
+
+## 2026-11-07 — Ideias do PO (lote 2): oficina física, carros "de verdade", funcionários, expansão e rivais
+**Testado no Studio (Play) e integrado ao main.** Conferido em jogo: aceitar longe da TV é recusado e na TV funciona;
+conversar a 30 studs do cliente é recusado e de perto abre o diagnóstico; comprar longe da loja é recusado e na loja
+funciona; carro sobe no elevador ao começar o reparo e desce ao cancelar; contratar mecânico pelo quadro e ele concluiu
+um serviço sozinho (+90 moedas, 4 estrelas); expandir pela placa constrói o anexo e o carro entra no Box 3 pelo caminho
+interno; 3 rivais ocupam lotes com placa e fachada; rodas detectadas em todos os carros; placa "LOTE LIVRE" nos lotes vazios.
+Correções achadas no teste: campos da placa 3D (impedia os rivais), postes da placa cobriam o texto, prompts das estações
+perto demais (o HUD mostra um por vez: quadro foi para o fundo e alcance caiu para 8), rivais ganhavam todos os clientes
+(agora disputam ~30% do mercado, Config.RivalMarketShare). 827 verificações automáticas passam.
+- **NPC:** um nome só sobre a cabeça (nome nativo do Humanoid; VIP com ★ e selo "VIP"); balão de fala pequeno, em studs
+  (encolhe com a distância) e visível só a até 26 studs.
+- **Carros (client/VehicleFx):** rodas giram conforme a distância percorrida (detectadas pela geometria), som de motor
+  com tom pela velocidade; defeito visível no carro estacionado (motor = fumaça no capô e escapamento + chiado; elétrica =
+  faíscas azuis, luz piscando e zumbido; pneu = pneu murcho com fumaça; suspensão = roda torta); no reparo o pneu sai do
+  carro, o capô abre (quando o modelo tem capô separado), parafusadeira/catraca e faíscas de trabalho.
+- **Elevador:** cada box tem plataforma elevatória; o carro sobe durante o reparo (som hidráulico) e desce antes de sair.
+- **Oficina física (StationService):** TV de ordens (aceitar SÓ na TV), prateleira do estoque, quadro de funcionários;
+  conversar/diagnosticar SÓ perto do cliente (10 studs ≈ 3 m); comprar SÓ na Loja de Autopeças do bairro. Longe da
+  estação, os botões Estoque/Loja e o "Aceitar" mostram uma luz-guia até ela. O guia do 1º atendimento aponta a TV e a loja.
+- **Mochila:** até 12 peças carregadas (para reparos fora da oficina no futuro); passar peças na prateleira.
+- **Placa 3D da oficina (totem):** atualiza sozinha a cada 6 s: tipo da oficina, nome, nível, nota, clientes atendidos,
+  reputação, posição no servidor ("A MELHOR OFICINA DO SERVIDOR" para o 1º). A TV mostra os clientes esperando.
+- **Expansão:** placa "Área de expansão" no pátio esquerdo (1.500 moedas) → anexo coberto com o Box 3 (elevador incluso);
+  o carro chega pelo corredor principal e um caminho interno. Equipamentos do pátio esquerdo foram para outros cantos.
+- **Funcionários:** contratar (300) no quadro; salário de 60 a cada 5 min; até 2. Atendem sozinhos carros estacionados
+  (diagnóstico + elevador + reparo em 40 s, qualidade 72%, sem XP para o dono); sem peças/equipamento avisam e tentam
+  de novo em 1 min; sem dinheiro para o salário, um pede demissão. Validação de mercado: Retail Tycoon 2 e Restaurant
+  Tycoon 2 usam contratação + expansão (nenhum módulo pronto para oficina; feito do zero).
+- **Oficinas rivais (RivalService):** até 3 rivais NPC com nomes de jogador ocupam lotes livres (sempre sobram 2), com
+  totem, fachada pelo tipo, mecânico, clientes chegando de carro, elevador e estatísticas que crescem; disputam clientes
+  no mercado e aparecem no ranking e no painel da praça. Quando falta lote para quem entra, um rival "vende" e sai.
+- **Testes:** CatalogTest ganhou checagens de estações, placa, anexo e configurações (rodar no Studio).
+- **Pendente:** ouvir os sons no jogo (ids públicos; não dá para conferir áudio pelo Studio via MCP), testar no celular,
+  2 jogadores reais disputando lotes com rivais.

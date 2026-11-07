@@ -1,7 +1,7 @@
 --!strict
 -- CustomerArrivalService: chegada do cliente. Ele vem DIRIGINDO o próprio carro pela rua, encosta no meio-fio em frente
--- à oficina, desce e espera na calçada (balão com a reclamação e prompt "Atender"). A ordem só ABRE quando ele está na
--- calçada: WorkshopService usa o tempo estimado devolvido por Arrive() como `ArrivesAt`.
+-- à oficina, desce e espera na calçada (balão com a reclamação). A ordem só ABRE quando ele está na calçada, e é aceita
+-- na TV de ordens dentro da oficina (StationService). WorkshopService usa o tempo de Arrive() como `ArrivesAt`.
 -- Ao aceitar, Claim() entrega carro e cliente ao VehicleService, que o leva de volta ao volante e entra na vaga.
 -- Se for dispensado ou cansar de esperar (Depart), ele volta ao carro e vai embora pela rua.
 -- O cliente nunca anda até a entrada do lote (nada de enroscar em placas): só contorna o próprio carro.
@@ -38,12 +38,6 @@ type State = {
 }
 
 local states: { [string]: State } = {}
-local acceptHandler: ((Player, string) -> ())? = nil
-
--- Quem atende pelo prompt do cliente na calçada (WorkshopService.AcceptJob valida tudo).
-function CustomerArrivalService.SetAcceptHandler(handler: (Player, string) -> ())
-	acceptHandler = handler
-end
 
 local function folder(): Folder
 	local f = workspace:FindFirstChild("Arrivals")
@@ -140,29 +134,6 @@ local function reverseRoute(route: { Vector3 }): { Vector3 }
 	return out
 end
 
-local function addAcceptPrompt(state: State, npc: Model)
-	local anchor = npc:FindFirstChild("HumanoidRootPart")
-	if not anchor or not anchor:IsA("BasePart") then
-		return
-	end
-	local prompt = Instance.new("ProximityPrompt")
-	prompt.Name = "Atender"
-	prompt.ActionText = "Atender"
-	prompt.ObjectText = tostring(state.Job.CustomerName)
-	prompt.HoldDuration = 0.3
-	prompt.MaxActivationDistance = 14
-	prompt.RequiresLineOfSight = false
-	prompt.KeyboardKeyCode = Enum.KeyCode.E
-	prompt.Style = Enum.ProximityPromptStyle.Custom -- o HUD desenha (e só para o dono)
-	prompt:SetAttribute("OwnerUserId", state.OwnerUserId)
-	prompt.Parent = anchor
-	prompt.Triggered:Connect(function(player: Player)
-		if acceptHandler and player.UserId == state.OwnerUserId and states[state.JobId] == state then
-			acceptHandler(player, state.JobId)
-		end
-	end)
-end
-
 local function removePrompt(npc: Model?)
 	local anchor = npc and npc:FindFirstChild("HumanoidRootPart")
 	local prompt = anchor and anchor:FindFirstChild("Atender")
@@ -254,7 +225,7 @@ function CustomerArrivalService.Arrive(job: any): number
 			end
 			state.Phase = "Waiting"
 			NpcKit.Say(npc, tostring(job.Complaint or "Olá! Pode olhar meu carro?"), nil, job.Vip and Color3.fromRGB(255, 200, 40) or nil)
-			addAcceptPrompt(state, npc)
+			-- aceitar é só pela TV de ordens dentro da oficina (pedido do PO); aqui o cliente só espera
 		else
 			state.Phase = "Waiting"
 		end

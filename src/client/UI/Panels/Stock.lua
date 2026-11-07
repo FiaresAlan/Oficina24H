@@ -1,8 +1,10 @@
 --!strict
--- Estoque: peças e equipamentos que a oficina possui (somente leitura; compras na Loja, consumo no servidor ao reparar).
+-- Estoque: peças e equipamentos que a oficina possui (compras na Loja, consumo no servidor ao reparar). Aberto na
+-- prateleira da oficina; ali o jogador também passa peças para a mochila (Config.BagCapacity) e de volta.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Catalog = require(ReplicatedStorage.Shared.Catalog)
+local Config = require(ReplicatedStorage.Shared.Config)
 local Theme = require(script.Parent.Parent.Theme)
 local Kit = require(script.Parent.Parent.Kit)
 local Store = require(script.Parent.Parent.Store)
@@ -157,6 +159,21 @@ function Stock.new(parent: Instance)
 			HudParts.text(detail, part.DisplayName, 30, { Font = Theme.FontTitle, LayoutOrder = 1 })
 			HudParts.text(detail, t("st_detail_category", t("cat_" .. (Catalog.PartCategory[id] or "Misc"))) .. "   ·   " .. (qty > 0 and t("st_qty", qty) or t("st_out")), 22, { Font = Theme.FontSemi, TextColor3 = qty > 0 and rgb(80, 230, 110) or Theme.Muted, LayoutOrder = 2 })
 			HudParts.text(detail, t("st_detail_used", usedIn(id)) .. "   ·   " .. t("st_detail_cost", part.Cost), 21, { Font = Theme.FontSemi, TextColor3 = rgb(180, 198, 225), LayoutOrder = 3, TextWrapped = true, AutomaticSize = Enum.AutomaticSize.Y, Size = UDim2.new(1, 0, 0, 0) })
+			-- Mochila: o que o jogador carrega (para reparos fora da oficina); o resto fica na prateleira.
+			local bag = snapshot.Profile.Bag or {}
+			local bagTotal = 0
+			for _, n in pairs(bag) do
+				bagTotal += n
+			end
+			HudParts.text(detail, string.format("Na mochila: %d   ·   Mochila: %d/%d", bag[id] or 0, bagTotal, Config.BagCapacity), 21, { Font = Theme.FontSemi, TextColor3 = rgb(255, 200, 70), LayoutOrder = 4 })
+			local take = PanelKit.button(detail, "Levar 1 na mochila", "blue", Vector2.new(230, 42), function()
+				Store.Act("MoveBag", { PartId = id, Quantity = 1, ToBag = true })
+			end)
+			take.LayoutOrder = 5
+			local store = PanelKit.button(detail, "Guardar 1 na prateleira", "dark", Vector2.new(230, 42), function()
+				Store.Act("MoveBag", { PartId = id, Quantity = 1, ToBag = false })
+			end)
+			store.LayoutOrder = 6
 		else
 			local equipment = Catalog.Equipment[id]
 			if not equipment then
@@ -261,7 +278,7 @@ function Stock.new(parent: Instance)
 	local lastKey = ""
 	Store.Changed.Event:Connect(function(snapshot: any)
 		if window.IsOpen() then
-			local key = game:GetService("HttpService"):JSONEncode(snapshot.Profile.Parts, snapshot.Profile.Equipment)
+			local key = game:GetService("HttpService"):JSONEncode({ snapshot.Profile.Parts, snapshot.Profile.Bag, snapshot.Profile.Equipment })
 			if key ~= lastKey then
 				lastKey = key
 				refresh()

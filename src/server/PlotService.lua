@@ -1,8 +1,10 @@
 --!strict
 -- PlotService: atribui, libera e consulta os terrenos físicos (Workspace.Plots.PlotN).
--- Autoridade do servidor: apenas este módulo escreve OwnerUserId nos lotes.
+-- Autoridade do servidor: este módulo escreve OwnerUserId dos jogadores; o RivalService marca lotes de rivais com -1.
 -- Atribuição é síncrona (sem yield entre ler e gravar), portanto não há corrida entre jogadores.
 local Players = game:GetService("Players")
+
+local StationService = require(script.Parent.StationService)
 
 local PlotService = {}
 
@@ -79,9 +81,15 @@ function PlotService.IsInsidePlot(plot: Folder, position: Vector3, margin: numbe
 	return math.abs(rel.X) <= base.Size.X / 2 + m and math.abs(rel.Z) <= base.Size.Z / 2 + m
 end
 
+-- Gancho opcional chamado antes de procurar lote livre (Main liga ao RivalService.MakeRoom).
+PlotService.BeforeAssign = nil :: (() -> ())?
+
 function PlotService.Assign(player: Player): (boolean, string, Folder?)
 	if plotByUser[player.UserId] then
 		return true, "Você já possui um terreno.", plotByUser[player.UserId]
+	end
+	if PlotService.BeforeAssign then
+		PlotService.BeforeAssign() -- uma oficina rival sai se não houver lote livre (RivalService.MakeRoom)
 	end
 	local plot = freePlot()
 	if not plot then
@@ -127,6 +135,8 @@ function PlotService.Release(player: Player)
 		priceText.Text = "OFICINA\nLIVRE"
 	end
 	setSign(plot, "LOTE " .. tostring(plot:GetAttribute("PlotId")) .. " - LIVRE")
+	StationService.ApplyExpansion(plot, 0) -- o anexo é do jogador
+	StationService.SetSign(plot, { Title = "LOTE LIVRE", Name = "Vire dono deste terreno!", Line1 = "", Line2 = "", Line3 = "" })
 	setSpawn(plot, false)
 	player.RespawnLocation = nil
 end

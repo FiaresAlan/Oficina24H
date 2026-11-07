@@ -26,6 +26,7 @@ local Notifications = require(script.Parent.Panels.Notifications)
 local RepairGame = require(script.Parent.RepairGame)
 local DiagnosisGame = require(script.Parent.DiagnosisGame)
 local Onboarding = require(script.Parent.Onboarding)
+local Stations = require(script.Parent.Stations)
 
 local t = Kit.t
 local HUD = {}
@@ -713,6 +714,12 @@ function HUD.start()
 
 	local function addNav(parent: Instance, spec: HudParts.NavSpec, panelName: string, order: number): HudParts.NavButton
 		local b = HudParts.navButton(spec, function()
+			-- Estoque e Loja são lugares físicos: longe deles, o botão guia até lá (a lista de ordens abre de qualquer lugar).
+			if (panelName == "stock" or panelName == "shop") and selectedName ~= panelName and not Stations.IsNear(panelName) then
+				Store.Message:Fire(Stations.FarText[panelName], false, "")
+				Stations.Guide(panelName)
+				return
+			end
 			HUD.openPanel(panelName)
 		end)
 		b.Root.LayoutOrder = order

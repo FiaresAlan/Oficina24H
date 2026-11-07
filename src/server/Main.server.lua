@@ -7,7 +7,8 @@ local PlotService = require(script.Parent.PlotService)
 local VehicleService = require(script.Parent.VehicleService)
 local EquipmentService = require(script.Parent.EquipmentService)
 local WorkshopService = require(script.Parent.WorkshopService)
-local CustomerArrivalService = require(script.Parent.CustomerArrivalService)
+local StationService = require(script.Parent.StationService)
+local RivalService = require(script.Parent.RivalService)
 
 local remotesFolder = Instance.new("Folder")
 remotesFolder.Name = "OficinaRemotes"
@@ -23,8 +24,11 @@ snapshotFunction.Parent = remotesFolder
 
 DataService.Start()
 PlotService.Start()
+StationService.Start() -- TV, prateleira, quadro, totem e elevadores em todos os lotes
+PlotService.BeforeAssign = RivalService.MakeRoom
 WorkshopService.Init(DataService)
 WorkshopService.Start()
+RivalService.Start() -- oficinas rivais (NPC) nos lotes livres
 
 -- Gancho de QA: SÓ existe no Studio (nunca no jogo publicado). Permite simular jogador novo nos testes pelo comando.
 if game:GetService("RunService"):IsStudio() then
@@ -42,6 +46,9 @@ if game:GetService("RunService"):IsStudio() then
             profile.TotalEarned = arg
             WorkshopService.UpdateSkin(player)
             return "ok"
+        elseif command == "Coins" and type(arg) == "number" then
+            DataService.AddCoins(player, arg, "QA (Studio)")
+            return profile.Coins
         elseif command == "AgeJobs" then
             return WorkshopService._ageJobsForTesting(player.UserId, 1000)
         elseif command == "Profile" then
@@ -55,7 +62,7 @@ end
 -- Limitador por JOGADOR e por AÇÃO (uma ação rápida não descarta outra diferente). Só ações conhecidas entram na tabela.
 local lastActionAt: {[number]: {[string]: number}} = {}
 local KNOWN_ACTIONS: {[string]: boolean} = {}
-for _, name in ipairs({ "ClaimWorkshop", "GenerateCustomer", "DeclineJob", "AcceptJob", "DiagnoseJob", "CompleteJob", "FinishRepair", "RepairPrefs", "CancelRepair", "SkipOnboarding", "BuyEquipment", "SetPrice", "BuyPart", "Checkout", "HireNpc", "InviteWorker", "CompleteCollaborativeJob", "RespondInvite" }) do
+for _, name in ipairs({ "ClaimWorkshop", "GenerateCustomer", "DeclineJob", "AcceptJob", "DiagnoseJob", "CompleteJob", "FinishRepair", "RepairPrefs", "CancelRepair", "SkipOnboarding", "BuyEquipment", "SetPrice", "BuyPart", "Checkout", "HireNpc", "InviteWorker", "CompleteCollaborativeJob", "RespondInvite", "MoveBag" }) do
     KNOWN_ACTIONS[name] = true
 end
 
@@ -123,9 +130,24 @@ local function onPrompt(player: Player, jobId: string, kind: string)
     sendResult(player, ok, message)
 end
 VehicleService.SetInteractionHandler(onPrompt)
--- "Atender" no cliente que espera na calçada = aceitar a ordem (mesmas validações do botão da lista).
-CustomerArrivalService.SetAcceptHandler(function(player: Player, jobId: string)
-    onPrompt(player, jobId, "Accept")
+-- Estações físicas do lote (StationService): contratar/demitir mecânico e expandir a oficina pelos prompts.
+-- "Ver ordens" e "Abrir estoque" só abrem telas no cliente (o servidor valida a distância nas ações).
+StationService.SetPromptHandler(function(player: Player, _plot: Instance, action: string)
+    local nowClock = os.clock()
+    if nowClock - (lastInteractAt[player.UserId] or 0) < 0.5 then return end
+    lastInteractAt[player.UserId] = nowClock
+    snapshotCache[player.UserId] = nil
+    local ok, message
+    if action == "Contratar" then
+        ok, message = WorkshopService.HireEmployee(player)
+    elseif action == "Demitir" then
+        ok, message = WorkshopService.FireEmployee(player)
+    elseif action == "Expandir" then
+        ok, message = WorkshopService.BuyExpansion(player)
+    else
+        return
+    end
+    sendResult(player, ok, message)
 end)
 
 -- GetSnapshot custa CPU (percorre ordens e ranking): resposta em cache por 0,4 s por jogador contra laço de InvokeServer.
@@ -187,6 +209,8 @@ actionEvent.OnServerEvent:Connect(function(player: Player, action: any, payload:
         success, message = WorkshopService.SetPrice(player, payload.Multiplier)
     elseif action == "BuyPart" and type(payload.PartId) == "string" and type(payload.Quantity) == "number" then
         success, message = WorkshopService.BuyPart(player, payload.PartId, payload.Quantity)
+    elseif action == "MoveBag" and type(payload.PartId) == "string" and type(payload.Quantity) == "number" and type(payload.ToBag) == "boolean" then
+        success, message = WorkshopService.MoveBag(player, payload.PartId, payload.Quantity, payload.ToBag)
     elseif action == "Checkout" and type(payload.Items) == "table" then
         success, message = WorkshopService.Checkout(player, payload.Items)
     elseif action == "HireNpc" and type(payload.JobId) == "string" then

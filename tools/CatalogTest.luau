@@ -165,6 +165,26 @@ do
 	end
 end
 
+-- Estações físicas, placa, anexo da expansão: nada no caminho dos carros nem em cima de equipamento
+do
+	local Layout = require(sharedClone.Layout)
+	local A, I, D, S = Layout.Annex, Layout.Interior, Layout.Driveway, Layout.Sign
+	for id, s in pairs(Layout.Slots) do
+		check("equipamento " .. id .. " fora do anexo", not (s.x > A.x0 - 3 and s.x < A.x1 + 3 and s.z > A.z0 - 3 and s.z < A.z1 + 3), s.x .. "," .. s.z)
+	end
+	for name, s in pairs(Layout.Stations) do
+		check("estação " .. name .. " dentro do prédio", s.x >= I.x0 - 1 and s.x <= I.x1 + 1 and s.z >= I.z0 and s.z <= I.z1 + 0.5)
+	end
+	check("placa 3D fora do corredor dos carros", S.x + 7 < D.x0 or S.x - 7 > D.x1)
+	check("placa 3D fora do anexo", S.x - 7 > A.x1 or S.x + 7 < A.x0)
+	local b = Layout.AnnexBay
+	check("box do anexo dentro do anexo", b.x - b.w / 2 >= A.x0 and b.x + b.w / 2 <= A.x1 and b.z - b.d / 2 >= A.z0 and b.z + b.d / 2 <= A.z1)
+	local Config = require(sharedClone.Config)
+	check("expansão tem preço", #Config.ExpansionCosts >= 1 and Config.ExpansionCosts[1] > 0)
+	check("funcionário: salário e contratação positivos", Config.EmployeeSalary > 0 and Config.EmployeeHireCost > 0 and Config.MaxEmployees >= 1)
+	check("rivais sempre deixam lote livre", Config.RivalKeepFreePlots >= 1)
+end
+
 -- Modelos constroem sem erro e apoiados no piso (y=0 local)
 for id in pairs(Catalog.Equipment) do
 	local ok, model = pcall(EquipmentModels.Build, id)

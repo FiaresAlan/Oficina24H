@@ -5,6 +5,9 @@
 -- põe de volta ao volante e tira o carro da vaga. Ferramentas comuns (modelo, animação, fala) ficam no NpcKit.
 -- Servidor é a única autoridade; não existe NPC sem veículo, então não há duplicata ao entrar/sair.
 local NpcKit = require(script.Parent.NpcKit)
+local Config = require(game:GetService("ReplicatedStorage").Shared.Config)
+
+local TALK_DISTANCE = Config.TalkDistance
 
 local CustomerNpcService = {}
 
@@ -29,9 +32,9 @@ function CustomerNpcService.Adopt(npc: Model, animator: NpcKit.NpcAnimator?, job
 		local prompt = Instance.new("ProximityPrompt")
 		prompt.Name = "Talk"
 		prompt.ActionText = "Conversar"
-		prompt.ObjectText = tostring(job.CustomerName or "Cliente")
+		prompt.ObjectText = job.Vip and "Cliente VIP" or "Cliente" -- o nome já aparece sobre a cabeça
 		prompt.HoldDuration = 0
-		prompt.MaxActivationDistance = 12
+		prompt.MaxActivationDistance = TALK_DISTANCE -- só de perto (~3 m)
 		prompt.RequiresLineOfSight = false
 		prompt.KeyboardKeyCode = Enum.KeyCode.E
 		prompt.Style = Enum.ProximityPromptStyle.Custom -- o HUD desenha o prompt (e só mostra para o dono)
@@ -88,6 +91,21 @@ function CustomerNpcService.Leave(jobId: string)
 	if npc then
 		npc:Destroy()
 	end
+end
+
+-- O jogador está perto do cliente desta ordem (conversa/diagnóstico só de perto)? nil = sem NPC (então não restringe).
+function CustomerNpcService.IsNear(player: Player, jobId: string, maxDistance: number): boolean?
+	local entry = byJob[jobId]
+	local root = entry and entry.Npc.PrimaryPart
+	local character = player.Character
+	local hrp = character and character:FindFirstChild("HumanoidRootPart")
+	if not root then
+		return nil
+	end
+	if not hrp or not hrp:IsA("BasePart") then
+		return false
+	end
+	return (hrp.Position - root.Position).Magnitude <= maxDistance
 end
 
 function CustomerNpcService.Count(): number

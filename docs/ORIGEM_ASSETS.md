@@ -110,3 +110,10 @@ Os avatares gerados por IA (`Assets/Customers`) saíram. Os clientes agora são 
 - Masculinos: Casey, Dennis, Denny, John, Kenneth, Man, Oakley, Oliver.
 - Femininos: Cindy, Claire, Lin, Lindsey, Linlin, Serena, Skyler, Summer, Woman.
 Animação de volante: animação padrão de sentar R15 da Roblox (`2506281703`).
+
+## Sons (2026-11-07)
+Áudios públicos da Creator Store (filtro "criadores verificados"), usados por id em `src/shared/SoundIds.lua`:
+motor "New Gen Car Idle Engine" (126560668123605, 4CIoud), "Electric_sparking2 loop" (109371098703931, Thanksforvsin),
+"Electric Buzzing" (74799822173480, Appapffhhh), "steam hiss loop" (130730262452898, sting_avenue37) e, da biblioteca
+ProSoundEffects licenciada pela Roblox: "Air Wrench 4" (9113078798), "Ratchet Wrench Gear Winding 3" (9118047781),
+"Hydraulic Pallet Lift 1" (9114852843). Se algum id deixar de ser público, o jogo segue sem aquele som.

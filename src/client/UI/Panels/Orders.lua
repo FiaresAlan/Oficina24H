@@ -12,6 +12,7 @@ local Kit = require(script.Parent.Parent.Kit)
 local Store = require(script.Parent.Parent.Store)
 local HudParts = require(script.Parent.Parent.HudParts)
 local PanelKit = require(script.Parent.Parent.PanelKit)
+local Stations = require(script.Parent.Parent.Stations)
 
 local t = Kit.t
 local Orders = {}
@@ -236,6 +237,12 @@ function Orders.new(parent: Instance)
 		end, "pn_chat")
 		talk.LayoutOrder = 1
 		local accept = PanelKit.button(actions, t("or_accept"), "green", Vector2.new(200, 48), function()
+			-- aceitar é só na TV de ordens dentro da oficina: longe dela, guia até lá
+			if not Stations.IsNear("orders") then
+				Store.Message:Fire(Stations.FarText.orders, false, "")
+				Stations.Guide("orders")
+				return
+			end
 			Store.Act("AcceptJob", { JobId = job.Id })
 		end, "pn_o_check")
 		accept.LayoutOrder = 2

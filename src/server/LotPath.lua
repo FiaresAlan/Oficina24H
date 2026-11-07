@@ -115,6 +115,28 @@ local function arc(pts: { Vector2 }, bayX: number, reverse: boolean)
 	end
 end
 
+-- Caminho interno do anexo (Layout.AnnexRoute): do fim da curva do corredor principal (mainX, LaneZ + R) até o box do
+-- anexo. Sobe pelo corredor, vira para -X em turnZ e entra no anexo de frente (+Z).
+local Layout = require(game:GetService("ReplicatedStorage").Shared.Layout)
+
+local function arcPts(pts: { Vector2 }, cx: number, cz: number, r: number, a0: number, a1: number)
+	local n = 10
+	for i = 1, n do
+		local a = a0 + (a1 - a0) * i / n
+		table.insert(pts, Vector2.new(cx + r * math.cos(a), cz + r * math.sin(a)))
+	end
+end
+
+local function annexRoute(pts: { Vector2 }, bayX: number, bayZ: number)
+	local route = Layout.AnnexRoute
+	local r, mx, tz = route.radius, route.mainX, route.turnZ
+	table.insert(pts, Vector2.new(mx, tz - r))
+	arcPts(pts, mx - r, tz - r, r, 0, math.pi / 2) -- vira para -X
+	table.insert(pts, Vector2.new(bayX + r, tz))
+	arcPts(pts, bayX + r, tz + r, r, -math.pi / 2, -math.pi) -- vira para +Z, entrando no anexo
+	table.insert(pts, Vector2.new(bayX, bayZ))
+end
+
 -- Chegada: surge longe na faixa e encosta no meio-fio na vaga `slotX`.
 function LotPath.Arrival(frame: CFrame, slotX: number): { Vector3 }
 	local pts = { Vector2.new(slotX - LotPath.StreetSpan, LotPath.LaneZ), Vector2.new(slotX - 18, LotPath.LaneZ) }
@@ -123,27 +145,47 @@ function LotPath.Arrival(frame: CFrame, slotX: number): { Vector3 }
 end
 
 -- Do meio-fio (ou de longe, se `slotX` for nil) até a vaga da oficina, entrando de frente.
-function LotPath.Enter(frame: CFrame, slotX: number?, bayX: number, bayZ: number): { Vector3 }
+-- `annex` = o box fica no anexo: entra pelo corredor principal e segue o caminho interno.
+function LotPath.Enter(frame: CFrame, slotX: number?, bayX: number, bayZ: number, annex: boolean?): { Vector3 }
 	local R = LotPath.TurnRadius
+	local gateX = annex and Layout.AnnexRoute.mainX or bayX
 	local pts: { Vector2 }
 	if slotX then
 		pts = { Vector2.new(slotX, LotPath.ParkZ) }
-		sCurve(pts, slotX, LotPath.ParkZ, math.min(slotX + 14, bayX - R), LotPath.LaneZ)
+		sCurve(pts, slotX, LotPath.ParkZ, math.min(slotX + 14, gateX - R), LotPath.LaneZ)
 	else
-		pts = { Vector2.new(bayX - R - LotPath.StreetSpan, LotPath.LaneZ) }
+		pts = { Vector2.new(gateX - R - LotPath.StreetSpan, LotPath.LaneZ) }
 	end
-	table.insert(pts, Vector2.new(bayX - R, LotPath.LaneZ))
-	arc(pts, bayX, false)
-	table.insert(pts, Vector2.new(bayX, bayZ))
+	table.insert(pts, Vector2.new(gateX - R, LotPath.LaneZ))
+	arc(pts, gateX, false)
+	if annex then
+		annexRoute(pts, bayX, bayZ)
+	else
+		table.insert(pts, Vector2.new(bayX, bayZ))
+	end
 	return toWorld(frame, pts)
 end
 
--- Saída da vaga: dá ré até a faixa (terminando de frente para +X) ...
-function LotPath.BackOut(frame: CFrame, bayX: number, bayZ: number): { Vector3 }
+-- Saída da vaga: dá ré até a faixa (terminando de frente para +X) ... Retorna também o x de onde segue pela faixa.
+function LotPath.BackOut(frame: CFrame, bayX: number, bayZ: number, annex: boolean?): ({ Vector3 }, number)
 	local R = LotPath.TurnRadius
-	local pts = { Vector2.new(bayX, bayZ), Vector2.new(bayX, LotPath.LaneZ + R) }
-	arc(pts, bayX, true)
-	return toWorld(frame, pts)
+	local pts: { Vector2 }
+	local gateX = bayX
+	if annex then
+		-- o mesmo caminho interno, de ré, até o corredor principal
+		gateX = Layout.AnnexRoute.mainX
+		local forward: { Vector2 } = {}
+		annexRoute(forward, bayX, bayZ)
+		pts = {}
+		for i = #forward, 1, -1 do
+			table.insert(pts, forward[i])
+		end
+		table.insert(pts, Vector2.new(gateX, LotPath.LaneZ + R))
+	else
+		pts = { Vector2.new(bayX, bayZ), Vector2.new(bayX, LotPath.LaneZ + R) }
+	end
+	arc(pts, gateX, true)
+	return toWorld(frame, pts), gateX - R
 end
 
 -- ... e segue pela faixa até sumir.

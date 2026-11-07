@@ -1,0 +1,477 @@
+--!strict
+-- VehicleFx: efeitos dos carros dos clientes, só no cliente (nada disso volta ao servidor nem muda as regras):
+--   * rodas giram conforme o carro anda e o motor faz barulho (volume e tom pela velocidade);
+--   * o DEFEITO aparece no carro estacionado (atributo "Sintoma" vindo do servidor):
+--       Engine = fumaça no capô e no escapamento + chiado; Electrical = faíscas azuis, luz piscando e zumbido;
+--       Tires = pneu murcho soltando fumaça; Suspension = roda torta (cambagem); Bodywork = sem efeito extra;
+--   * durante o REPARO (atributo "Reparando"): o pneu sai do carro (pneu/suspensão), o capô abre (motor/elétrica,
+--     quando o modelo tem capô separado), sons de parafusadeira/catraca e faíscas de trabalho.
+-- As rodas são detectadas pela geometria (peças redondas perto dos 4 cantos e embaixo). Leve: só carros a até 160 studs.
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+
+local SoundIds = require(ReplicatedStorage.Shared.SoundIds)
+
+local MAX_DISTANCE = 160
+
+type WheelGroup = {
+	Parts: { BasePart },
+	Offsets: { CFrame }, -- relativo ao eixo
+	Axle: Vector3, -- centro do eixo, relativo à Raiz
+	Radius: number,
+	Side: number, -- -1 esquerda, +1 direita (X da Raiz)
+	Front: boolean,
+	Spin: number, -- ângulo atual da roda
+}
+
+type Hood = { Parts: { BasePart }, Offsets: { CFrame }, Hinge: Vector3 }
+
+type CarFx = {
+	Model: Model,
+	Root: BasePart,
+	Wheels: { WheelGroup },
+	Hood: Hood?,
+	LastPos: Vector3,
+	Speed: number,
+	LastMove: number,
+	Engine: Sound,
+	Remove: number, -- 0..1 pneu fora (reparo)
+	HoodOpen: number, -- 0..1
+	FxKey: string, -- efeito montado agora ("" = nenhum)
+	FxParts: { Instance },
+	NextBurst: number,
+	NextTool: number,
+	Light: PointLight?,
+	Sparks: ParticleEmitter?,
+	SparkSound: Sound?,
+}
+
+local cars: { [Model]: CarFx } = {}
+
+local function sound(parent: Instance, id: string, volume: number, looped: boolean): Sound
+	local s = Instance.new("Sound")
+	s.SoundId = id
+	s.Volume = volume
+	s.Looped = looped
+	s.RollOffMinDistance = 8
+	s.RollOffMaxDistance = 70
+	s.Parent = parent
+	return s
+end
+
+local function dims(model: Model): (number, number, number)
+	return tonumber(model:GetAttribute("Comprimento")) or 18, tonumber(model:GetAttribute("Largura")) or 8, tonumber(model:GetAttribute("Altura")) or 5
+end
+
+-- Tamanho da peça medido nos eixos do carro.
+local function extents(rel: CFrame, size: Vector3): Vector3
+	local r, u, l = rel.RightVector, rel.UpVector, rel.LookVector
+	local function axis(v: Vector3): number
+		return math.abs(r:Dot(v)) * size.X + math.abs(u:Dot(v)) * size.Y + math.abs(l:Dot(v)) * size.Z
+	end
+	return Vector3.new(axis(Vector3.xAxis), axis(Vector3.yAxis), axis(Vector3.zAxis))
+end
+
+local function ownParts(model: Model, root: BasePart): { BasePart }
+	local list = {}
+	for _, d in ipairs(model:GetDescendants()) do
+		if d:IsA("BasePart") and d ~= root and d.Name ~= "Casco" and d.Name ~= "InteractPoint" then
+			local owner = d:FindFirstAncestorWhichIsA("Model")
+			if owner == model or (owner and not owner:FindFirstChildOfClass("Humanoid")) then
+				table.insert(list, d) -- o cliente sentado ao volante (modelo com Humanoid) não é parte do carro
+			end
+		end
+	end
+	return list
+end
+
+-- Solta a peça do conjunto SÓ no cliente (para podermos girar/mover): remove a solda e ancora localmente.
+local function detach(root: BasePart, p: BasePart)
+	for _, w in ipairs(root:GetChildren()) do
+		if w:IsA("WeldConstraint") and (w.Part1 == p or w.Part0 == p) then
+			w:Destroy()
+		end
+	end
+	for _, w in ipairs(p:GetChildren()) do
+		if w:IsA("WeldConstraint") then
+			w:Destroy()
+		end
+	end
+	p.Anchored = true
+end
+
+local function detectWheels(model: Model, root: BasePart, parts: { BasePart }): { WheelGroup }
+	local L, W, H = dims(model)
+	local buckets: { [string]: { { Part: BasePart, Rel: CFrame, Ext: Vector3 } } } = {}
+	for _, p in ipairs(parts) do
+		local rel = root.CFrame:ToObjectSpace(p.CFrame)
+		local pos = rel.Position
+		if pos.Y < H * 0.45 and math.abs(pos.X) > W * 0.15 and math.abs(pos.Z) > L * 0.15 then
+			local ext = extents(rel, p.Size)
+			local big = math.max(ext.Y, ext.Z)
+			if ext.Y > 0.6 and ext.Z > 0.6 and math.abs(ext.Y - ext.Z) < big * 0.35 and ext.X < W * 0.35 and big < H * 0.7 then
+				local key = (pos.X > 0 and "R" or "L") .. (pos.Z > 0 and "B" or "F")
+				buckets[key] = buckets[key] or {}
+				table.insert(buckets[key], { Part = p, Rel = rel, Ext = ext })
+			end
+		end
+	end
+	local groups: { WheelGroup } = {}
+	for key, list in pairs(buckets) do
+		-- o pneu é a peça redonda maior; o eixo passa pelo centro dela
+		table.sort(list, function(a, b)
+			return math.max(a.Ext.Y, a.Ext.Z) > math.max(b.Ext.Y, b.Ext.Z)
+		end)
+		local tire = list[1]
+		local radius = math.max(tire.Ext.Y, tire.Ext.Z) / 2
+		local axle = tire.Rel.Position
+		local group: WheelGroup = {
+			Parts = {},
+			Offsets = {},
+			Axle = axle,
+			Radius = math.max(radius, 0.5),
+			Side = string.sub(key, 1, 1) == "R" and 1 or -1,
+			Front = string.sub(key, 2, 2) == "F",
+			Spin = 0,
+		}
+		for _, item in ipairs(list) do
+			local d = item.Rel.Position - axle
+			if math.abs(d.Y) < radius * 0.7 and math.abs(d.Z) < radius * 0.7 then
+				table.insert(group.Parts, item.Part)
+				table.insert(group.Offsets, CFrame.new(axle):ToObjectSpace(item.Rel))
+			end
+		end
+		if #group.Parts > 0 then
+			table.insert(groups, group)
+		end
+	end
+	return groups
+end
+
+local function detectHood(model: Model, root: BasePart, parts: { BasePart }): Hood?
+	local hoodParts = {}
+	for _, p in ipairs(parts) do
+		local n = string.lower(p.Name)
+		if string.find(n, "hood", 1, true) or string.find(n, "bonnet", 1, true) or string.find(n, "capo", 1, true) then
+			table.insert(hoodParts, p)
+		end
+	end
+	if #hoodParts == 0 then
+		return nil
+	end
+	local maxZ, topY = -math.huge, -math.huge
+	for _, p in ipairs(hoodParts) do
+		local rel = root.CFrame:ToObjectSpace(p.CFrame)
+		local ext = extents(rel, p.Size)
+		maxZ = math.max(maxZ, rel.Position.Z + ext.Z / 2)
+		topY = math.max(topY, rel.Position.Y + ext.Y / 2)
+	end
+	local hinge = Vector3.new(0, topY, maxZ) -- borda de trás do capô (perto do para-brisa)
+	local hood: Hood = { Parts = hoodParts, Offsets = {}, Hinge = hinge }
+	for i, p in ipairs(hoodParts) do
+		hood.Offsets[i] = CFrame.new(hinge):ToObjectSpace(root.CFrame:ToObjectSpace(p.CFrame))
+	end
+	return hood
+end
+
+local function setup(model: Model): CarFx?
+	local root = model.PrimaryPart
+	if not root or root.Name ~= "Raiz" then
+		return nil
+	end
+	local parts = ownParts(model, root)
+	local wheels = detectWheels(model, root, parts)
+	local hood = detectHood(model, root, parts)
+	for _, g in ipairs(wheels) do
+		for _, p in ipairs(g.Parts) do
+			detach(root, p)
+		end
+	end
+	if hood then
+		for _, p in ipairs(hood.Parts) do
+			detach(root, p)
+		end
+	end
+	local fx: CarFx = {
+		Model = model,
+		Root = root,
+		Wheels = wheels,
+		Hood = hood,
+		LastPos = root.Position,
+		Speed = 0,
+		LastMove = 0,
+		Engine = sound(root, SoundIds.Engine, 0, true),
+		Remove = 0,
+		HoodOpen = 0,
+		FxKey = "",
+		FxParts = {},
+		NextBurst = 0,
+		NextTool = 0,
+		Light = nil,
+		Sparks = nil,
+		SparkSound = nil,
+	}
+	return fx
+end
+
+local function clearFx(fx: CarFx)
+	for _, inst in ipairs(fx.FxParts) do
+		inst:Destroy()
+	end
+	table.clear(fx.FxParts)
+	fx.Light, fx.Sparks, fx.SparkSound = nil, nil, nil
+end
+
+local function attachment(fx: CarFx, pos: Vector3): Attachment
+	local a = Instance.new("Attachment")
+	a.Position = pos
+	a.Parent = fx.Root
+	table.insert(fx.FxParts, a)
+	return a
+end
+
+local function smoke(parent: Attachment, color: Color3, rate: number, size: number): ParticleEmitter
+	local e = Instance.new("ParticleEmitter")
+	e.Texture = "rbxasset://textures/particles/smoke_main.dds"
+	e.Color = ColorSequence.new(color)
+	e.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.45), NumberSequenceKeypoint.new(1, 1) })
+	e.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, size), NumberSequenceKeypoint.new(1, size * 3) })
+	e.Lifetime = NumberRange.new(1.6, 2.6)
+	e.Rate = rate
+	e.Speed = NumberRange.new(2, 4)
+	e.SpreadAngle = Vector2.new(18, 18)
+	e.Acceleration = Vector3.new(0, 2.5, 0)
+	e.RotSpeed = NumberRange.new(-40, 40)
+	e.EmissionDirection = Enum.NormalId.Top
+	e.Parent = parent
+	return e
+end
+
+local function sparks(parent: Attachment, color: Color3): ParticleEmitter
+	local e = Instance.new("ParticleEmitter")
+	e.Texture = "rbxasset://textures/particles/sparkles_main.dds"
+	e.Color = ColorSequence.new(color, Color3.new(1, 1, 1))
+	e.LightEmission = 1
+	e.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.35), NumberSequenceKeypoint.new(1, 0) })
+	e.Lifetime = NumberRange.new(0.25, 0.6)
+	e.Rate = 0
+	e.Speed = NumberRange.new(8, 16)
+	e.SpreadAngle = Vector2.new(70, 70)
+	e.Acceleration = Vector3.new(0, -30, 0)
+	e.Parent = parent
+	return e
+end
+
+local function frontWheel(fx: CarFx): WheelGroup?
+	for _, g in ipairs(fx.Wheels) do
+		if g.Front and g.Side < 0 then
+			return g
+		end
+	end
+	return fx.Wheels[1]
+end
+
+-- Monta o efeito do defeito (e do reparo) quando muda.
+local function applyFx(fx: CarFx)
+	local model = fx.Model
+	local parked = model:GetAttribute("Estacionado") == true
+	local symptom = parked and tostring(model:GetAttribute("Sintoma") or "") or ""
+	local repairing = parked and model:GetAttribute("Reparando") == true
+	local key = symptom .. (repairing and ":R" or "")
+	if key == fx.FxKey then
+		return
+	end
+	fx.FxKey = key
+	clearFx(fx)
+	if symptom == "" then
+		return
+	end
+	local L, W, H = dims(model)
+	if symptom == "Engine" then
+		smoke(attachment(fx, Vector3.new(0, H * 0.72, -L * 0.36)), Color3.fromRGB(190, 190, 190), repairing and 3 or 7, 0.9)
+		smoke(attachment(fx, Vector3.new(W * 0.25, H * 0.15, L * 0.5)), Color3.fromRGB(70, 70, 75), 9, 0.6)
+		table.insert(fx.FxParts, (function()
+			local s = sound(fx.Root, SoundIds.Hiss, 0.25, true)
+			s:Play()
+			return s
+		end)())
+	elseif symptom == "Electrical" then
+		local a = attachment(fx, Vector3.new(0, H * 0.7, -L * 0.36))
+		fx.Sparks = sparks(a, Color3.fromRGB(90, 170, 255))
+		local light = Instance.new("PointLight")
+		light.Color = Color3.fromRGB(90, 160, 255)
+		light.Range = 10
+		light.Brightness = 0
+		light.Shadows = false
+		light.Parent = a
+		fx.Light = light
+		local buzz = sound(fx.Root, SoundIds.Buzz, 0.2, true)
+		buzz:Play()
+		table.insert(fx.FxParts, buzz)
+		fx.SparkSound = sound(fx.Root, SoundIds.Sparks, 0.35, false)
+		table.insert(fx.FxParts, fx.SparkSound)
+	elseif symptom == "Tires" then
+		local g = frontWheel(fx)
+		if g then
+			smoke(attachment(fx, g.Axle + Vector3.new(g.Side * 0.6, -g.Radius * 0.6, 0)), Color3.fromRGB(220, 220, 220), 4, 0.5)
+		end
+	end
+	if repairing then
+		-- faíscas de trabalho perto de onde o mecânico mexe
+		local spot = (symptom == "Tires" or symptom == "Suspension") and frontWheel(fx)
+		local pos = spot and (spot.Axle + Vector3.new(spot.Side * 1.5, 0, 0)) or Vector3.new(0, H * 0.75, -L * 0.42)
+		local a = attachment(fx, pos)
+		local e = sparks(a, Color3.fromRGB(255, 200, 90))
+		e.Rate = 6
+		if not fx.Sparks then
+			fx.Sparks = e
+		end
+	end
+end
+
+local function track(model: Instance)
+	if not model:IsA("Model") or cars[model] then
+		return
+	end
+	task.defer(function()
+		if not model.Parent or cars[model] then
+			return
+		end
+		local ok, fx = pcall(setup, model)
+		if ok and fx then
+			cars[model] = fx
+		end
+	end)
+end
+
+local function watch(folderName: string)
+	local function hook(folder: Instance)
+		for _, m in ipairs(folder:GetChildren()) do
+			track(m)
+		end
+		folder.ChildAdded:Connect(track)
+	end
+	local existing = workspace:FindFirstChild(folderName)
+	if existing then
+		hook(existing)
+	end
+	workspace.ChildAdded:Connect(function(child)
+		if child.Name == folderName then
+			hook(child)
+		end
+	end)
+end
+watch("Vehicles")
+watch("Arrivals")
+
+local camera = workspace.CurrentCamera
+
+RunService.RenderStepped:Connect(function(dt: number)
+	local now = os.clock()
+	local camPos = camera.CFrame.Position
+	for model, fx in pairs(cars) do
+		if not model.Parent or not fx.Root.Parent then
+			clearFx(fx)
+			fx.Engine:Destroy()
+			cars[model] = nil
+			continue
+		end
+		local root = fx.Root
+		local pos = root.Position
+		local moved = (pos - fx.LastPos)
+		fx.LastPos = pos
+		local far = (pos - camPos).Magnitude > MAX_DISTANCE
+		if far then
+			-- longe: sem som nem efeitos, mas rodas/capô (soltos só no cliente) continuam acompanhando o carro
+			if fx.Engine.IsPlaying then
+				fx.Engine:Stop()
+			end
+			for _, g in ipairs(fx.Wheels) do
+				local axleWorld = root.CFrame * CFrame.new(g.Axle) * CFrame.Angles(g.Spin, 0, 0)
+				for i, p in ipairs(g.Parts) do
+					p.CFrame = axleWorld * g.Offsets[i]
+				end
+			end
+			local farHood = fx.Hood
+			if farHood then
+				local hinge = root.CFrame * CFrame.new(farHood.Hinge)
+				for i, p in ipairs(farHood.Parts) do
+					p.CFrame = hinge * farHood.Offsets[i]
+				end
+			end
+			continue
+		end
+		local forward = -root.CFrame.LookVector:Dot(moved) -- frente = LookVector; positivo andando para frente
+		local speed = moved.Magnitude / math.max(dt, 1 / 240)
+		fx.Speed += (speed - fx.Speed) * math.min(1, dt * 6)
+		if speed > 0.3 then
+			fx.LastMove = now
+		end
+		-- motor
+		local running = now - fx.LastMove < 1.5
+		local target = running and 0.45 or 0
+		fx.Engine.Volume += (target - fx.Engine.Volume) * math.min(1, dt * 3)
+		fx.Engine.PlaybackSpeed = 0.85 + math.min(fx.Speed / 26, 1) * 0.7
+		if fx.Engine.Volume > 0.02 and not fx.Engine.IsPlaying then
+			fx.Engine:Play()
+		elseif fx.Engine.Volume <= 0.02 and fx.Engine.IsPlaying then
+			fx.Engine:Stop()
+		end
+		-- efeitos de defeito / reparo
+		applyFx(fx)
+		local repairing = model:GetAttribute("Reparando") == true and model:GetAttribute("Estacionado") == true
+		local symptom = tostring(model:GetAttribute("Sintoma") or "")
+		local wantRemove = repairing and (symptom == "Tires" or symptom == "Suspension") and 1 or 0
+		local wantHood = repairing and (symptom == "Engine" or symptom == "Electrical") and 1 or 0
+		fx.Remove += (wantRemove - fx.Remove) * math.min(1, dt * 2)
+		fx.HoodOpen += (wantHood - fx.HoodOpen) * math.min(1, dt * 2)
+		if fx.Light then
+			fx.Light.Brightness = math.random() < 0.15 and math.random() * 3 or fx.Light.Brightness * 0.8
+		end
+		if fx.Sparks and now >= fx.NextBurst and symptom == "Electrical" then
+			fx.NextBurst = now + 0.4 + math.random() * 1.2
+			fx.Sparks:Emit(10)
+			if fx.SparkSound then
+				fx.SparkSound:Play()
+			end
+		end
+		if repairing and now >= fx.NextTool then
+			fx.NextTool = now + 2.2 + math.random() * 1.5
+			local s = sound(root, (symptom == "Tires" or symptom == "Suspension") and SoundIds.AirWrench or SoundIds.Ratchet, 0.5, false)
+			s:Play()
+			game:GetService("Debris"):AddItem(s, 4)
+		end
+		-- rodas: giram pela distância percorrida; pneu murcho / torto / fora do carro
+		if #fx.Wheels > 0 then
+			local front = frontWheel(fx)
+			for _, g in ipairs(fx.Wheels) do
+				local spin = -forward / g.Radius -- cada roda gira pelo próprio raio
+				local axle = g.Axle
+				local extra = CFrame.identity
+				if g == front then
+					if symptom == "Tires" and model:GetAttribute("Estacionado") == true then
+						axle += Vector3.new(0, -0.3, 0) -- pneu murcho
+					elseif symptom == "Suspension" and model:GetAttribute("Estacionado") == true then
+						extra = CFrame.Angles(0, 0, math.rad(10) * g.Side) -- roda torta
+					end
+					if fx.Remove > 0.001 then
+						axle += Vector3.new(g.Side * 3 * fx.Remove, -0.4 * fx.Remove, 0) -- pneu sai do carro
+					end
+				end
+				g.Spin = (g.Spin + spin) % (math.pi * 2)
+				local axleWorld = root.CFrame * CFrame.new(axle) * extra * CFrame.Angles(g.Spin, 0, 0)
+				for i, p in ipairs(g.Parts) do
+					p.CFrame = axleWorld * g.Offsets[i]
+				end
+			end
+		end
+		-- capô
+		local hood = fx.Hood
+		if hood then
+			local hinge = root.CFrame * CFrame.new(hood.Hinge) * CFrame.Angles(math.rad(55) * fx.HoodOpen, 0, 0)
+			for i, p in ipairs(hood.Parts) do
+				p.CFrame = hinge * hood.Offsets[i]
+			end
+		end
+	end
+end)

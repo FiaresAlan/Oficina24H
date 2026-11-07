@@ -13,6 +13,7 @@ local CustomerNpcService = require(script.Parent.CustomerNpcService)
 local CustomerArrivalService = require(script.Parent.CustomerArrivalService)
 local NpcKit = require(script.Parent.NpcKit)
 local LotPath = require(script.Parent.LotPath)
+local StationService = require(script.Parent.StationService)
 
 local VehicleService = {}
 
@@ -102,8 +103,7 @@ local function addPrompts(car: Model, job: any)
 			end
 		end)
 	end
-	make("Diagnose", "Diagnosticar", 1.2)
-	make("Repair", "Reparar", 0.5)
+	make("Repair", "Reparar", 0.5) -- o diagnóstico é conversando com o cliente (prompt "Conversar", de perto)
 end
 
 local function applyStage(car: Model)
@@ -132,6 +132,43 @@ function VehicleService.SetStage(jobId: string, stage: string)
 	car:SetAttribute("Etapa", stage)
 	applyStage(car)
 	CustomerNpcService.SetDiagnosed(jobId, stage ~= "Diagnose")
+end
+
+-- Efeito do defeito mostrado no carro (VehicleFx no cliente): "Tires" | "Engine" | "Electrical" | "Suspension" |
+-- "Bodywork" | "" (nenhum).
+function VehicleService.SetSymptom(jobId: string, specialization: string)
+	local car = byJob[jobId]
+	if car then
+		car:SetAttribute("Sintoma", specialization)
+	end
+end
+
+local function bayOf(car: Model): BasePart?
+	local bayName = car:GetAttribute("BayName")
+	local plots = workspace:FindFirstChild("Plots")
+	if not plots or type(bayName) ~= "string" then
+		return nil
+	end
+	for _, p in ipairs(plots:GetChildren()) do
+		local bay = p:FindFirstChild(bayName)
+		if bay and bay:IsA("BasePart") and p:GetAttribute("OwnerUserId") == car:GetAttribute("OwnerUserId") then
+			return bay
+		end
+	end
+	return nil
+end
+
+-- Reparo em andamento: o carro sobe no elevador do box e o cliente vê o trabalho (pneu sai, capô abre, faíscas...).
+function VehicleService.SetRepairing(jobId: string, on: boolean)
+	local car = byJob[jobId]
+	if not car or car:GetAttribute("Estacionado") ~= true then
+		return
+	end
+	car:SetAttribute("Reparando", on)
+	local bay = bayOf(car)
+	if bay then
+		task.spawn(StationService.Lift, bay, car.PrimaryPart, on)
+	end
 end
 
 -- Distância do personagem até o veículo ESTACIONADO (usada também pelas ações vindas da UI).
@@ -296,7 +333,8 @@ function VehicleService.Spawn(owner: Player, job: any): (boolean, string)
 	bay:SetAttribute("JobId", job.Id)
 	local bayLocal = frame:PointToObjectSpace(bay.Position)
 	local handoff = CustomerArrivalService.Claim(job.Id)
-	local path = LotPath.Enter(frame, handoff and handoff.SlotX or nil, bayLocal.X, bayLocal.Z)
+	local annex = bay:GetAttribute("Anexo") == true
+	local path = LotPath.Enter(frame, handoff and handoff.SlotX or nil, bayLocal.X, bayLocal.Z, annex)
 	local car: Model?, npc: Model?, animator: NpcKit.NpcAnimator? = nil, nil, nil
 	if handoff then
 		car, npc, animator = handoff.Car, handoff.Npc, handoff.Animator
@@ -384,6 +422,9 @@ function VehicleService.Despawn(jobId: string, instant: boolean?)
 		if bay and bay:GetAttribute("JobId") == jobId then
 			bay:SetAttribute("JobId", nil)
 		end
+		if bay and StationService.IsBusy(bay) then
+			task.spawn(StationService.Lift, bay, nil, false)
+		end
 		if npc then
 			npc:Destroy()
 		end
@@ -401,7 +442,12 @@ function VehicleService.Despawn(jobId: string, instant: boolean?)
 		end
 	end
 	task.delay(30, release) -- segurança: nunca prende a vaga
+	car:SetAttribute("Reparando", false)
+	car:SetAttribute("Sintoma", "")
 	task.spawn(function()
+		if StationService.IsBusy(theBay) then
+			StationService.Lift(theBay, car.PrimaryPart, false) -- desce do elevador antes de sair
+		end
 		if npc and npc.Parent then
 			NpcKit.Say(npc, "Valeu! Ficou ótimo.", 3)
 			local route = standRoute(car, theFrame)
@@ -418,11 +464,13 @@ function VehicleService.Despawn(jobId: string, instant: boolean?)
 		task.wait(0.4)
 		local bayLocal = theFrame:PointToObjectSpace(theBay.Position)
 		local root = car.PrimaryPart :: BasePart
-		LotPath.Drive(root, LotPath.BackOut(theFrame, bayLocal.X, bayLocal.Z), LotPath.YardSpeed * 0.7, true)
+		local annex = theBay:GetAttribute("Anexo") == true
+		local back, offFromX = LotPath.BackOut(theFrame, bayLocal.X, bayLocal.Z, annex)
+		LotPath.Drive(root, back, annex and LotPath.YardSpeed or LotPath.YardSpeed * 0.7, true)
 		release()
 		if car.Parent then
 			task.wait(0.3)
-			LotPath.Drive(root, LotPath.DriveOff(theFrame, bayLocal.X - LotPath.TurnRadius), LotPath.StreetSpeed)
+			LotPath.Drive(root, LotPath.DriveOff(theFrame, offFromX), LotPath.StreetSpeed)
 		end
 		car:Destroy()
 	end)

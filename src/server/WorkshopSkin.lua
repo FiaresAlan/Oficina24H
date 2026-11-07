@@ -106,7 +106,7 @@ end
 local builders: { [number]: (Ctx) -> () } = {}
 
 builders[1] = function(ctx)
-	prop(ctx, "Oficina", "Of_PilhaPneus", -26, 1.5)
+	prop(ctx, "Oficina", "Of_PilhaPneus", 41, 1.5)
 	prop(ctx, "Oficina", "Of_Placa", -12, -3.5, 8)
 	prop(ctx, "Oficina", "Of_PisoMolhado", -5.5, -2.2, -20)
 	prop(ctx, "Oficina", "Of_Lixeira", 25, 1.5)
@@ -135,12 +135,12 @@ builders[2] = function(ctx)
 	label(panel, "CENTRO\nAUTOMOTIVO", WHITE, Enum.NormalId.Front)
 	label(panel, "CENTRO\nAUTOMOTIVO", WHITE, Enum.NormalId.Back)
 	neon(ctx, "TotemLed", 31.3, 44.7, 14.6, 15, -9.3, -8.5, CYAN)
-	prop(ctx, "Oficina", "Of_PilhaPneus", -28, 2)
+	prop(ctx, "Oficina", "Of_PilhaPneus", 41, 0)
 	prop(ctx, "Oficina", "Of_Placa", -14, -6, 10)
 	prop(ctx, "Oficina", "Of_Elevador", 31, -3.5)
 	prop(ctx, "Oficina", "Of_CarrinhoFerramenta", 22.5, -2.5, -30)
 	prop(ctx, "Oficina", "Of_Lixeira", 40, 3)
-	prop(ctx, "Cenario", "Rua_Jardineira", -17, -9, 0, 0.4)
+	prop(ctx, "Cenario", "Rua_Jardineira", -16, -30, 0, 0.4)
 	prop(ctx, "Cenario", "Rua_Jardineira", 28, -9, 0, 0.4)
 end
 
@@ -209,8 +209,8 @@ builders[3] = function(ctx)
 	neon(ctx, "LedChao1", -40, 18, 0.35, 0.5, -18, -17.6, GOLD)
 	neon(ctx, "LedChao2", -40, 18, 0.35, 0.5, -6, -5.6, GOLD)
 	prop(ctx, "Oficina", "Of_Placa", -14, -7, 6)
-	prop(ctx, "Cenario", "Rua_Jardineira", -29, -9, 0, 0.4)
-	prop(ctx, "Cenario", "Rua_Jardineira", -24, -28, 0, 0.4)
+	prop(ctx, "Cenario", "Rua_Jardineira", -30, -30, 0, 0.4)
+	prop(ctx, "Cenario", "Rua_Jardineira", -16, -30, 0, 0.4)
 end
 
 local function clear(plot: Instance)

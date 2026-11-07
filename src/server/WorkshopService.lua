@@ -16,9 +16,36 @@ local VehicleService = require(script.Parent.VehicleService)
 local CustomerArrivalService = require(script.Parent.CustomerArrivalService)
 local WorkshopSkin = require(script.Parent.WorkshopSkin)
 local EquipmentService = require(script.Parent.EquipmentService)
+local StationService = require(script.Parent.StationService)
+local CustomerNpcService = require(script.Parent.CustomerNpcService)
+local RivalService = require(script.Parent.RivalService)
+local NpcKit = require(script.Parent.NpcKit)
+
+-- Loja de Autopeças do bairro: comprar só estando nela (prédio Workspace.PublicAreas.LojaAutopecas).
+local function nearShop(player: Player): boolean
+    local areas = workspace:FindFirstChild("PublicAreas")
+    local shop = areas and areas:FindFirstChild("LojaAutopecas")
+    local character = player.Character
+    local hrp = character and character:FindFirstChild("HumanoidRootPart")
+    if not shop or not shop:IsA("BasePart") then
+        return true -- sem o prédio (ex.: testes no Edit) não bloqueia
+    end
+    if not hrp or not hrp:IsA("BasePart") then
+        return false -- sem personagem (morto/respawn) não compra
+    end
+    local rel = shop.CFrame:PointToObjectSpace(hrp.Position)
+    local half = shop.Size / 2
+    local dx = math.max(math.abs(rel.X) - half.X, 0)
+    local dz = math.max(math.abs(rel.Z) - half.Z, 0)
+    return math.sqrt(dx * dx + dz * dz) <= Config.ShopDistance
+end
+local SHOP_FAR = "Vá até a Loja de Autopeças do bairro para comprar."
 
 local DataService: any
 local updatePriceBoard: (Player) -> () -- definido adiante; declarado aqui porque ClaimWorkshop o usa
+local syncStaffRef: (Player) -> () -- definido adiante (funcionários)
+local refreshPlotDisplays: () -> () -- definido adiante (placa 3D e TV)
+local rankingEntriesRef: () -> { any } -- definido adiante (ranking com rivais)
 local Workshops: {[number]: any} = {}
 local Jobs: {[string]: any} = {}
 local Invites: {[string]: any} = {}
@@ -27,6 +54,8 @@ local nextInviteId = 0
 local ratingNotifier: ((Player, any) -> ())? = nil -- definido por Main (envia o evento "Rated" ao cliente)
 local eventSender: ((Player, string, any) -> ())? = nil -- definido por Main (RepairStart / RepairDone)
 local Repairs: { [number]: { JobId: string, Plan: any, StartedAt: number } } = {} -- sessões do minijogo, por jogador
+-- Funcionários por dono: NPCs, ordens em que estão trabalhando e próximo pagamento de salário.
+local Staff: { [number]: { Npcs: { Model }, Busy: { [string]: boolean }, NextPay: number } } = {}
 local RepairAssist: { [number]: boolean } = {} -- preferência de acessibilidade (Reduzir movimento), por jogador
 
 local function isFinite(value: any): boolean
@@ -118,6 +147,12 @@ end
 
 function WorkshopService.SetEventSender(callback: ((Player, string, any) -> ())?)
     eventSender = callback
+end
+
+-- Efeito visual do defeito no carro (VehicleFx no cliente): Tires, Engine, Electrical, Suspension, Bodywork.
+local function defectSymptom(defectId: string?): string
+    local defect = defectId and Catalog.Defects[defectId]
+    return defect and defect.Specialization or ""
 end
 
 -- `specialization` (opcional): o cliente procurou um especialista nessa área (escolha de mercado, ver DispatchCustomers).
@@ -232,6 +267,13 @@ function WorkshopService.ClaimWorkshop(player: Player)
 
     EquipmentService.Sync(player, profile.Equipment)
     WorkshopSkin.Update(player, profile.TotalEarned or 0)
+    if plot then
+        StationService.ApplyExpansion(plot, profile.Expansion or 0)
+    end
+    task.defer(function()
+        syncStaffRef(player)
+        refreshPlotDisplays()
+    end)
     updatePriceBoard(player)
     return true, "Oficina registrada."
 end
@@ -316,6 +358,9 @@ function WorkshopService.GetSnapshot(player: Player)
         end
     end
 
+    for _, entry in ipairs(RivalService.RankEntries()) do
+        table.insert(ranking, entry)
+    end
     return {
         Ranking = CustomerRules.Rank(ranking),
         Profile = profile,
@@ -329,25 +374,12 @@ end
 
 -- Texto do painel "Melhores oficinas do servidor" da praça: as 5 oficinas online por reputação (mesma regra do ranking).
 function WorkshopService.TopWorkshopsText(limit: number): string
-    local list: { any } = {}
-    for userId, shop in pairs(Workshops) do
-        local owner = Players:GetPlayerByUserId(userId)
-        local p = owner and DataService.Get(owner)
-        if p then
-            table.insert(list, {
-                Name = shop.Name,
-                Reputation = p.Reputation,
-                TotalEarned = p.TotalEarned or 0,
-                Level = Catalog.BusinessLevel(p.TotalEarned or 0),
-                Rating = CustomerRules.AverageRating(p.RatingSum or 0, p.RatingCount or 0),
-            })
-        end
-    end
-    if #list == 0 then
+    local ranked = rankingEntriesRef()
+    if #ranked == 0 then
         return "Abra sua oficina e apareça aqui!"
     end
     local lines = {}
-    for i, entry in ipairs(CustomerRules.Rank(list)) do
+    for i, entry in ipairs(ranked) do
         if i > limit then
             break
         end
@@ -440,6 +472,10 @@ function WorkshopService.AcceptJob(player: Player, jobId: string)
     if CustomerArrivalService.IsArriving(jobId) then
         return false, "O cliente ainda está estacionando."
     end
+    local plot = PlotService.GetPlot(player)
+    if plot and plot:FindFirstChild("Estacoes") and not StationService.IsNear(player, plot, "Orders") then
+        return false, "Aceite a ordem na TV de ordens, dentro da oficina."
+    end
     -- O VehicleService assume o carro e o cliente da calçada (CustomerArrivalService.Claim) e entra na vaga.
     local placed, placeMessage = VehicleService.Spawn(player, job)
     if not placed then
@@ -447,6 +483,7 @@ function WorkshopService.AcceptJob(player: Player, jobId: string)
     end
     job.Status = "InProgress"
     job.AcceptedAt = os.time()
+    VehicleService.SetSymptom(job.Id, defectSymptom(job.Diagnosed and job.DefectId or job.ComplaintDefectId))
     job.AssignedWorkerUserId = player.UserId
     return true, "Ordem aceita. " .. placeMessage
 end
@@ -461,7 +498,11 @@ function WorkshopService.DiagnoseJob(player: Player, jobId: string, choice: any?
     if job.Status ~= "InProgress" or job.AssignedWorkerUserId ~= player.UserId then
         return false, "Você não está responsável por esta ordem."
     end
-    if not VehicleService.IsNear(player, job.Id, Config.InteractDistance) then
+    -- Diagnóstico = conversar com o cliente: só de perto dele (~3 m). Sem NPC, vale a distância do carro.
+    local nearCustomer = CustomerNpcService.IsNear(player, job.Id, Config.TalkDistance)
+    if nearCustomer == false then
+        return false, "Chegue perto do cliente para conversar."
+    elseif nearCustomer == nil and not VehicleService.IsNear(player, job.Id, Config.InteractDistance) then
         return false, "Aproxime-se do veículo para diagnosticar."
     end
     if job.Diagnosed then
@@ -503,6 +544,7 @@ function WorkshopService.DiagnoseJob(player: Player, jobId: string, choice: any?
 
     job.Diagnosed = true
     VehicleService.SetStage(job.Id, "Repair")
+    VehicleService.SetSymptom(job.Id, defectSymptom(job.DefectId)) -- agora o carro mostra o defeito real
     VehicleService.Flash(job.Id, Color3.fromRGB(80, 150, 255))
     if eventSender then
         eventSender(player, "DiagnoseDone", { JobId = job.Id, Attempts = job.DiagnoseAttempts })
@@ -559,6 +601,7 @@ function WorkshopService.StartRepair(player: Player, jobId: string, assist: bool
     local margin = math.max(0, DataService.GetSkillLevel(player, defect.Specialization) - defect.RequiredLevel)
     local plan = RepairRules.BuildPlan(math.random(1, 2147483646), defect.RequiredLevel, margin, assist == true or RepairAssist[player.UserId] == true, Catalog.EquipmentEfficiency[defect.RequiredEquipment])
     Repairs[player.UserId] = { JobId = job.Id, Plan = plan, StartedAt = os.clock() }
+    VehicleService.SetRepairing(job.Id, true) -- carro sobe no elevador / capô abre / pneu sai (efeitos no cliente)
     if eventSender then
         eventSender(player, "RepairStart", {
             JobId = job.Id,
@@ -571,6 +614,10 @@ function WorkshopService.StartRepair(player: Player, jobId: string, assist: bool
 end
 
 function WorkshopService.CancelRepair(player: Player)
+    local session = Repairs[player.UserId]
+    if session then
+        VehicleService.SetRepairing(session.JobId, false)
+    end
     Repairs[player.UserId] = nil
     return true, ""
 end
@@ -597,6 +644,7 @@ function WorkshopService.FinishRepair(player: Player, jobId: string, presses: an
         DiagnosisAttempts = job.DiagnoseAttempts or 1,
     }
     local result = RepairRules.Evaluate(session.Plan, presses, elapsed, mods)
+    VehicleService.SetRepairing(jobId, false)
     if not result.Valid then
         return false, "Reparo inválido (" .. tostring(result.Reason) .. ")."
     end
@@ -648,6 +696,7 @@ function WorkshopService.SkipOnboarding(player: Player)
 end
 
 function WorkshopService.BuyEquipment(player: Player, equipmentId: string)
+    if not nearShop(player) then return false, SHOP_FAR end
     local workshop = getWorkshop(player)
     local equipment = Catalog.Equipment[equipmentId]
     if not workshop or not equipment then return false, "Oficina ou equipamento inválido." end
@@ -666,6 +715,7 @@ end
 
 -- Loja de peças: compra em quantidade (1..MaxPartPurchase); o saldo e o estoque são decididos aqui.
 function WorkshopService.BuyPart(player: Player, partId: string, quantity: number)
+    if not nearShop(player) then return false, SHOP_FAR end
     local part = Catalog.Parts[partId]
     if not part then
         return false, "Peça inválida."
@@ -693,6 +743,7 @@ function WorkshopService.Checkout(player: Player, items: any)
     if type(items) ~= "table" or #items == 0 or #items > MAX_CART_LINES then
         return false, "Carrinho inválido."
     end
+    if not nearShop(player) then return false, SHOP_FAR end
     local profile = DataService.Get(player)
     local workshop = getWorkshop(player)
     if not profile or not workshop then
@@ -944,6 +995,13 @@ function WorkshopService.PlayerLeft(userId: number)
         end
     end
     VehicleService.DespawnOwner(userId)
+    local staff = Staff[userId]
+    if staff then
+        for _, npc in ipairs(staff.Npcs) do
+            npc:Destroy()
+        end
+        Staff[userId] = nil
+    end
     -- A oficina referencia tabelas do perfil carregado; ao sair, descarta para não usar dados velhos na reentrada.
     Workshops[userId] = nil
 end
@@ -994,16 +1052,328 @@ function WorkshopService.DispatchCustomers(arrivals: number?, rand: (() -> numbe
                 Distance = e.Distance,
             }
         end
+        local rivalCandidates = RivalService.Candidates()
+        for _, rc in ipairs(rivalCandidates) do
+            table.insert(candidates, rc)
+        end
         local choice = CustomerRules.Choose(candidates, rand)
-        if choice then
+        if choice and choice <= #entries then
             createJob(entries[choice].Owner.UserId, specialization)
             created += 1
+        elseif choice then
+            RivalService.Serve(candidates[choice].RivalId) -- o cliente preferiu a oficina rival
+            lost += 1
         else
             lost += 1
         end
     end
     return created, lost
 end
+
+-- Mochila <-> prateleira (só perto da prateleira do estoque).
+function WorkshopService.MoveBag(player: Player, partId: string, quantity: number, toBag: boolean)
+    local plot = PlotService.GetPlot(player)
+    if not getWorkshop(player) or not plot then
+        return false, "Registre sua oficina primeiro."
+    end
+    if plot:FindFirstChild("Estacoes") and not StationService.IsNear(player, plot, "Stock") then
+        return false, "Vá até a prateleira do estoque, dentro da oficina."
+    end
+    return DataService.MoveBag(player, partId, quantity, toBag)
+end
+
+-- Expansão: anexo com mais um box (Bay3). Comprada no prompt da área de expansão.
+function WorkshopService.BuyExpansion(player: Player)
+    local profile = DataService.Get(player)
+    local plot = PlotService.GetPlot(player)
+    if not profile or not plot or not getWorkshop(player) then
+        return false, "Registre sua oficina primeiro."
+    end
+    local level = profile.Expansion or 0
+    local cost = Config.ExpansionCosts[level + 1]
+    if not cost then
+        return false, "Sua oficina já está no tamanho máximo."
+    end
+    if profile.Coins < cost then
+        return false, string.format("A expansão custa %d moedas.", cost)
+    end
+    DataService.AddCoins(player, -cost, "Expansão da oficina")
+    DataService.SetExpansion(player, level + 1)
+    StationService.ApplyExpansion(plot, level + 1)
+    return true, "Oficina expandida! O Box 3 do anexo já recebe clientes."
+end
+
+-- Funcionários ---------------------------------------------------------------------------------------------------
+
+local function staffSpot(plot: Instance, index: number): Vector3?
+    local root = StationService.FrameOf(plot)
+    if not root then
+        return nil
+    end
+    return (root * CFrame.new(-8 - index * 2.5, 0.4, 12)).Position -- área livre perto da prateleira, longe dos boxes
+end
+
+local function syncStaff(player: Player)
+    local profile = DataService.Get(player)
+    local plot = PlotService.GetPlot(player)
+    local entry = Staff[player.UserId]
+    if not entry then
+        entry = { Npcs = {}, Busy = {}, NextPay = os.clock() + Config.PaydaySeconds }
+        Staff[player.UserId] = entry
+    end
+    local want = profile and plot and (profile.Employees or 0) or 0
+    while #entry.Npcs > want do
+        local npc = table.remove(entry.Npcs)
+        if npc then
+            npc:Destroy()
+        end
+    end
+    while #entry.Npcs < want and plot do
+        local index = #entry.Npcs + 1
+        local gender, name = Catalog.PickCustomer()
+        local npc = NpcKit.Clone(gender, name, "Funcionario_" .. player.UserId .. "_" .. index)
+        if not npc then
+            break
+        end
+        npc:SetAttribute("Funcionario", true)
+        local spot = staffSpot(plot, index)
+        npc.Parent = plot
+        if spot then
+            NpcKit.Place(npc, spot, spot + Vector3.new(0, 0, 1))
+        end
+        NpcKit.ServerOwned(npc)
+        NpcKit.Animate(npc).Idle()
+        NpcKit.NameTag(npc, "Mecânico " .. name, false)
+        table.insert(entry.Npcs, npc)
+    end
+end
+
+function WorkshopService.HireEmployee(player: Player)
+    local profile = DataService.Get(player)
+    if not profile or not getWorkshop(player) then
+        return false, "Registre sua oficina primeiro."
+    end
+    if (profile.Employees or 0) >= Config.MaxEmployees then
+        return false, string.format("Sua equipe já tem %d mecânicos.", Config.MaxEmployees)
+    end
+    if profile.Coins < Config.EmployeeHireCost then
+        return false, string.format("Contratar custa %d moedas.", Config.EmployeeHireCost)
+    end
+    DataService.AddCoins(player, -Config.EmployeeHireCost, "Contratação de mecânico")
+    DataService.SetEmployees(player, (profile.Employees or 0) + 1)
+    syncStaff(player)
+    return true, string.format("Mecânico contratado! Salário: %d moedas a cada %d min. Ele atende sozinho os carros que estiverem no box.", Config.EmployeeSalary, Config.PaydaySeconds // 60)
+end
+
+function WorkshopService.FireEmployee(player: Player)
+    local profile = DataService.Get(player)
+    if not profile or (profile.Employees or 0) <= 0 then
+        return false, "Você não tem funcionários."
+    end
+    DataService.SetEmployees(player, profile.Employees - 1)
+    syncStaff(player)
+    return true, "Mecânico demitido."
+end
+
+-- O funcionário pega um carro estacionado ainda não atendido: diagnostica, sobe no elevador e conserta sozinho.
+local function employeeWork(owner: Player, job: any, npc: Model)
+    local entry = Staff[owner.UserId]
+    entry.Busy[job.Id] = true
+    local defect = Catalog.Defects[job.DefectId]
+    local service = Catalog.Services[job.ServiceId]
+    local workshop = getWorkshop(owner)
+    local function release(message: string?)
+        entry.Busy[job.Id] = nil
+        local plot = PlotService.GetPlot(owner)
+        local spot = plot and staffSpot(plot, table.find(entry.Npcs, npc) or 1)
+        if npc.Parent and spot then
+            NpcKit.Place(npc, spot, spot + Vector3.new(0, 0, 1))
+            NpcKit.ServerOwned(npc)
+        end
+        if message and eventSender then
+            eventSender(owner, "Notice", { Message = message, Success = false })
+        end
+    end
+    if not workshop or not ownsEquipment(workshop, defect.RequiredEquipment) then
+        job.EmployeeRetryAt = os.time() + 60
+        release("Seu mecânico não tem o equipamento para " .. service.DisplayName .. ".")
+        return
+    end
+    if missingPartsMessage(owner, defect.Parts) then
+        job.EmployeeRetryAt = os.time() + 60
+        release("Seu mecânico precisa de peças para " .. service.DisplayName .. ". Compre na Loja de Autopeças.")
+        return
+    end
+    -- vai até o carro
+    local car = workspace:FindFirstChild("Vehicles") and workspace.Vehicles:FindFirstChild(job.Id)
+    local carRoot = car and car:IsA("Model") and car.PrimaryPart
+    if carRoot then
+        local spot = carRoot.CFrame * Vector3.new(0, 0, -((tonumber(car:GetAttribute("Comprimento")) or 18) / 2 + 2))
+        NpcKit.Place(npc, Vector3.new(spot.X, carRoot.Position.Y, spot.Z), carRoot.Position)
+        NpcKit.ServerOwned(npc)
+    end
+    job.Diagnosed = true
+    VehicleService.SetStage(job.Id, "None")
+    VehicleService.SetSymptom(job.Id, defectSymptom(job.DefectId))
+    VehicleService.SetRepairing(job.Id, true)
+    task.wait(Config.EmployeeWorkSeconds)
+    local current = Jobs[job.Id]
+    if current ~= job or job.Status ~= "InProgress" or not owner.Parent then
+        release(nil)
+        return
+    end
+    if not DataService.TakeParts(owner, defect.Parts) then
+        VehicleService.SetRepairing(job.Id, false)
+        VehicleService.SetStage(job.Id, "Repair")
+        job.EmployeeRetryAt = os.time() + 60
+        release("Faltaram peças para o mecânico terminar " .. service.DisplayName .. ".")
+        return
+    end
+    job.Status = "Completed"
+    VehicleService.SetRepairing(job.Id, false)
+    VehicleService.Flash(job.Id, Color3.fromRGB(90, 220, 130))
+    VehicleService.Despawn(job.Id)
+    local basePrice = job.Price or service.Reward
+    local price = math.floor(basePrice * RepairRules.PayMultiplier(Config.EmployeeQuality) + 0.5)
+    DataService.AddCoins(owner, price, "Serviço do funcionário: " .. service.DisplayName)
+    DataService.AddReputation(owner, service.Reputation)
+    local stars = rateService(owner, job, service, defect, nil, true, Config.EmployeeQuality)
+    WorkshopService.UpdateSkin(owner)
+    release(nil)
+    if eventSender then
+        eventSender(owner, "Notice", { Message = string.format("Seu mecânico concluiu %s: +%d moedas (%s).", service.DisplayName, price, CustomerRules.StarsText(stars)), Success = true })
+    end
+end
+
+local function staffTick()
+    for userId, entry in pairs(Staff) do
+        local owner = Players:GetPlayerByUserId(userId)
+        local profile = owner and DataService.Get(owner)
+        if not owner or not profile then
+            for _, npc in ipairs(entry.Npcs) do
+                npc:Destroy()
+            end
+            Staff[userId] = nil
+        else
+            -- salário (o relógio só corre com alguém contratado)
+            if #entry.Npcs == 0 then
+                entry.NextPay = os.clock() + Config.PaydaySeconds
+            elseif os.clock() >= entry.NextPay then
+                entry.NextPay = os.clock() + Config.PaydaySeconds
+                local bill = #entry.Npcs * Config.EmployeeSalary
+                if profile.Coins >= bill then
+                    DataService.AddCoins(owner, -bill, "Salário dos funcionários")
+                    if eventSender then
+                        eventSender(owner, "Notice", { Message = string.format("Salários pagos: -%d moedas.", bill), Success = true })
+                    end
+                else
+                    DataService.SetEmployees(owner, math.max(0, (profile.Employees or 0) - 1))
+                    syncStaff(owner)
+                    if eventSender then
+                        eventSender(owner, "Notice", { Message = "Sem moedas para o salário: um mecânico pediu demissão.", Success = false })
+                    end
+                end
+            end
+            -- trabalho: cada funcionário livre pega um carro estacionado sem ninguém trabalhando
+            local working = 0
+            for _ in pairs(entry.Busy) do
+                working += 1
+            end
+            if working < #entry.Npcs then
+                for jobId, job in pairs(Jobs) do
+                    if working >= #entry.Npcs then
+                        break
+                    end
+                    if job.OwnerUserId == userId and job.Status == "InProgress" and not entry.Busy[jobId]
+                        and not job.CollaboratorUserId and VehicleService.IsParked(jobId)
+                        and not (Repairs[userId] and Repairs[userId].JobId == jobId)
+                        and os.time() >= (job.EmployeeRetryAt or 0) then
+                        local free: Model? = nil
+                        for _, npc in ipairs(entry.Npcs) do
+                            if not npc:GetAttribute("Trabalhando") then
+                                free = npc
+                                break
+                            end
+                        end
+                        if free then
+                            working += 1
+                            local worker = free :: Model
+                            worker:SetAttribute("Trabalhando", true)
+                            task.spawn(function()
+                                employeeWork(owner, job, worker)
+                                worker:SetAttribute("Trabalhando", nil)
+                            end)
+                        end
+                    end
+                end
+            end
+        end
+    end
+end
+
+-- Placa 3D e TV de ordens de cada oficina (e dos rivais), com a posição no ranking geral.
+local function rankingEntries(): { any }
+    local list: { any } = {}
+    for userId, shop in pairs(Workshops) do
+        local owner = Players:GetPlayerByUserId(userId)
+        local p = owner and DataService.Get(owner)
+        if p then
+            table.insert(list, {
+                Name = shop.Name,
+                Reputation = p.Reputation,
+                TotalEarned = p.TotalEarned or 0,
+                Price = p.PriceMultiplier or 1,
+                Level = Catalog.BusinessLevel(p.TotalEarned or 0),
+                Rating = CustomerRules.AverageRating(p.RatingSum or 0, p.RatingCount or 0),
+                RatingCount = p.RatingCount or 0,
+                UserId = userId,
+            })
+        end
+    end
+    for _, entry in ipairs(RivalService.RankEntries()) do
+        table.insert(list, entry)
+    end
+    return CustomerRules.Rank(list)
+end
+
+function refreshPlotDisplays()
+    local ranked = rankingEntries()
+    local rankByName: { [string]: number } = {}
+    for i, entry in ipairs(ranked) do
+        rankByName[entry.Name] = rankByName[entry.Name] or i
+    end
+    for userId, shop in pairs(Workshops) do
+        local owner = Players:GetPlayerByUserId(userId)
+        local p = owner and DataService.Get(owner)
+        local plot = owner and PlotService.GetPlot(owner)
+        if owner and p and plot then
+            local tier, tierName = Catalog.WorkshopTier(p.TotalEarned or 0)
+            local rank = rankByName[shop.Name]
+            StationService.SetSign(plot, {
+                Title = string.upper(tierName),
+                Name = string.upper(shop.Name),
+                Line1 = string.format("Nível %d  ·  ★ %.1f (%d avaliações)", Catalog.BusinessLevel(p.TotalEarned or 0),
+                    CustomerRules.AverageRating(p.RatingSum or 0, p.RatingCount or 0), p.RatingCount or 0),
+                Line2 = string.format("Clientes atendidos: %d  ·  Rep. %d", p.RatingCount or 0, p.Reputation or 0),
+                Line3 = rank == 1 and "🏆 A MELHOR OFICINA DO SERVIDOR" or (rank and string.format("#%d no servidor  ·  faturou %d", rank, p.TotalEarned or 0) or ""),
+                Color = tier >= 3 and Color3.fromRGB(255, 196, 70) or tier == 2 and Color3.fromRGB(70, 190, 255) or Color3.fromRGB(255, 196, 40),
+            })
+            local lines = {}
+            for _, job in pairs(Jobs) do
+                if job.OwnerUserId == userId and job.Status == "Available" and not CustomerArrivalService.IsArriving(job.Id) and os.time() >= (job.ArrivesAt or 0) then
+                    table.insert(lines, string.format("%s%s · %s", job.Vip and "★ " or "", tostring(job.CustomerName), tostring(job.VehicleName)))
+                end
+            end
+            StationService.SetOrdersScreen(plot, #lines > 0 and (table.concat(lines, "\n") .. "\n\nAperte E para aceitar") or "Nenhum cliente esperando.")
+        end
+    end
+    RivalService.RefreshSigns(function(name: string): number?
+        return rankByName[name]
+    end)
+end
+WorkshopService.RefreshPlotDisplays = refreshPlotDisplays
+syncStaffRef = syncStaff
+rankingEntriesRef = rankingEntries
 
 -- Somente QA no Studio (Main expõe via ServerStorage.QA): envelhece as ordens abertas do jogador para testar a expiração.
 function WorkshopService._ageJobsForTesting(userId: number, seconds: number): number
@@ -1031,6 +1401,7 @@ function WorkshopService.Start()
             for userId, session in pairs(Repairs) do
                 if os.clock() - session.StartedAt > RepairRules.MaxSessionSeconds + 5 then
                     Repairs[userId] = nil -- sessão esquecida não prende a ordem
+                    VehicleService.SetRepairing(session.JobId, false)
                 end
             end
             for jobId, job in pairs(Jobs) do
@@ -1072,6 +1443,19 @@ function WorkshopService.Start()
                 if invite.Status ~= "Pending" or os.time() > invite.ExpiresAt + 120 then
                     Invites[inviteId] = nil
                 end
+            end
+        end
+    end)
+
+    -- Funcionários (salário e trabalho) e placas/TVs das oficinas.
+    task.spawn(function()
+        local n = 0
+        while true do
+            task.wait(2)
+            n += 1
+            staffTick()
+            if n % 3 == 0 then
+                refreshPlotDisplays()
             end
         end
     end)

@@ -11,6 +11,7 @@ local Theme = require(script.Parent.Theme)
 local Kit = require(script.Parent.Kit)
 local Store = require(script.Parent.Store)
 local HudParts = require(script.Parent.HudParts)
+local Stations = require(script.Parent.Stations)
 
 local t = Kit.t
 local Onboarding = {}
@@ -163,14 +164,25 @@ function Onboarding.new(gui: ScreenGui, navRoots: (string) -> { GuiObject })
 		local step, text, kind, target = "", "", "", nil :: any
 		if not active then
 			if available then
-				step, text, kind, target = "accept", t("ob_accept"), "button", "orders"
+				-- aceitar é na TV de ordens dentro da oficina
+				local tv = Stations.Target("orders")
+				if tv then
+					step, text, kind, target = "accept", "Aceite o cliente na TV de ordens", "world", tv
+				else
+					step, text, kind, target = "accept", t("ob_accept"), "button", "orders"
+				end
 			else
 				step, text, kind = "wait", t("ob_wait"), "none"
 			end
 		elseif not active.Diagnosed then
 			step, text, kind, target = "talk:" .. active.Id, t("ob_talk"), "world", findWorld(active.Id)
 		elseif missingParts(active, profile) then
-			step, text, kind, target = "buy:" .. active.Id, t("ob_buy"), "button", "shop"
+			local shop = Stations.Target("shop")
+			if shop then
+				step, text, kind, target = "buy:" .. active.Id, "Compre as peças na Loja de Autopeças", "world", shop
+			else
+				step, text, kind, target = "buy:" .. active.Id, t("ob_buy"), "button", "shop"
+			end
 		else
 			step, text, kind, target = "repair:" .. active.Id, t("ob_repair"), "world", vehicleOf(active.Id)
 		end

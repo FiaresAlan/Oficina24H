@@ -16,8 +16,21 @@ Layout.Bays = {
 -- Corredor por onde os carros dos clientes entram (nada pode ficar aqui: placas, vasos, colunas).
 Layout.Driveway = { x0 = -1.5, x1 = 21.5, z0 = -45, z1 = 8 }
 
--- Placa e entrada do lote (fora do corredor dos carros).
-Layout.Sign = { x = -14, z = -40.5 }
+-- Placa e entrada do lote (fora do corredor dos carros e do caminho do anexo): lado direito da frente.
+Layout.Sign = { x = 33, z = -40.5 }
+
+-- Estações físicas dentro do prédio (y = altura do centro; yaw: 0 = de frente para a rua).
+Layout.Stations = {
+	Orders = { x = -12, y = 7.5, z = 32.3, yaw = 0 }, -- TV de ordens na parede do fundo
+	Stock = { x = -18.6, y = 0, z = 11.5, yaw = -90 }, -- prateleira na parede esquerda, de frente para dentro
+	Staff = { x = -19.6, y = 5.5, z = 16.6, yaw = -90 }, -- quadro de funcionários na parede esquerda (longe dos boxes)
+}
+
+-- Expansão nível 1: anexo no pátio esquerdo com um box (Bay3), carro de frente para o fundo (+Z).
+Layout.Annex = { x0 = -44, x1 = -23, z0 = 6, z1 = 36 }
+Layout.AnnexBay = { x = -33.5, z = 21, w = 9, d = 22 }
+-- Caminho interno até o anexo: sobe pelo corredor principal (x = 4), vira à esquerda em z = -15 e entra no anexo.
+Layout.AnnexRoute = { mainX = 4, turnZ = -15, radius = 10 }
 
 -- Espaços de equipamento: pequenos dentro do prédio (rente às paredes), grandes no pátio ao lado.
 Layout.Slots = {
@@ -28,8 +41,8 @@ Layout.Slots = {
 	EngineBench = { x = -16, z = 27.5, rot = 0 },
 	Compressor = { x = -18.3, z = 21.5, rot = 90 },
 	Balancer = { x = -10, z = 22, rot = 0 },
-	TireMachine = { x = -40, z = 6, rot = 0 },
-	AlignmentRig = { x = -34, z = 18, rot = 0 },
+	TireMachine = { x = -30, z = 40.5, rot = 0 }, -- atrás do anexo (o pátio esquerdo é do anexo)
+	AlignmentRig = { x = 36, z = 35, rot = 0 }, -- fundo do pátio direito
 	SuspensionLift = { x = 36, z = 10, rot = 0 },
 	BodyworkKit = { x = 36, z = 22, rot = 0 },
 }

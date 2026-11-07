@@ -574,4 +574,8 @@ Detalhes em `docs/AUDITORIA_GERAL.md`. Resumo:
   Creator Store) saíram; ficaram lava-rápido, estacionamento da galeria, banca e outdoor.
 - **Desempenho**: ~350 mil triângulos no mapa todo (nem todos visíveis ao mesmo tempo), decoração sem colisão, 59
   colisores invisíveis simples. Play: carros dos clientes chegam e param no meio-fio como antes, sem erros.
-- **Pendente**: conferir no celular; chão ainda é o cinza liso (falta calçada/grama em volta dos prédios).
+- **Chão**: gramado verde (o Ground já era material Grass, só a cor era cinza) e calçada de concreto em volta de cada
+  prédio, na altura das calçadas da rua; prédios de frente para a rua têm calçada até a calçada da rua; as calçadas
+  são cortadas onde encostariam em lote, asfalto, loja, Construtora, estacionamentos ou praça. 115 pinheiros (bordas +
+  grupos de 3 a 5 nos gramados, nunca em calçada). Play: carros e rivais andando normalmente, sem erros.
+- **Pendente**: conferir no celular.

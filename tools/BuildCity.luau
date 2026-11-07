@@ -81,6 +81,83 @@ end
 
 local DIRS = { S = Vector3.new(0, 0, 1), N = Vector3.new(0, 0, -1), E = Vector3.new(1, 0, 0), W = Vector3.new(-1, 0, 0) }
 
+-- Chão: grama verde (o Ground já usa o material Grass) e calçada de concreto em volta de cada prédio, na altura das
+-- calçadas da rua (topo 0,8). Prédios de frente para a rua ganham calçada até a calçada da rua. A calçada é cortada
+-- onde encostaria nas peças físicas do jogo (lotes, rua, loja, Construtora, estacionamentos, praça).
+local ground = workspace.Map:FindFirstChild("Ground")
+if ground then
+	ground.Color = Color3.fromRGB(98, 142, 70)
+end
+local pads = Instance.new("Folder")
+pads.Name = "Calcadas"
+pads.Parent = city
+local PAD_MARGIN = 6
+local PAD_TOPS = { 0.72, 0.74, 0.76, 0.78 } -- alturas alternadas: calçadas sobrepostas não piscam (z-fighting)
+local HARD = { -- peças físicas que a calçada não pode cobrir {x0, x1, z0, z1}
+	{ -350, 350, -20, 20 }, { 200, 240, -20, 280 }, -- asfalto
+	{ -245, 45, -118, -28 }, { -245, 45, 28, 118 }, -- lotes
+	{ 105, 155, -100, -60 }, { 270, 330, 95, 145 }, { 95, 165, 55, 105 }, -- loja, Construtora, estacionamento
+	{ -440, -380, -150, -32 }, { 296, 394, 45, 95 }, -- praça, estacionamento da galeria
+}
+local padCount = 0
+local padRects = {}
+
+local function clipPad(p, keep)
+	for _, h in ipairs(HARD) do
+		if p[1] < h[2] and p[2] > h[1] and p[3] < h[4] and p[4] > h[3] then
+			-- corta pelo lado que tira menos, sem invadir o prédio
+			local best, cost = nil, math.huge
+			local options = {
+				{ 2, h[1], p[2] - h[1], h[1] >= keep[2] },
+				{ 1, h[2], h[2] - p[1], h[2] <= keep[1] },
+				{ 4, h[3], p[4] - h[3], h[3] >= keep[4] },
+				{ 3, h[4], h[4] - p[3], h[4] <= keep[3] },
+			}
+			for _, o in ipairs(options) do
+				if o[4] and o[3] < cost then
+					best, cost = o, o[3]
+				end
+			end
+			if best then
+				p[best[1]] = best[2]
+			end
+		end
+	end
+	return p
+end
+
+local function pad(rect, face: string): number
+	local p = { rect[1] - PAD_MARGIN, rect[2] + PAD_MARGIN, rect[3] - PAD_MARGIN, rect[4] + PAD_MARGIN }
+	if face == "S" and p[4] > -60 and p[4] < -20 then
+		p[4] = -24 -- até a calçada norte da rua principal
+	elseif face == "N" and p[3] < 60 and p[3] > 20 then
+		p[3] = 24
+	elseif face == "E" and p[2] > 160 and p[2] < 200 then
+		p[2] = 188
+	elseif face == "W" and p[1] < 285 and p[1] > 240 then
+		p[1] = 252
+	end
+	clipPad(p, rect)
+	padCount += 1
+	local top = PAD_TOPS[(padCount - 1) % #PAD_TOPS + 1]
+	local w, d = p[2] - p[1], p[4] - p[3]
+	table.insert(padRects, p)
+	if w > 2 and d > 2 then
+		local part = Instance.new("Part")
+		part.Name = "Calcada"
+		part.Anchored = true
+		part.Material = Enum.Material.Concrete
+		part.Color = Color3.fromRGB(176, 172, 164)
+		part.Size = Vector3.new(w, top, d)
+		part.CFrame = CFrame.new((p[1] + p[2]) / 2, top / 2, (p[3] + p[4]) / 2)
+		part.TopSurface = Enum.SurfaceType.Smooth
+		part.CastShadow = false
+		part.CanTouch = false
+		part.Parent = pads
+	end
+	return top
+end
+
 local function collider(name: string, cf: CFrame, size: Vector3)
 	local c = Instance.new("Part")
 	c.Name = "Colisor_" .. name
@@ -115,7 +192,8 @@ local function building(name: string, x: number, z: number, face: string)
 		dir = -dir
 	end
 	local m = template:Clone()
-	local pos = Vector3.new(x, 0, z)
+	local top = pad(rect, face) -- o prédio fica em cima da própria calçada
+	local pos = Vector3.new(x, top, z)
 	m:PivotTo(CFrame.lookAt(pos, pos + dir))
 	m.Parent = city
 	table.insert(placed, rect)
@@ -215,6 +293,11 @@ local function tree(x: number, z: number)
 	if blocked(rect) then
 		return false
 	end
+	for _, p in ipairs(padRects) do
+		if overlaps(rect, p) then
+			return false -- árvore só na grama
+		end
+	end
 	local t = pine:Clone()
 	t:ScaleTo(rng:NextNumber(0.8, 1.3))
 	t:PivotTo(CFrame.new(x, 0, z) * CFrame.Angles(0, rng:NextNumber(0, math.pi * 2), 0))
@@ -259,5 +342,19 @@ for _ = 1, 400 do
 	end
 end
 
-return string.format("prédios: %d | pulados: %d | árvores no lugar das antigas: %d | árvores nas bordas: %d\n%s",
-	report.ok, #report.skipped, moved, edge, table.concat(report.skipped, "\n"))
+-- pinheiros em grupos (3 a 5) nos gramados entre os prédios: densos nas bordas, nunca na rua, lote ou calçada
+local inner = 0
+for _ = 1, 600 do
+	if inner >= 45 then
+		break
+	end
+	local cx, cz = rng:NextNumber(-440, 440), rng:NextNumber(-340, 340)
+	for _ = 1, rng:NextInteger(3, 5) do
+		if tree(cx + rng:NextNumber(-14, 14), cz + rng:NextNumber(-14, 14)) then
+			inner += 1
+		end
+	end
+end
+
+return string.format("prédios: %d | pulados: %d | calçadas: %d | árvores: %d antigas, %d nas bordas, %d nos gramados\n%s",
+	report.ok, #report.skipped, padCount, moved, edge, inner, table.concat(report.skipped, "\n"))

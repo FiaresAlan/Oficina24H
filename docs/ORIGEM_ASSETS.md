@@ -123,3 +123,13 @@ ProSoundEffects licenciada pela Roblox: "Air Wrench 4" (9113078798), "Ratchet Wr
 (9112759095), "Small Town Ambience 1" (9112874053), "Industrial Ambience Reverberant Interior 2" (9114872503).
 Música da APM Music (licenciada pela Roblox, criador APMOfficial): Funky Disco Beats (9038367768), Moving Round The
 Block (9047105108), Funky (A) (1840434670), Lo-fi Chill A (9043887091), Blue Motel (9044512739), Poolside (9046863253).
+
+## Cidade nova (2026-11-07)
+"Low Poly city" de ORKQN (CGTrader, modelo #4359726,
+https://www.cgtrader.com/free-3d-models/exterior/cityscape/low-poly-city-low-poly-assets-3d-model), Royalty Free
+License (no AI), gratuita para uso comercial; baixada pela conta do dono do projeto. O arquivo original (.blend) fica
+em `_assets_work/cidade_orkqn/` (fora do repositório). Escolhida entre 4 opções avaliadas (ver PROGRESSO).
+Tratamento: `pipeline/blender_split_city.py` separa a cena em peças (letreiros de texto com marcas descartados),
+`pipeline/blender_process_prop.py` (escala ×16, pivô na base, cor lisa -> mini-textura, ≤ 9 mil triângulos) e
+`pipeline/upload_models.py` (ids em `pipeline/city_ids.json`). 23 prédios + pinheiro em ServerStorage.Assets.Cenario
+(Cid_*); montagem por `tools/BuildCity.luau`. O prédio com marca Starbucks não foi usado.

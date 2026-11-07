@@ -558,3 +558,20 @@ Detalhes em `docs/AUDITORIA_GERAL.md`. Resumo:
   de funilaria" com carro da frota chegando, faixa na tela, liga no snapshot, sem erros no console.
 - **Bônus de amigo**: jogando no mesmo servidor que um amigo do Roblox, todo serviço paga +10% (aviso ao ativar,
   atributo `BonusAmigo` no jogador). Conferido em Play solo (sem bônus, sem erros); com amigo real falta testar.
+
+## 2026-11-07 (manhã) — Cidade nova
+- **Backup antes de mexer**: branch `backup/cidade-antiga-2026-11-07` + tag `antes-cidade-nova` (GitHub), cópia da
+  pasta em `Desktop\OFICINA24h_BACKUP_2026-11-07` (com `Oficina24H_Teste_antes_cidade_nova.rbxl`) e
+  `ServerStorage.Backup_CidadeAntiga_2026_11_07` dentro do place (mapa, áreas públicas, cenário, bairro, iluminação).
+- **Avaliação dos 4 mapas do CGTrader**: (1) kit modular só de ruas/viadutos, sem prédios; (2) pacote colorido
+  "de brinquedo" que destoa dos carros realistas; (3) **Low Poly city (ORKQN) — escolhido**: dezenas de prédios
+  variados, peças < 2 mil polígonos, GLTF/BLEND; (4) cena escaneada de 117 MB só em .blend e sem texturas.
+- **Integração sem quebrar o jogo**: a cidade inteira tem 1,7 milhão de triângulos e ruas próprias; em vez de trocar o
+  mapa, as peças foram separadas (249 grupos), 24 escolhidas e tratadas, e montadas em volta do esqueleto do jogo
+  (rua principal, rua lateral, 6 lotes, Loja de Autopeças, Construtora, estacionamento, praça), que ficou intacto.
+  `tools/BuildCity.luau` confere cada prédio contra essas áreas: 58 prédios, 0 conflitos, 98 pinheiros (no lugar das
+  árvores de blocos e nas bordas), torre torcida como marco visível dos lotes. Prédios antigos (casas e lojas da
+  Creator Store) saíram; ficaram lava-rápido, estacionamento da galeria, banca e outdoor.
+- **Desempenho**: ~350 mil triângulos no mapa todo (nem todos visíveis ao mesmo tempo), decoração sem colisão, 59
+  colisores invisíveis simples. Play: carros dos clientes chegam e param no meio-fio como antes, sem erros.
+- **Pendente**: conferir no celular; chão ainda é o cinza liso (falta calçada/grama em volta dos prédios).

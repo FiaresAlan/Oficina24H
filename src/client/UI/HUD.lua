@@ -962,9 +962,8 @@ function HUD.start()
 		end
 	end
 
+	local lastCustomersKey = ""
 	local function renderCustomers(snapshot: any)
-		clearChildren(customersList)
-		customerRows = {}
 		local waiting = {}
 		for _, job in ipairs(snapshot.Jobs) do
 			if job.Status == "Available" then
@@ -974,6 +973,16 @@ function HUD.start()
 		table.sort(waiting, function(a, b)
 			return (a.WaitSeconds or 0) > (b.WaitSeconds or 0)
 		end)
+		-- Mesmo cliente no cartão: só atualiza os dados (sem recriar a miniatura 3D a cada snapshot)
+		local key = #waiting .. ":" .. tostring(waiting[1] and waiting[1].Id)
+		if key == lastCustomersKey and #customerRows > 0 then
+			customersCount.Text = t("customers_count", #waiting)
+			customerRows[1].Job = waiting[1]
+			return
+		end
+		lastCustomersKey = key
+		clearChildren(customersList)
+		customerRows = {}
 		customersCount.Text = t("customers_count", #waiting)
 		customersCount.Visible = #waiting > 0
 		if #waiting == 0 then

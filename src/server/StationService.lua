@@ -85,6 +85,7 @@ local function label(partOn: BasePart, face: Enum.NormalId, name: string, ppsOrN
 	gui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
 	gui.PixelsPerStud = ppsOrNil or 40
 	gui.LightInfluence = 0
+	gui.MaxDistance = 140 -- longe, o texto nem é desenhado (celular agradece)
 	local frame = Instance.new("Frame")
 	frame.Size = UDim2.fromScale(1, 1)
 	frame.BackgroundTransparency = 1
@@ -484,7 +485,7 @@ local function rebuildBays(plot: Instance, root: CFrame, level: number)
 		bay.CFrame = root * CFrame.new(x, 0.35, WorkshopLevels.BayZ)
 		bay.Color = Color3.fromRGB(70, 110, 160)
 		bay.Material = Enum.Material.SmoothPlastic
-		bay.Transparency = 0.5
+		bay.Transparency = 1 -- só referência de posição: a marcação visível é a faixa amarela e o elevador
 		bay.Parent = plot
 		buildLift(bay)
 	end

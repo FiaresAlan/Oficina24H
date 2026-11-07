@@ -525,3 +525,14 @@ Ideias do Alan, avaliadas e ajustadas (validação e balanceamento pelo dono do 
   pelo portão de saída, tela da Construtora, compra de equipamento na loja e "Usar" na máquina.
 - **Pendente:** ouvir as músicas/ambiente no jogo (ids licenciados; o MCP não reproduz áudio), celular, revisar a
   aparência dos 4 níveis em foto lado a lado, prédio do nível 3 com 2 funcionários em ação.
+
+## 2026-11-07 (madrugada) — Revisão total: auditorias por skill + retenção
+Detalhes em `docs/AUDITORIA_GERAL.md`. Resumo:
+- **Auditorias** (segurança/dados, desempenho/celular, retenção/design) com as skills fwjelaa. Sem falhas críticas;
+  7 achados de segurança e 4 de desempenho corrigidos; plano para os demais.
+- **Retenção nova**: recompensa diária (7 dias), 3 missões diárias, 14 conquistas, códigos promocionais, Hora do Rush
+  (servidor inteiro), combo do turno; tela "Metas" (botão 🎯 com aviso) e faixa do Rush.
+- **Primeiro minuto**: 1º cliente imediato, 2 primeiros defeitos resolvíveis com o estoque inicial, guia levando à TV
+  com luz-guia, funil do guia no Analytics.
+- **Testes**: 815 verificações (nova suíte ProgressTest). Play no Studio: tela Metas abriu sozinha, diária, código,
+  missão, Hora do Rush com aviso, faixa e clientes em dobro conferidos.

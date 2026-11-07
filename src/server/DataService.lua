@@ -15,7 +15,7 @@ local CustomerRules = require(ReplicatedStorage.Shared.CustomerRules)
 
 local DataService = {}
 
-local SCHEMA_VERSION = 2
+local SCHEMA_VERSION = 3 -- 3: níveis do prédio, mochila, funcionários, retenção (diária/missões/conquistas)
 local MAX_ATTEMPTS = 4
 local LOCK_TIMEOUT = 360 -- s; maior que 2 autosaves, para um servidor que caiu não prender o jogador para sempre
 local LOCK_WAIT_STEP = 3
@@ -85,6 +85,11 @@ local function makeDefaultData(): any
 		Bag = {}, -- peças na mochila do jogador (o resto fica na prateleira da oficina = Parts)
 		Expansion = 0, -- (antigo: anexo; migrado para WorkshopLevel)
 		WorkshopLevel = 0, -- nível do prédio (shared/WorkshopLevels: 0 = 1 box ... 3 = 6 boxes)
+		Daily = { LastDay = -1, Streak = 0 }, -- recompensa diária (shared/ProgressRules)
+		Missions = { Day = -1, List = {} }, -- missões do dia: { Id, Progress, Claimed }
+		Codes = {}, -- códigos já usados
+		Achievements = {}, -- conquistas ganhas
+		Stats = { Repairs = 0, Earned = 0, Vip = 0, Perfect = 0, FirstTry = 0 }, -- contadores das conquistas
 		Employees = 0, -- mecânicos NPC contratados
 	}
 end
@@ -107,8 +112,12 @@ local function reconcile(data: any): any
 			data[key] = value
 		end
 	end
-	if type(data.Coins) ~= "number" or data.Coins ~= data.Coins then
+	if type(data.Coins) ~= "number" or data.Coins ~= data.Coins or data.Coins == math.huge or data.Coins == -math.huge then
 		data.Coins = defaults.Coins
+	end
+	data.Coins = math.max(0, math.floor(data.Coins))
+	if type(data.NextPayAt) ~= "number" or data.NextPayAt ~= data.NextPayAt then
+		data.NextPayAt = 0
 	end
 	if type(data.Reputation) ~= "number" or data.Reputation ~= data.Reputation or data.Reputation == math.huge or data.Reputation == -math.huge then
 		data.Reputation = defaults.Reputation
@@ -120,7 +129,8 @@ local function reconcile(data: any): any
 		data.SkillXP = defaults.SkillXP
 	end
 	for _, specialization in ipairs(Catalog.Specializations) do
-		if type(data.SkillXP[specialization]) ~= "number" then
+		local xp = data.SkillXP[specialization]
+		if type(xp) ~= "number" or xp ~= xp or xp == math.huge or xp < 0 then
 			data.SkillXP[specialization] = 0
 		end
 	end
@@ -210,6 +220,28 @@ local function reconcile(data: any): any
 				bagTotal -= excess
 			end
 		end
+	end
+	-- Retenção (ProgressService): tabelas válidas, números finitos
+	local function num(v: any): number
+		return (type(v) == "number" and v == v and v ~= math.huge and v ~= -math.huge) and v or 0
+	end
+	if type(data.Daily) ~= "table" then
+		data.Daily = { LastDay = -1, Streak = 0 }
+	end
+	data.Daily = { LastDay = math.floor(num(data.Daily.LastDay)), Streak = math.clamp(math.floor(num(data.Daily.Streak)), 0, 100000) }
+	if type(data.Missions) ~= "table" or type(data.Missions.List) ~= "table" then
+		data.Missions = { Day = -1, List = {} }
+	end
+	for _, key in ipairs({ "Codes", "Achievements" }) do
+		if type(data[key]) ~= "table" then
+			data[key] = {}
+		end
+	end
+	if type(data.Stats) ~= "table" then
+		data.Stats = {}
+	end
+	for _, key in ipairs({ "Repairs", "Earned", "Vip", "Perfect", "FirstTry" }) do
+		data.Stats[key] = math.max(0, math.floor(num(data.Stats[key])))
 	end
 	local function intIn(v: any, lo: number, hi: number): number
 		return type(v) == "number" and v == v and math.clamp(math.floor(v), lo, hi) or lo

@@ -20,6 +20,7 @@ local StationService = require(script.Parent.StationService)
 local CustomerNpcService = require(script.Parent.CustomerNpcService)
 local RivalService = require(script.Parent.RivalService)
 local NpcKit = require(script.Parent.NpcKit)
+local ProgressService = require(script.Parent.ProgressService)
 
 -- Loja de Autopeças do bairro: comprar só estando nela (prédio Workspace.PublicAreas.LojaAutopecas).
 local function nearShop(player: Player): boolean
@@ -47,6 +48,7 @@ local syncStaffRef: (Player) -> () -- definido adiante (funcionários)
 local refreshPlotDisplays: () -> () -- definido adiante (placa 3D e TV)
 local rankingEntriesRef: () -> { any } -- definido adiante (ranking com rivais)
 local upgradeInfoRef: (Player, any) -> any -- definido adiante (Construtora)
+local createJobRef: (number, string?) -> any -- definido adiante (createJob)
 local Workshops: {[number]: any} = {}
 local Jobs: {[string]: any} = {}
 local Invites: {[string]: any} = {}
@@ -69,6 +71,31 @@ end
 
 local function getWorkshop(player: Player)
     return Workshops[player.UserId]
+end
+
+-- Funil do guia do 1º atendimento (Creator Dashboard > Analytics > Funnels). Só conta quem ainda está no guia.
+local AnalyticsService = game:GetService("AnalyticsService")
+local FUNNEL_STEPS = { Claimed = { 1, "Oficina registrada" }, Accepted = { 2, "Aceitou o 1º cliente" }, Diagnosed = { 3, "Diagnosticou" }, Repaired = { 4, "Concluiu o 1º reparo" } }
+local function funnel(player: Player, key: string)
+    local profile = DataService and DataService.Get(player)
+    local step = FUNNEL_STEPS[key]
+    if not profile or not step or (profile.Onboarding and profile.Onboarding.Done and key ~= "Repaired") then
+        return
+    end
+    pcall(function()
+        AnalyticsService:LogOnboardingFunnelStepEvent(player, step[1], step[2])
+    end)
+end
+
+-- Combo do turno: reparos seguidos com qualidade >= 70% aumentam o pagamento (+10% por reparo, até +50%).
+-- Zera quando um cliente vai embora sem atendimento ou um serviço é abandonado. Só na sessão (não é salvo).
+local Combo: { [number]: number } = {}
+local COMBO_MIN_QUALITY = 70
+local function comboMultiplier(userId: number): number
+    return 1 + 0.1 * math.min(Combo[userId] or 0, 5)
+end
+local function breakCombo(userId: number)
+    Combo[userId] = 0
 end
 
 -- Nível do prédio (shared/WorkshopLevels) e contagem de equipamentos do jogador.
@@ -191,12 +218,20 @@ local function createJob(ownerUserId: number, specialization: string?)
         equipment = profile.Equipment
     end
     local defectId = JobRules.PickDefectId(skillLevels, equipment, math.random, specialization)
+    -- Novato (guia ativo, menos de 2 serviços): o 1º e o 2º cliente têm defeitos que o estoque inicial resolve
+    -- (pneu furado / bateria fraca), sem reclamação enganosa e sem VIP. O desafio entra depois.
+    local rookie = profile ~= nil and not (profile.Onboarding and profile.Onboarding.Done) and (profile.RatingCount or 0) < 2
+    if rookie then
+        defectId = math.random(1, 2) == 1 and "FlatTire" or "WeakBattery"
+    end
     local defect = Catalog.Defects[defectId]
     -- O preço é fixado quando o cliente chega: mudar a tabela depois não altera ordens já abertas.
     -- Cliente VIP (esportivo) paga o dobro da tabela.
-    local vip = math.random() < Catalog.VipChance
+    local vip = not rookie and math.random() < Catalog.VipChance
     local multiplier = profile and profile.PriceMultiplier or 1
-    local price = math.max(1, math.floor(Catalog.Services[defect.ServiceId].Reward * multiplier * (vip and Catalog.VipPayMultiplier or 1) + 0.5))
+    local rush = ProgressService.IsRush() -- Hora do Rush: o cliente aceita pagar mais
+    local price = math.max(1, math.floor(Catalog.Services[defect.ServiceId].Reward * multiplier * (vip and Catalog.VipPayMultiplier or 1)
+        * (rush and Config.RushPayMultiplier or 1) + 0.5))
     local gender, customerName = Catalog.PickCustomer()
     local vehicles = vip and Catalog.VipVehicleNames or Catalog.VehicleNames
 
@@ -204,7 +239,7 @@ local function createJob(ownerUserId: number, specialization: string?)
     -- problema (de outra especialização). O jogador precisa diagnosticar para saber o que realmente está errado.
     local complaint = defect.Complaint
     local complaintDefectId = defectId
-    if math.random() < 0.35 then
+    if not rookie and math.random() < 0.35 then
         local others = {}
         for otherId, other in pairs(Catalog.Defects) do
             if otherId ~= defectId and other.Specialization ~= defect.Specialization then
@@ -227,6 +262,7 @@ local function createJob(ownerUserId: number, specialization: string?)
         CustomerName = customerName,
         CustomerGender = gender,
         Vip = vip,
+        Rush = rush,
         Complaint = complaint,
         ComplaintDefectId = complaintDefectId,
         DefectId = defectId,
@@ -256,6 +292,8 @@ local function createJob(ownerUserId: number, specialization: string?)
     end
     return job
 end
+
+createJobRef = createJob
 
 function WorkshopService.Init(dataService: any)
     DataService = dataService
@@ -292,6 +330,15 @@ function WorkshopService.ClaimWorkshop(player: Player)
         StationService.ApplyLevel(plot, profile.WorkshopLevel or 0, player.DisplayName)
     end
     EquipmentService.Sync(player, profile.Equipment)
+    funnel(player, "Claimed")
+    if not (profile.Onboarding and profile.Onboarding.Done) then
+        -- novato: o 1º cliente chega logo (sem esperar a leva do bairro)
+        task.delay(3, function()
+            if Workshops[player.UserId] and getOpenJobCount(player.UserId) == 0 then
+                createJobRef(player.UserId)
+            end
+        end)
+    end
     task.defer(function()
         syncStaffRef(player)
         refreshPlotDisplays()
@@ -388,6 +435,7 @@ function WorkshopService.GetSnapshot(player: Player)
         Profile = profile,
         HasWorkshop = workshop ~= nil,
         Workshop = (workshop and profile) and upgradeInfoRef(player, profile) or nil,
+        Progress = profile and ProgressService.Snapshot(player, profile) or nil,
         WorkshopName = workshop and workshop.Name or nil,
         Jobs = jobs,
         CollabJobs = collabJobs,
@@ -481,6 +529,7 @@ function WorkshopService.DeclineJob(player: Player, jobId: string)
     VehicleService.Despawn(job.Id)
     Jobs[jobId] = nil
     DataService.AddReputation(player, -1)
+    breakCombo(player.UserId)
     return true, "Ordem abandonada. -1 de reputação."
 end
 
@@ -506,6 +555,7 @@ function WorkshopService.AcceptJob(player: Player, jobId: string)
     end
     job.Status = "InProgress"
     job.AcceptedAt = os.time()
+    funnel(player, "Accepted")
     VehicleService.SetSymptom(job.Id, defectSymptom(job.Diagnosed and job.DefectId or job.ComplaintDefectId))
     job.AssignedWorkerUserId = player.UserId
     return true, "Ordem aceita. " .. placeMessage
@@ -566,6 +616,7 @@ function WorkshopService.DiagnoseJob(player: Player, jobId: string, choice: any?
     end
 
     job.Diagnosed = true
+    funnel(player, "Diagnosed")
     VehicleService.SetStage(job.Id, "Repair")
     VehicleService.SetSymptom(job.Id, defectSymptom(job.DefectId)) -- agora o carro mostra o defeito real
     VehicleService.Flash(job.Id, Color3.fromRGB(80, 150, 255))
@@ -694,13 +745,23 @@ function WorkshopService.FinishRepair(player: Player, jobId: string, presses: an
     VehicleService.Flash(job.Id, Color3.fromRGB(90, 220, 130))
     VehicleService.Despawn(job.Id)
     local basePrice = job.Price or service.Reward
-    local price = math.floor(basePrice * RepairRules.PayMultiplier(result.Quality) + 0.5)
+    local combo = comboMultiplier(player.UserId)
+    local price = math.floor(basePrice * RepairRules.PayMultiplier(result.Quality) * combo + 0.5)
+    if result.Quality >= COMBO_MIN_QUALITY then
+        Combo[player.UserId] = (Combo[player.UserId] or 0) + 1
+    else
+        breakCombo(player.UserId)
+    end
     local tip = RepairRules.Tip(basePrice, result.Quality)
     local xp = RepairRules.XPBonus(service.XP, result.Quality)
     DataService.AddCoins(player, price + tip, "Serviço: " .. service.DisplayName .. (tip > 0 and " (+gorjeta)" or ""))
     DataService.AddSkillXP(player, defect.Specialization, xp)
     DataService.AddReputation(player, service.Reputation)
     local stars = rateService(player, job, service, defect, player, false, result.Quality)
+    ProgressService.Record(player, {
+        Kind = "RepairDone", Amount = price + tip, Spec = defect.Specialization, Quality = result.Quality, Stars = stars,
+        Vip = job.Vip == true, FirstTry = (job.DiagnoseAttempts or 1) <= 1, Rush = job.Rush == true or ProgressService.IsRush(),
+    })
     local bonus = DataService.CompleteOnboarding(player, Config.OnboardingBonus)
     WorkshopService.UpdateSkin(player)
     if eventSender then
@@ -708,10 +769,12 @@ function WorkshopService.FinishRepair(player: Player, jobId: string, presses: an
             Bonus = bonus,
             Quality = result.Quality, Perfect = result.Perfect, Good = result.Good, Miss = result.Miss,
             Corrected = result.Corrected, Uncorrected = result.Uncorrected, Breakdown = result.Breakdown,
-            Tip = tip, Price = price, XP = xp, Stars = stars,
+            Tip = tip, Price = price, XP = xp, Stars = stars, Combo = combo, NextCombo = comboMultiplier(player.UserId),
         })
     end
-    return true, "Serviço concluído. +" .. tostring(price + tip) .. " moedas (qualidade " .. tostring(result.Quality) .. "%), +" .. tostring(xp)
+    funnel(player, "Repaired")
+    return true, "Serviço concluído. +" .. tostring(price + tip) .. " moedas (qualidade " .. tostring(result.Quality) .. "%"
+        .. (combo > 1 and string.format(", combo x%.1f", combo) or "") .. "), +" .. tostring(xp)
         .. " XP. Avaliação: " .. CustomerRules.StarsText(stars) .. " (" .. tostring(stars) .. ")"
         .. (bonus > 0 and (" Bônus do primeiro serviço: +" .. tostring(bonus) .. ".") or "")
 end
@@ -935,9 +998,23 @@ function WorkshopService.CompleteCollaborativeJob(worker: Player, jobId: string)
     if level < defect.RequiredLevel then
         return false, "Seu nível de habilidade é insuficiente."
     end
+    if not VehicleService.IsParked(job.Id) then
+        return false, "Espere o carro estacionar no box."
+    end
+    -- reparo de máquina: o colaborador também precisa estar na máquina da sala dos fundos
+    if defect.RequiredEquipment ~= "BasicToolset" then
+        local plot = PlotService.GetPlot(owner)
+        local pos = plot and EquipmentService.Position(plot, defect.RequiredEquipment)
+        local character = worker.Character
+        local hrp = character and character:FindFirstChild("HumanoidRootPart")
+        if not pos or not hrp or not hrp:IsA("BasePart") or (hrp.Position - pos).Magnitude > 12 then
+            return false, "Use o equipamento " .. Catalog.Equipment[defect.RequiredEquipment].DisplayName .. " na sala dos fundos da oficina."
+        end
+    end
 
     local workerPercent = job.CollaborationSplitPercent or 25
-    local price = job.Price or service.Reward
+    -- sem o minijogo, o serviço do colaborador vale como qualidade padrão (85%) e rende metade do XP
+    local price = math.floor((job.Price or service.Reward) * RepairRules.PayMultiplier(85) + 0.5)
     local workerPay = math.floor(price * workerPercent / 100)
     local ownerPay = price - workerPay
 
@@ -951,7 +1028,7 @@ function WorkshopService.CompleteCollaborativeJob(worker: Player, jobId: string)
     VehicleService.Flash(job.Id, Color3.fromRGB(90, 220, 130))
     VehicleService.Despawn(job.Id)
     DataService.AddCoins(worker, workerPay, "Trabalho em oficina alheia: " .. service.DisplayName)
-    DataService.AddSkillXP(worker, defect.Specialization, service.XP)
+    DataService.AddSkillXP(worker, defect.Specialization, math.floor(service.XP / 2))
     DataService.AddCoins(owner, ownerPay, "Serviço (parte do dono): " .. service.DisplayName)
     DataService.AddReputation(owner, service.Reputation)
     local stars = rateService(owner, job, service, defect, worker, false)
@@ -966,6 +1043,13 @@ function WorkshopService.HireNpc(player: Player, jobId: string)
         return false, "Ordem inválida."
     end
     if not job.Diagnosed then return false, "Faça o diagnóstico primeiro." end
+    if job.CollaboratorUserId then
+        return false, "Um profissional convidado já está nesta ordem."
+    end
+    local hirePlot = PlotService.GetPlot(player)
+    if hirePlot and hirePlot:FindFirstChild("Estacoes") and not StationService.IsNear(player, hirePlot, "Orders") then
+        return false, "Chame o mecânico avulso pela TV de ordens, dentro da oficina."
+    end
 
     local defect = Catalog.Defects[job.DefectId]
     local service = Catalog.Services[job.ServiceId]
@@ -1018,6 +1102,7 @@ end
 -- Dono saiu: devolve ordens em andamento para "Available" e remove os veículos físicos do lote.
 function WorkshopService.PlayerLeft(userId: number)
     Repairs[userId] = nil -- sessão de minijogo abandonada
+    Combo[userId] = nil
     CustomerArrivalService.Clear(userId) -- clientes que ainda esperavam na rua somem junto
     RepairAssist[userId] = nil
     for jobId, job in pairs(Jobs) do
@@ -1080,6 +1165,9 @@ function WorkshopService.DispatchCustomers(arrivals: number?, rand: (() -> numbe
     end
 
     local count = arrivals or math.max(1, math.ceil(#entries * Config.CustomersPerWorkshopPerTick))
+    if not arrivals and ProgressService.IsRush() then
+        count *= 2 -- Hora do Rush: clientes em dobro
+    end
     local created, lost = 0, 0
     for _ = 1, count do
         -- Cada cliente precisa de uma área; os candidatos são julgados por ela.
@@ -1217,7 +1305,12 @@ local function syncStaff(player: Player)
     local plot = PlotService.GetPlot(player)
     local entry = Staff[player.UserId]
     if not entry then
-        entry = { Npcs = {}, Busy = {}, NextPay = os.clock() + Config.PaydaySeconds }
+        local saved = profile and tonumber(profile.NextPayAt) or 0
+        local remaining = saved > os.time() and (saved - os.time()) or Config.PaydaySeconds
+        if saved > 0 and saved <= os.time() and profile and (profile.Employees or 0) > 0 then
+            remaining = 1 -- o pagamento venceu enquanto estava fora: cobra já
+        end
+        entry = { Npcs = {}, Busy = {}, NextPay = os.clock() + remaining }
         Staff[player.UserId] = entry
     end
     local want = profile and plot and (profile.Employees or 0) or 0
@@ -1263,6 +1356,9 @@ function WorkshopService.HireEmployee(player: Player)
         return false, string.format("Contratar custa %d moedas.", Config.EmployeeHireCost)
     end
     DataService.AddCoins(player, -Config.EmployeeHireCost, "Contratação de mecânico")
+    if (profile.Employees or 0) == 0 then
+        profile.NextPayAt = os.time() + Config.PaydaySeconds
+    end
     DataService.SetEmployees(player, (profile.Employees or 0) + 1)
     syncStaff(player)
     return true, string.format("Mecânico contratado! Salário: %d moedas a cada %d min. Ele atende sozinho os carros que estiverem no box.", Config.EmployeeSalary, Config.PaydaySeconds // 60)
@@ -1361,8 +1457,10 @@ local function staffTick()
             -- salário (o relógio só corre com alguém contratado)
             if #entry.Npcs == 0 then
                 entry.NextPay = os.clock() + Config.PaydaySeconds
+                profile.NextPayAt = 0
             elseif os.clock() >= entry.NextPay then
                 entry.NextPay = os.clock() + Config.PaydaySeconds
+                profile.NextPayAt = os.time() + Config.PaydaySeconds
                 local bill = #entry.Npcs * Config.EmployeeSalary
                 if profile.Coins >= bill then
                     DataService.AddCoins(owner, -bill, "Salário dos funcionários")
@@ -1541,7 +1639,10 @@ function WorkshopService.Start()
                     Jobs[jobId] = nil
                     CustomerArrivalService.Depart(jobId)
                     if owner and eventSender then
-                        eventSender(owner, "Notice", { Message = tostring(job.CustomerName) .. " cansou de esperar e foi embora.", Success = false })
+                        eventSender(owner, "Notice", { Message = tostring(job.CustomerName) .. " cansou de esperar e foi embora." .. ((Combo[job.OwnerUserId] or 0) > 0 and " Seu combo zerou!" or ""), Success = false })
+                    end
+                    if owner then
+                        breakCombo(job.OwnerUserId)
                     end
                 elseif job.Status == "InProgress" and job.CollaboratorUserId and os.time() - (job.CollabAt or os.time()) > Config.CollabMaxSeconds then
                     -- colaborador que não conclui não prende a vaga: a ordem volta ao dono

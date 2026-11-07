@@ -179,7 +179,7 @@ do
 	A.Load(p)
 	local prof = A.Get(p)
 	check("migração: dados antigos preservados", prof and prof.Coins == 999 and prof.SkillXP.Tires == 150)
-	check("migração: campos novos criados", prof and prof.Equipment.BasicToolset and type(prof.Transactions) == "table" and prof.SchemaVersion == 2)
+	check("migração: campos novos criados", prof and prof.Equipment.BasicToolset and type(prof.Transactions) == "table" and prof.SchemaVersion == 3 and type(prof.Daily) == "table" and prof.WorkshopLevel ~= nil)
 	check("migração: outras habilidades zeradas", prof and prof.SkillXP.Engine == 0)
 end
 

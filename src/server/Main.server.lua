@@ -9,6 +9,7 @@ local EquipmentService = require(script.Parent.EquipmentService)
 local WorkshopService = require(script.Parent.WorkshopService)
 local StationService = require(script.Parent.StationService)
 local RivalService = require(script.Parent.RivalService)
+local ProgressService = require(script.Parent.ProgressService)
 
 local remotesFolder = Instance.new("Folder")
 remotesFolder.Name = "OficinaRemotes"
@@ -70,7 +71,7 @@ end
 -- Limitador por JOGADOR e por AÇÃO (uma ação rápida não descarta outra diferente). Só ações conhecidas entram na tabela.
 local lastActionAt: {[number]: {[string]: number}} = {}
 local KNOWN_ACTIONS: {[string]: boolean} = {}
-for _, name in ipairs({ "ClaimWorkshop", "GenerateCustomer", "DeclineJob", "AcceptJob", "DiagnoseJob", "CompleteJob", "FinishRepair", "RepairPrefs", "CancelRepair", "SkipOnboarding", "BuyEquipment", "SetPrice", "BuyPart", "Checkout", "HireNpc", "InviteWorker", "CompleteCollaborativeJob", "RespondInvite", "MoveBag", "UpgradeWorkshop" }) do
+for _, name in ipairs({ "ClaimWorkshop", "GenerateCustomer", "DeclineJob", "AcceptJob", "DiagnoseJob", "CompleteJob", "FinishRepair", "RepairPrefs", "CancelRepair", "SkipOnboarding", "BuyEquipment", "SetPrice", "BuyPart", "Checkout", "HireNpc", "InviteWorker", "CompleteCollaborativeJob", "RespondInvite", "MoveBag", "UpgradeWorkshop", "ClaimDaily", "ClaimMission", "RedeemCode" }) do
     KNOWN_ACTIONS[name] = true
 end
 
@@ -122,7 +123,20 @@ WorkshopService.SetEventSender(function(player: Player, kind: string, payload: a
     actionEvent:FireClient(player, kind, payload) -- "RepairStart" / "RepairDone"
 end)
 
+-- Retenção: diária, missões, conquistas, códigos e Hora do Rush (ProgressService).
+ProgressService.Init(DataService, function(player: Player, message: string, ok: boolean)
+    actionEvent:FireClient(player, "Notice", { Message = message, Success = ok })
+end, function(kind: string, payload: any)
+    actionEvent:FireAllClients(kind, payload)
+end)
+ProgressService.Start()
+
 local snapshotCache: { [number]: { At: number, Value: any } } = {} -- ver GetSnapshot abaixo
+local lastSnapshotBuild: { [number]: { At: number, Value: any } } = {}
+Players.PlayerRemoving:Connect(function(player)
+    lastSnapshotBuild[player.UserId] = nil
+    snapshotCache[player.UserId] = nil
+end)
 
 -- Prompts "E" (carro e cliente) também passam por limite por jogador: sem ele dava para disparar Interact em rajada.
 local lastInteractAt: {[number]: number} = {}
@@ -175,8 +189,14 @@ snapshotFunction.OnServerInvoke = function(player: Player)
     if cached and os.clock() - cached.At < 0.4 then
         return cached.Value
     end
+    -- limite próprio do snapshot: mesmo com ações limpando o cache, no máximo ~4 montagens por segundo por jogador
+    local last = lastSnapshotBuild[player.UserId]
+    if last and os.clock() - last.At < 0.25 then
+        return last.Value
+    end
     local value = WorkshopService.GetSnapshot(player)
     snapshotCache[player.UserId] = { At = os.clock(), Value = value }
+    lastSnapshotBuild[player.UserId] = snapshotCache[player.UserId]
     return value
 end
 
@@ -224,6 +244,12 @@ actionEvent.OnServerEvent:Connect(function(player: Player, action: any, payload:
         success, message = WorkshopService.SetPrice(player, payload.Multiplier)
     elseif action == "BuyPart" and type(payload.PartId) == "string" and type(payload.Quantity) == "number" then
         success, message = WorkshopService.BuyPart(player, payload.PartId, payload.Quantity)
+    elseif action == "ClaimDaily" then
+        success, message = ProgressService.ClaimDaily(player)
+    elseif action == "ClaimMission" and type(payload.Id) == "string" then
+        success, message = ProgressService.ClaimMission(player, payload.Id)
+    elseif action == "RedeemCode" and type(payload.Code) == "string" then
+        success, message = ProgressService.RedeemCode(player, payload.Code)
     elseif action == "UpgradeWorkshop" then
         success, message = WorkshopService.UpgradeWorkshop(player)
     elseif action == "MoveBag" and type(payload.PartId) == "string" and type(payload.Quantity) == "number" and type(payload.ToBag) == "boolean" then

@@ -98,6 +98,11 @@ function Onboarding.new(gui: ScreenGui, navRoots: (string) -> { GuiObject })
 		h.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
 		h.Parent = target
 		worldHighlight = h
+		-- luz-guia do pé do jogador até o alvo (ajuda quando ele está fora da tela)
+		local part = target:IsA("BasePart") and target or (target:IsA("Model") and (target.PrimaryPart or target:FindFirstChildWhichIsA("BasePart", true)))
+		if part and part:IsA("BasePart") then
+			Stations.GuideTo(part, 20)
+		end
 		if not GuiService.ReducedMotionEnabled then
 			TweenService:Create(h, TweenInfo.new(0.9, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), { FillTransparency = 0.55 }):Play()
 		end
@@ -172,7 +177,13 @@ function Onboarding.new(gui: ScreenGui, navRoots: (string) -> { GuiObject })
 					step, text, kind, target = "accept", t("ob_accept"), "button", "orders"
 				end
 			else
-				step, text, kind = "wait", t("ob_wait"), "none"
+				-- enquanto o 1º cliente chega, o jogador já vai para a TV (onde vai aceitar)
+				local tv = Stations.Target("orders")
+				if tv then
+					step, text, kind, target = "wait", "Seu 1º cliente está chegando! Vá até a TV de ordens", "world", tv
+				else
+					step, text, kind = "wait", t("ob_wait"), "none"
+				end
 			end
 		elseif not active.Diagnosed then
 			step, text, kind, target = "talk:" .. active.Id, t("ob_talk"), "world", findWorld(active.Id)

@@ -73,7 +73,7 @@ end)
 task.spawn(function()
 	while true do
 		Store.Refresh()
-		task.wait(4)
+		task.wait(6) -- as ações já pedem atualização na hora; o ciclo é só para novidades do servidor
 	end
 end)
 

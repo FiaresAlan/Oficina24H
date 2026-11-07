@@ -72,11 +72,20 @@ end
 -- Linha brilhante do jogador até a estação + destaque, por alguns segundos.
 local guide: { Instance } = {}
 function Stations.Guide(kind: string, seconds: number?)
+	local target = Stations.Target(kind)
+	if target then
+		Stations.GuideTo(target, seconds, function(): boolean
+			return Stations.IsNear(kind)
+		end)
+	end
+end
+
+-- Mesma luz-guia para qualquer peça do mundo (usada também pelo guia do 1º atendimento). `arrived` encerra a guia.
+function Stations.GuideTo(target: BasePart, seconds: number?, arrived: (() -> boolean)?)
 	for _, inst in ipairs(guide) do
 		inst:Destroy()
 	end
 	table.clear(guide)
-	local target = Stations.Target(kind)
 	local character = player.Character
 	local hrp = character and character:FindFirstChild("HumanoidRootPart")
 	if not target or not hrp then
@@ -119,7 +128,9 @@ function Stations.Guide(kind: string, seconds: number?)
 	-- some sozinho ao chegar
 	task.spawn(function()
 		while guide == mine and #guide > 0 do
-			if Stations.IsNear(kind) then
+			local hrp2 = character and character:FindFirstChild("HumanoidRootPart")
+			local near = arrived and arrived() or (not arrived and hrp2 and hrp2:IsA("BasePart") and (hrp2.Position - target.Position).Magnitude < 12)
+			if near then
 				for _, inst in ipairs(guide) do
 					inst:Destroy()
 				end

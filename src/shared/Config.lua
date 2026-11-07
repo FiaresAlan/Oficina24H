@@ -45,6 +45,12 @@ Config.EmployeeQuality = 72 -- qualidade (%) do serviço feito por funcionário
 -- Oficinas rivais (NPC) ocupam lotes livres para o bairro não parecer vazio; sempre sobra lote para quem entra.
 Config.RivalMax = 3
 Config.RivalKeepFreePlots = 2
-Config.RivalMarketShare = 0.3 -- em ~30% das chegadas os rivais entram na disputa pelo cliente
+Config.RivalMarketShare = 0.3
+
+-- Hora do Rush (evento do servidor): clientes em dobro e serviços pagando mais, por alguns minutos.
+Config.RushEverySeconds = 720
+Config.RushSeconds = 180
+Config.RushFirstDelaySeconds = 240
+Config.RushPayMultiplier = 1.5 -- em ~30% das chegadas os rivais entram na disputa pelo cliente
 
 return Config

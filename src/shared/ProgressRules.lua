@@ -150,4 +150,45 @@ function ProgressRules.NormalizeCode(text: any): string?
 	return clean
 end
 
+-- Liga semanal do bairro ----------------------------------------------------------------------------------------
+-- Pontos por carro entregue (estrelas + bônus); a semana vira na segunda-feira 00:00 de Brasília (03:00 UTC).
+-- Ao virar a semana, a faixa alcançada paga o prêmio uma vez e vira selo até o fim da semana seguinte.
+local WEEK_OFFSET = 4 * 86400 + 3 * 3600 -- 1970-01-01 foi quinta: +4 dias = segunda; +3 h = meia-noite em Brasília
+
+function ProgressRules.Week(now: number): number
+	return math.floor((now - WEEK_OFFSET) / 604800)
+end
+
+function ProgressRules.WeekEndsIn(now: number): number
+	return (ProgressRules.Week(now) + 1) * 604800 + WEEK_OFFSET - now
+end
+
+ProgressRules.LeagueTiers = {
+	{ Id = "Bronze", Points = 40, Coins = 300, Icon = "🥉" },
+	{ Id = "Prata", Points = 150, Coins = 900, Icon = "🥈" },
+	{ Id = "Ouro", Points = 400, Coins = 2500, Icon = "🥇" },
+} :: { { Id: string, Points: number, Coins: number, Icon: string } }
+
+-- Faixa alcançada com `points` (ou nil) e a próxima faixa (ou nil no topo).
+function ProgressRules.LeagueTier(points: number): (any, any)
+	local reached, nextTier = nil, nil
+	for _, tier in ipairs(ProgressRules.LeagueTiers) do
+		if points >= tier.Points then
+			reached = tier
+		elseif not nextTier then
+			nextTier = tier
+		end
+	end
+	return reached, nextTier
+end
+
+ProgressRules.LeagueContractPoints = 15
+
+-- Pontos de liga de um carro entregue: estrelas (1..5) + 2 se qualidade >= 90 + 2 se VIP.
+function ProgressRules.LeaguePoints(stars: number, quality: number?, vip: boolean?): number
+	local raw = tonumber(stars) or 0
+	local s = raw == raw and math.clamp(math.floor(raw), 0, 5) or 0 -- NaN vira 0
+	return s + (((tonumber(quality) or 0) >= 90) and 2 or 0) + (vip and 2 or 0)
+end
+
 return ProgressRules

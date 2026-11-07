@@ -62,6 +62,7 @@ actionEvent.OnClientEvent:Connect(function(kind: string, payload: any)
 		Store.DiagnoseDone:Fire(payload)
 	elseif kind == "Notice" then
 		Store.Message:Fire(tostring(payload.Message or ""), payload.Success == true, "")
+		task.delay(0.3, Store.Refresh) -- avisos (contrato, freguês, Rush) costumam mudar o estado
 	elseif kind == "RepairStart" then
 		Store.RepairStart:Fire(payload)
 	elseif kind == "RepairDone" then

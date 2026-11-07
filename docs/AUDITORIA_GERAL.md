@@ -29,7 +29,7 @@ Pior caso estimado: 6 lotes nível 3 + 3 rivais + 12 carros andando ≈ 20–30 
 | 36 marcadores de box semitransparentes (overdraw) | **Corrigido**: invisíveis (a marcação é a faixa e o elevador) |
 | Cartão do cliente recriava a miniatura 3D a cada snapshot | **Corrigido**: só recria quando muda o cliente |
 | Snapshot a cada 4 s | **Ajustado** para 6 s (as ações já atualizam na hora) |
-| Carros movidos pelo servidor a cada frame (rede + tranco no 4G) | **Plano #1**: mandar caminho + hora de início uma vez e animar no cliente (VehicleFx); ~95% menos tráfego de carros |
+| Carros movidos pelo servidor a cada frame (rede + tranco no 4G) | **Corrigido**: rota enviada uma vez e animada no cliente (`shared/RouteMotion`); servidor a 5 Hz |
 | Triângulos/memória | **Plano #2**: StreamingEnabled (modelos Atomic), versões leves dos 18 carros estacionados |
 | VehicleFx por frame | **Plano**: pular carros parados, `BulkMoveTo`, cachear atributos, desligar efeitos de longe |
 | Snapshot leva histórico e transações | **Plano**: buscar histórico só ao abrir o Perfil |
@@ -56,10 +56,10 @@ Implementado nesta rodada:
 1. ~~Clientes fiéis e indicação~~ **feito**: quem dá 5★ vira freguês (até 8 por oficina); 30% das chegadas são de
    fregueses, que voltam com o mesmo carro, pagam +25%, têm +50% de paciência, chegam dizendo "Voltei! Só confio em
    você" (♥ no nome) e, na 3ª visita, indicam um cliente VIP garantido.
-2. **Contratos de frota** na TV a cada 20 min ("Táxi Veloz: 3 pneus em 8 min", 500 moedas + 6 reputação); se não
-   cumprir, um rival "pega" e o painel da praça anuncia.
-3. **Liga semanal do bairro** (reputação ganha na semana, faixas Bronze/Prata/Ouro com 300/800/2.000 moedas e selo
-   no totem; global por OrderedDataStore com chave da semana).
+2. ~~Contratos de frota~~ **feito**: empresa pede N reparos de uma área em 8–12 min; 60% das chegadas viram carros
+   da frota; prêmio por nível; se perder, um rival pega.
+3. ~~Liga semanal do bairro~~ **feito**: pontos por carro (estrelas + bônus), Bronze/Prata/Ouro = 300/900/2.500
+   moedas na virada da semana, selo na placa e top 10 global (OrderedDataStore por semana).
 4. **Projeto de restauração**: comprar uma sucata de preço fixo na Construtora, restaurar em 5 etapas (minijogo +
    peças), vender por 2,2× o investido ou expor na vitrine.
 5. **Social**: +10% jogando no mesmo servidor que um amigo; "Curtir oficina" (+1 reputação, limite diário); visitar

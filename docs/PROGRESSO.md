@@ -538,3 +538,21 @@ Detalhes em `docs/AUDITORIA_GERAL.md`. Resumo:
   missão, Hora do Rush com aviso, faixa e clientes em dobro conferidos.
 - **Clientes fiéis** (fregueses): 5★ → freguês que volta com o mesmo carro, paga +25%, tem +50% de paciência e indica
   um VIP na 3ª visita. Testado em Play: freguês "Rafael" voltou com o Sedã azul, paciência 450 s.
+- **Contratos de frota** (`shared/ContractRules`, `server/ContractService`): 6 min depois do guia e depois a cada
+  20 min, uma empresa do bairro (Táxi Veloz, Entregas Já, Frota Luz Elétrica, Locadora do Bairro, Transportes Serra)
+  pede N reparos de uma área que a oficina já atende (2 carros no nível 0 até 5 no nível 3, 8 a 12,5 min). Enquanto
+  vale, 60% das chegadas são carros da frota (📋 no nome e na TV). Cumpriu: 240–1.350 moedas + reputação + 15 pontos
+  de liga e aviso para o servidor inteiro. Perdeu: um rival "pega" o contrato (sem multa). Faixa com barra e cronômetro
+  acima da barra de baixo; linha no topo da TV de ordens. Conta reparo do jogador, do colaborador e do funcionário.
+- **Liga semanal do bairro**: pontos por carro entregue (1 por estrela, +2 reparo 90%+, +2 VIP, +15 contrato). Faixas
+  🥉 Bronze 40 / 🥈 Prata 150 / 🥇 Ouro 400 pagam 300 / 900 / 2.500 moedas quando a semana vira (segunda 00:00 de
+  Brasília) e viram selo na placa da oficina na semana seguinte. Ranking global (top 10 de todos os servidores) por
+  OrderedDataStore com a semana na chave, mostrado na tela Metas. Esquema de dados v4.
+- **Carros animados no cliente** (`shared/RouteMotion`): o servidor manda a rota uma vez (pontos, velocidade, hora de
+  início) e cada cliente anima a 60 fps; o servidor só acompanha a 5 Hz e grava a pose final. ~92% menos tráfego dos
+  carros e sem tranco no 4G. Quem entra no meio recebe as rotas ativas. Conferido em Play: carros andando mudam de
+  posição em 59 de 60 quadros.
+- **Correções**: avaliação do freguês usava a paciência normal (agora a dele, ×1,5); avisos do servidor atualizam a
+  tela na hora.
+- **Testes**: 843 verificações (contratos, liga e rotas no ProgressTest). Play: contrato "Locadora do Bairro 4 reparos
+  de funilaria" com carro da frota chegando, faixa na tela, liga no snapshot, sem erros no console.

@@ -15,7 +15,7 @@ local CustomerRules = require(ReplicatedStorage.Shared.CustomerRules)
 
 local DataService = {}
 
-local SCHEMA_VERSION = 3 -- 3: níveis do prédio, mochila, funcionários, retenção (diária/missões/conquistas)
+local SCHEMA_VERSION = 4 -- 3: níveis do prédio, mochila, funcionários, retenção (diária/missões/conquistas); 4: liga semanal
 local MAX_ATTEMPTS = 4
 local LOCK_TIMEOUT = 360 -- s; maior que 2 autosaves, para um servidor que caiu não prender o jogador para sempre
 local LOCK_WAIT_STEP = 3
@@ -92,6 +92,7 @@ local function makeDefaultData(): any
 		Stats = { Repairs = 0, Earned = 0, Vip = 0, Perfect = 0, FirstTry = 0 }, -- contadores das conquistas
 		Regulars = {}, -- fregueses: { Name, Gender, Vehicle, Visits } (até Config.RegularsMax)
 		PendingVipReferral = false, -- um freguês indicou um VIP: o próximo cliente é VIP
+		League = { Week = -1, Points = 0, Badge = "", BadgeWeek = -1 }, -- liga semanal (shared/ProgressRules)
 		Employees = 0, -- mecânicos NPC contratados
 	}
 end
@@ -251,6 +252,13 @@ local function reconcile(data: any): any
 	end
 	data.Regulars = cleanRegulars
 	data.PendingVipReferral = data.PendingVipReferral == true
+	local league = type(data.League) == "table" and data.League or {}
+	data.League = {
+		Week = math.floor(num(league.Week ~= nil and league.Week or -1)),
+		Points = math.clamp(math.floor(num(league.Points)), 0, 1e7),
+		Badge = (league.Badge == "Bronze" or league.Badge == "Prata" or league.Badge == "Ouro") and league.Badge or "",
+		BadgeWeek = math.floor(num(league.BadgeWeek ~= nil and league.BadgeWeek or -1)),
+	}
 	for _, key in ipairs({ "Repairs", "Earned", "Vip", "Perfect", "FirstTry" }) do
 		data.Stats[key] = math.max(0, math.floor(num(data.Stats[key])))
 	end

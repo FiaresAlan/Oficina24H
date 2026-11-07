@@ -3,8 +3,6 @@
 -- Tudo é calculado no espaço local do lote (mesmo referencial de shared/Layout): +X lateral, +Z rumo ao fundo, rua em -Z.
 -- Os carros andam na faixa do lado do lote no sentido +X local (mão direita nos dois lados da rua), param junto ao
 -- meio-fio antes das entradas e, quando a ordem é aceita, fazem a curva e entram de frente na vaga.
-local RunService = game:GetService("RunService")
-
 local LotPath = {}
 
 LotPath.LaneZ = -67 -- faixa de rodagem do lado do lote (a rua vai de z=-93 a z=-53 no espaço do lote)
@@ -196,59 +194,57 @@ function LotPath.Duration(points: { Vector3 }, speed: number): number
 	return LotPath.Length(points) / speed + 1.2
 end
 
+-- Movimento: o servidor manda a rota UMA vez (shared/RouteMotion) e cada cliente anima a Raiz a 60 fps.
+-- O servidor só acompanha a 5 Hz (para colisão dos NPCs e checagens de distância) e grava a pose final exata.
+-- Quem entra no meio de uma rota recebe as rotas ativas ao chegar.
+local RouteMotion = require(game:GetService("ReplicatedStorage").Shared.RouteMotion)
+local Players = game:GetService("Players")
+
+local SERVER_STEP = 0.2
+local routeEvent = Instance.new("RemoteEvent")
+routeEvent.Name = "OficinaCarRoute"
+routeEvent.Parent = game:GetService("ReplicatedStorage")
+LotPath.RouteEvent = routeEvent
+
+type Active = { Points: { Vector3 }, Speed: number, Backward: boolean, Start: number, Token: number }
+local active: { [BasePart]: Active } = {}
+local tokens = 0
+
+Players.PlayerAdded:Connect(function(player)
+	for root, a in pairs(active) do
+		if root.Parent then
+			routeEvent:FireClient(player, root, a.Points, a.Speed, a.Backward, a.Start)
+		end
+	end
+end)
+
 -- Move a Raiz ao longo dos pontos: acelera, freia antes do fim e aponta a frente (LookVector) para onde vai.
 -- `backward` = dá ré (a frente aponta para o lado oposto ao movimento). Retorna quando chega (ou o carro some).
 function LotPath.Drive(root: BasePart, points: { Vector3 }, speed: number, backward: boolean?)
-	local n = #points
-	if n < 2 then
+	local route = RouteMotion.Build(points, speed, backward)
+	if not route then
 		return
 	end
-	local cum = { 0 }
-	for i = 2, n do
-		cum[i] = cum[i - 1] + (points[i] - points[i - 1]).Magnitude
-	end
-	local total = cum[n]
-	if total < 0.05 then
-		return
-	end
-	local function sample(s: number): Vector3
-		if s <= 0 then
-			local dir = (points[2] - points[1])
-			return points[1] + (dir.Magnitude > 0 and dir.Unit * s or Vector3.zero)
-		elseif s >= total then
-			local dir = (points[n] - points[n - 1])
-			return points[n] + (dir.Magnitude > 0 and dir.Unit * (s - total) or Vector3.zero)
+	local rotation = root.CFrame.Rotation
+	local start = workspace:GetServerTimeNow()
+	tokens += 1
+	local token = tokens
+	active[root] = { Points = points, Speed = speed, Backward = backward == true, Start = start, Token = token }
+	routeEvent:FireAllClients(root, points, speed, backward == true, start)
+	while root.Parent do
+		local elapsed = workspace:GetServerTimeNow() - start
+		if elapsed >= route.Duration then
+			break
 		end
-		local lo, hi = 1, n
-		while hi - lo > 1 do
-			local mid = (lo + hi) // 2
-			if cum[mid] <= s then
-				lo = mid
-			else
-				hi = mid
-			end
-		end
-		local len = cum[hi] - cum[lo]
-		return points[lo]:Lerp(points[hi], len > 0 and (s - cum[lo]) / len or 0)
+		root.CFrame = RouteMotion.Pose(route, RouteMotion.DistanceAt(route, elapsed), rotation)
+		task.wait(math.min(SERVER_STEP, route.Duration - elapsed))
 	end
-	local accel = speed / 1.2
-	local s, v = 0, 0
-	local look = 3
-	while s < total and root.Parent do
-		local dt = RunService.Heartbeat:Wait()
-		local brake = math.sqrt(2 * accel * math.max(total - s, 0))
-		v = math.min(speed, v + accel * dt, math.max(brake, 2))
-		s = math.min(total, s + v * dt)
-		local pos = sample(s)
-		local dir = (sample(s + look) - sample(s - look)) * Vector3.new(1, 0, 1)
-		if dir.Magnitude > 0.01 then
-			if backward then
-				dir = -dir
-			end
-			root.CFrame = CFrame.lookAt(pos, pos + dir.Unit)
-		else
-			root.CFrame = CFrame.new(pos) * root.CFrame.Rotation
-		end
+	if root.Parent then
+		root.CFrame = RouteMotion.Pose(route, route.Total, rotation)
+	end
+	local current = active[root]
+	if current and current.Token == token then
+		active[root] = nil
 	end
 end
 

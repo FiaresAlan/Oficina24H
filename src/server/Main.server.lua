@@ -10,6 +10,7 @@ local WorkshopService = require(script.Parent.WorkshopService)
 local StationService = require(script.Parent.StationService)
 local RivalService = require(script.Parent.RivalService)
 local ProgressService = require(script.Parent.ProgressService)
+local ContractService = require(script.Parent.ContractService)
 
 local remotesFolder = Instance.new("Folder")
 remotesFolder.Name = "OficinaRemotes"
@@ -61,6 +62,8 @@ if game:GetService("RunService"):IsStudio() then
         elseif command == "Regular" then
             table.insert(profile.Regulars, { Name = "Rafael", Gender = "M", Vehicle = "Sedã azul", Visits = 2 })
             return #profile.Regulars
+        elseif command == "Contract" then
+            return ContractService.QaOfferNow(player)
         elseif command == "Dispatch" and type(arg) == "number" then
             return WorkshopService.DispatchCustomers(arg)
         elseif command == "AgeJobs" then
@@ -135,6 +138,17 @@ end, function(kind: string, payload: any)
     actionEvent:FireAllClients(kind, payload)
 end)
 ProgressService.Start()
+
+-- Contratos de frota: quando o tempo acaba, um rival do bairro "pega" o contrato.
+ContractService.Init(DataService, function(player: Player, message: string, ok: boolean)
+    actionEvent:FireClient(player, "Notice", { Message = message, Success = ok })
+end, function(kind: string, payload: any)
+    actionEvent:FireAllClients(kind, payload)
+end, function(): string?
+    local entries = RivalService.RankEntries()
+    return #entries > 0 and entries[math.random(1, #entries)].Name or nil
+end)
+ContractService.Start()
 
 local snapshotCache: { [number]: { At: number, Value: any } } = {} -- ver GetSnapshot abaixo
 local lastSnapshotBuild: { [number]: { At: number, Value: any } } = {}

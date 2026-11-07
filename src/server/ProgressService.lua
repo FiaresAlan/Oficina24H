@@ -170,6 +170,147 @@ function ProgressService.RedeemCode(player: Player, text: any): (boolean, string
 	return true, def.Text .. string.format(" +%d moedas", def.Coins)
 end
 
+-- Liga semanal ----------------------------------------------------------------------------------------------------
+-- Pontos da semana no perfil; ranking global por OrderedDataStore com a semana na chave (Liga_<semana>).
+-- Virou a semana: paga o prêmio da faixa alcançada (uma vez) e ela vira selo na placa durante a semana nova.
+local DataStoreService = game:GetService("DataStoreService")
+local leagueDirty: { [Player]: boolean } = {}
+local leagueTop: { { Name: string, Points: number } } = {}
+local leagueTopWeek = -1
+local nameCache: { [number]: string } = {}
+
+local function leagueStore(week: number): OrderedDataStore?
+	local ok, store = pcall(function()
+		return DataStoreService:GetOrderedDataStore("Liga_" .. tostring(week))
+	end)
+	return ok and store or nil
+end
+
+local function ensureLeague(player: Player, profile: any): any
+	local week = ProgressRules.Week(os.time())
+	local league = profile.League
+	if league.Week ~= week then
+		if league.Week >= 0 and league.Points > 0 then
+			local tier = ProgressRules.LeagueTier(league.Points)
+			if tier then
+				give(player, tier.Coins, nil, "Liga semanal: " .. tier.Id)
+				league.Badge = tier.Id
+				league.BadgeWeek = week
+				if notify then
+					local n = notify
+					task.delay(6, function()
+						if player.Parent then
+							n(player, string.format("%s Liga da semana passada: %s com %d pontos! +%d moedas. O selo fica na sua placa esta semana.",
+								tier.Icon, tier.Id, league.Points, tier.Coins), true)
+						end
+					end)
+				end
+			end
+		end
+		if league.BadgeWeek ~= week then
+			league.Badge = ""
+		end
+		league.Week = week
+		league.Points = 0
+		DataService.MarkDirty(player)
+	end
+	return league
+end
+
+function ProgressService.AddLeague(player: Player, points: number)
+	local profile = DataService and DataService.Get(player)
+	if not profile or points <= 0 then
+		return
+	end
+	local league = ensureLeague(player, profile)
+	local before = ProgressRules.LeagueTier(league.Points)
+	league.Points += math.floor(points)
+	local after = ProgressRules.LeagueTier(league.Points)
+	if after and after ~= before and notify then
+		notify(player, string.format("%s Você chegou na liga %s desta semana! Prêmio de %d moedas na segunda-feira.", after.Icon, after.Id, after.Coins), true)
+	end
+	leagueDirty[player] = true
+	DataService.MarkDirty(player)
+end
+
+function ProgressService.LeagueBadge(player: Player): string
+	local profile = DataService and DataService.Get(player)
+	if not profile then
+		return ""
+	end
+	local league = ensureLeague(player, profile)
+	for _, tier in ipairs(ProgressRules.LeagueTiers) do
+		if tier.Id == league.Badge then
+			return tier.Icon .. " Liga " .. tier.Id
+		end
+	end
+	return ""
+end
+
+local function leagueSnapshot(player: Player, profile: any): any
+	local league = ensureLeague(player, profile)
+	local tier, nextTier = ProgressRules.LeagueTier(league.Points)
+	return {
+		Points = league.Points,
+		Tier = tier and tier.Id or nil,
+		TierIcon = tier and tier.Icon or nil,
+		Next = nextTier and { Id = nextTier.Id, Icon = nextTier.Icon, Points = nextTier.Points, Coins = nextTier.Coins } or nil,
+		EndsIn = ProgressRules.WeekEndsIn(os.time()),
+		Tiers = ProgressRules.LeagueTiers,
+		Top = leagueTopWeek == ProgressRules.Week(os.time()) and leagueTop or {},
+		Badge = league.Badge,
+	}
+end
+
+local function pushLeague()
+	local week = ProgressRules.Week(os.time())
+	local store = leagueStore(week)
+	if not store then
+		return
+	end
+	for player in pairs(leagueDirty) do
+		leagueDirty[player] = nil
+		local profile = player.Parent and DataService.Get(player)
+		if profile and profile.League.Week == week and profile.League.Points > 0 then
+			local points = profile.League.Points
+			pcall(function()
+				store:SetAsync(tostring(player.UserId), points)
+			end)
+		end
+	end
+end
+
+local function pullLeague()
+	local week = ProgressRules.Week(os.time())
+	local store = leagueStore(week)
+	if not store then
+		return
+	end
+	local ok, pages = pcall(function()
+		return store:GetSortedAsync(false, 10)
+	end)
+	if not ok or not pages then
+		return
+	end
+	local list = {}
+	for _, entry in ipairs(pages:GetCurrentPage()) do
+		local userId = tonumber(entry.key)
+		if userId then
+			local name = nameCache[userId]
+			if not name then
+				local okName, result = pcall(function()
+					return Players:GetNameFromUserIdAsync(userId)
+				end)
+				name = okName and result or ("Jogador " .. tostring(userId))
+				nameCache[userId] = name
+			end
+			table.insert(list, { Name = name :: string, Points = tonumber(entry.value) or 0 })
+		end
+	end
+	leagueTop = list
+	leagueTopWeek = week
+end
+
 -- Hora do Rush ---------------------------------------------------------------------------------------------------
 local rushUntil = 0
 local nextRushAt = os.time() + Config.RushFirstDelaySeconds
@@ -211,6 +352,7 @@ function ProgressService.Snapshot(player: Player, profile: any): any
 		Missions = list,
 		Achievements = { Owned = owned, Total = #ProgressRules.Achievements, Next = nextAch },
 		Rush = ProgressService.RushInfo(),
+		League = leagueSnapshot(player, profile),
 	}
 end
 
@@ -221,9 +363,39 @@ function ProgressService.Start()
 			local profile = DataService.Get(player)
 			if profile and player.Parent then
 				ensureMissions(player, profile)
+				ensureLeague(player, profile)
 				checkAchievements(player, profile)
 			end
 		end)
+	end)
+	Players.PlayerRemoving:Connect(function(player)
+		-- grava a pontuação de quem está saindo (se o perfil ainda estiver na memória; senão vale a última gravação)
+		local profile = leagueDirty[player] and DataService.Get(player)
+		leagueDirty[player] = nil
+		if profile and profile.League.Week == ProgressRules.Week(os.time()) then
+			local store, points = leagueStore(profile.League.Week), profile.League.Points
+			if store then
+				task.spawn(pcall, function()
+					store:SetAsync(tostring(player.UserId), points)
+				end)
+			end
+		end
+	end)
+	-- ranking global da liga: grava a cada 2 min (só quem pontuou) e lê o top 10 a cada 3 min
+	task.spawn(function()
+		task.wait(20)
+		pullLeague()
+		local tick = 0
+		while true do
+			task.wait(60)
+			tick += 1
+			if tick % 2 == 0 then
+				pushLeague()
+			end
+			if tick % 3 == 0 then
+				pullLeague()
+			end
+		end
 	end)
 	task.spawn(function()
 		local warned = false

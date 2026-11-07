@@ -125,7 +125,7 @@ function Orders.new(parent: Instance)
 	talkClose.LayoutOrder = 4
 	talkClose.ZIndex = 32
 	local function talkTo(job: any)
-		talkTitle.Text = t("or_talk_title", (job.Vip and "★ VIP " or (job.Regular and "♥ " or "")) .. (job.CustomerName or "?"))
+		talkTitle.Text = t("or_talk_title", (job.Vip and "★ VIP " or (job.Regular and "♥ " or (job.Fleet and "📋 " or ""))) .. (job.CustomerName or "?"))
 		talkText.Text = "“" .. tostring(job.Complaint) .. "”"
 		dialog.Visible = true
 	end
@@ -218,7 +218,7 @@ function Orders.new(parent: Instance)
 		setModel(job.VehicleModel)
 		local info = stack(content, 3, false, 2)
 		info.Name = "Info"
-		HudParts.text(info, t("or_customer", (job.Vip and "★ VIP " or (job.Regular and "♥ " or "")) .. (job.CustomerName or "?")), 30, { Font = Theme.FontTitle, LayoutOrder = 1 })
+		HudParts.text(info, t("or_customer", (job.Vip and "★ VIP " or (job.Regular and "♥ " or (job.Fleet and "📋 " or ""))) .. (job.CustomerName or "?")), 30, { Font = Theme.FontTitle, LayoutOrder = 1 })
 		HudParts.text(info, job.VehicleName, 26, { Font = Theme.FontSemi, LayoutOrder = 2 })
 		local status = stack(info, 8, true, 3)
 		HudParts.sprite(status, "pn_o_clock", Vector2.new(28, 28))
@@ -266,7 +266,7 @@ function Orders.new(parent: Instance)
 		local info = stack(content, 3, false, 2)
 		info.Name = "Info"
 		info.AutomaticSize = Enum.AutomaticSize.XY
-		HudParts.text(info, t("or_customer", (job.Vip and "★ VIP " or (job.Regular and "♥ " or "")) .. (job.CustomerName or "?")), 30, { Font = Theme.FontTitle, LayoutOrder = 1 })
+		HudParts.text(info, t("or_customer", (job.Vip and "★ VIP " or (job.Regular and "♥ " or (job.Fleet and "📋 " or ""))) .. (job.CustomerName or "?")), 30, { Font = Theme.FontTitle, LayoutOrder = 1 })
 		HudParts.text(info, job.VehicleName, 26, { Font = Theme.FontSemi, LayoutOrder = 2 })
 		local statusRow = stack(info, 8, true, 3)
 		HudParts.sprite(statusRow, "pn_o_wrench", Vector2.new(28, 28))

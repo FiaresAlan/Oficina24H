@@ -58,6 +58,10 @@ Config.RegularsMax = 8
 Config.RegularChance = 0.3 -- parte das chegadas que é de fregueses (se houver)
 Config.RegularPayMultiplier = 1.25
 Config.RegularPatienceMultiplier = 1.5
-Config.RegularReferralVisit = 3 -- na 3ª visita o freguês indica um cliente VIP -- em ~30% das chegadas os rivais entram na disputa pelo cliente
+Config.RegularReferralVisit = 3 -- na 3ª visita o freguês indica um cliente VIP
+
+-- Contratos de frota (ver shared/ContractRules): uma empresa pede N reparos de uma área em poucos minutos.
+Config.ContractEverySeconds = 1200 -- 20 min entre contratos (depois de cumprir ou perder)
+Config.ContractFirstDelaySeconds = 360 -- o 1º chega 6 min depois de terminar o guia
 
 return Config

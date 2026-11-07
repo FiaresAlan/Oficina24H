@@ -106,18 +106,67 @@ list.Padding = UDim.new(0, 10)
 list.SortOrder = Enum.SortOrder.LayoutOrder
 list.Parent = scroll
 
+-- Faixas de evento empilhadas logo acima da barra de baixo (não cobrem as telas): contrato de frota e Hora do Rush.
+local banners = Instance.new("Frame")
+banners.AnchorPoint = Vector2.new(0.5, 1)
+banners.Position = UDim2.new(0.5, 0, 1, -112)
+banners.Size = UDim2.fromOffset(520, 120)
+banners.BackgroundTransparency = 1
+banners.Parent = gui
+local bannerList = Instance.new("UIListLayout")
+bannerList.VerticalAlignment = Enum.VerticalAlignment.Bottom
+bannerList.HorizontalAlignment = Enum.HorizontalAlignment.Center
+bannerList.Padding = UDim.new(0, 6)
+bannerList.SortOrder = Enum.SortOrder.LayoutOrder
+bannerList.Parent = banners
+
 -- Faixa da Hora do Rush
 local rush = Instance.new("TextLabel")
-rush.AnchorPoint = Vector2.new(0.5, 1)
-rush.Position = UDim2.new(0.5, 0, 1, -112) -- logo acima da barra de baixo: não cobre as telas
+rush.LayoutOrder = 2
 rush.Size = UDim2.fromOffset(460, 40)
 rush.BackgroundColor3 = Color3.fromRGB(220, 70, 30)
 rush.TextColor3 = Color3.new(1, 1, 1)
 rush.Font = Enum.Font.GothamBlack
 rush.TextSize = 20
 rush.Visible = false
-rush.Parent = gui
+rush.Parent = banners
 corner(rush, 12)
+
+-- Cartão do contrato de frota: empresa, progresso (barra) e tempo restante
+local contract = Instance.new("Frame")
+contract.LayoutOrder = 1
+contract.Size = UDim2.fromOffset(400, 52)
+contract.BackgroundColor3 = Color3.fromRGB(20, 70, 120)
+contract.Visible = false
+contract.Parent = banners
+corner(contract, 12)
+local contractStroke = Instance.new("UIStroke")
+contractStroke.Color = Color3.fromRGB(120, 200, 255)
+contractStroke.Thickness = 1.5
+contractStroke.Parent = contract
+local contractText = Instance.new("TextLabel")
+contractText.BackgroundTransparency = 1
+contractText.Position = UDim2.fromOffset(12, 4)
+contractText.Size = UDim2.new(1, -24, 0, 26)
+contractText.Font = Enum.Font.GothamBlack
+contractText.TextSize = 16
+contractText.TextColor3 = Color3.new(1, 1, 1)
+contractText.TextXAlignment = Enum.TextXAlignment.Left
+contractText.TextTruncate = Enum.TextTruncate.AtEnd
+contractText.Parent = contract
+local contractBar = Instance.new("Frame")
+contractBar.Position = UDim2.new(0, 12, 1, -16)
+contractBar.Size = UDim2.new(1, -24, 0, 8)
+contractBar.BackgroundColor3 = Color3.fromRGB(10, 30, 60)
+contractBar.Parent = contract
+corner(contractBar, 4)
+local contractFill = Instance.new("Frame")
+contractFill.Size = UDim2.fromScale(0, 1)
+contractFill.BackgroundColor3 = GREEN
+contractFill.Parent = contractBar
+corner(contractFill, 4)
+local contractEnds = 0
+local contractInfo: any = nil
 
 local codeBox: TextBox? = nil
 
@@ -231,12 +280,50 @@ local function render()
 			end
 		end)
 	end
+	-- Liga semanal
+	local league = progress.League
+	if league then
+		local ends = tonumber(league.EndsIn) or 0
+		local lg = section(string.format("Liga semanal · termina em %dd %dh", math.floor(ends / 86400), math.floor(ends % 86400 / 3600)), 3)
+		text(lg, league.Tier and string.format("%s Liga %s · %d pontos", league.TierIcon, league.Tier, league.Points)
+			or string.format("Sem faixa ainda · %d pontos", league.Points), 18, Color3.new(1, 1, 1), Enum.Font.GothamBlack).LayoutOrder = 1
+		local nextTier = league.Next
+		local bar = Instance.new("Frame")
+		bar.Size = UDim2.new(1, 0, 0, 12)
+		bar.BackgroundColor3 = Color3.fromRGB(40, 54, 86)
+		bar.LayoutOrder = 2
+		bar.Parent = lg
+		corner(bar, 6)
+		local fill = Instance.new("Frame")
+		fill.Size = UDim2.fromScale(nextTier and math.clamp(league.Points / nextTier.Points, 0, 1) or 1, 1)
+		fill.BackgroundColor3 = GOLD
+		fill.Parent = bar
+		corner(fill, 6)
+		text(lg, nextTier and string.format("Faltam %d pontos para %s %s (+%d moedas na segunda-feira)", nextTier.Points - league.Points, nextTier.Icon, nextTier.Id, nextTier.Coins)
+			or "Você está no topo: Liga Ouro!", 15, MUTED).LayoutOrder = 3
+		local tiers = {}
+		for _, tier in ipairs(league.Tiers or {}) do
+			table.insert(tiers, string.format("%s %d pts = %d", tier.Icon, tier.Points, tier.Coins))
+		end
+		text(lg, table.concat(tiers, "   ·   "), 14, Color3.new(1, 1, 1)).LayoutOrder = 4
+		text(lg, "Pontos: 1 por estrela do cliente, +2 reparo 90%+, +2 VIP, +15 contrato de frota.", 13, MUTED).LayoutOrder = 5
+		if league.Top and #league.Top > 0 then
+			local rows = {}
+			for i, entry in ipairs(league.Top) do
+				if i > 5 then
+					break
+				end
+				table.insert(rows, string.format("%d. %s — %d", i, entry.Name, entry.Points))
+			end
+			text(lg, "Melhores de todos os servidores esta semana:\n" .. table.concat(rows, "\n"), 14, Color3.new(1, 1, 1)).LayoutOrder = 6
+		end
+	end
 	-- Conquistas
-	local a = section(string.format("Conquistas: %d de %d", progress.Achievements.Owned, progress.Achievements.Total), 3)
+	local a = section(string.format("Conquistas: %d de %d", progress.Achievements.Owned, progress.Achievements.Total), 4)
 	local nextAch = progress.Achievements.Next
 	text(a, nextAch and string.format("Próxima: %s (%d/%d) · +%d moedas", nextAch.Title, nextAch.Have, nextAch.Need, nextAch.Coins) or "Você conquistou tudo!", 16, Color3.new(1, 1, 1)).LayoutOrder = 1
 	-- Código
-	local c = section("Código promocional", 4)
+	local c = section("Código promocional", 5)
 	local rowCode = Instance.new("Frame")
 	rowCode.BackgroundTransparency = 1
 	rowCode.Size = UDim2.new(1, 0, 0, 40)
@@ -310,6 +397,20 @@ Store.Changed.Event:Connect(function(snap: any)
 	if progress and progress.Rush then
 		rushEnds = progress.Rush.Active and (os.clock() + progress.Rush.EndsIn) or 0
 	end
+	local c = snap and snap.Contract
+	if c and c.Active then
+		local changed = not contractInfo or contractInfo.Done ~= c.Done
+		contractInfo = c
+		contractEnds = os.clock() + (tonumber(c.EndsIn) or 0)
+		TweenService:Create(contractFill, TweenInfo.new(0.4), { Size = UDim2.fromScale(math.clamp(c.Done / math.max(c.Target, 1), 0, 1), 1) }):Play()
+		if changed then
+			contract.Size = UDim2.fromOffset(440, 58)
+			TweenService:Create(contract, TweenInfo.new(0.5, Enum.EasingStyle.Back), { Size = UDim2.fromOffset(400, 52) }):Play()
+		end
+	else
+		contractInfo = nil
+		contractEnds = 0
+	end
 	if frame.Visible and not (codeBox and codeBox:IsFocused()) then
 		render()
 	end
@@ -331,6 +432,15 @@ task.spawn(function()
 			rush.Text = string.format("🔥 HORA DO RUSH · clientes em dobro · +50%% · %d:%02d", math.floor(left / 60), math.floor(left % 60))
 		else
 			rush.Visible = false
+		end
+		local cleft = contractEnds - os.clock()
+		if contractInfo and cleft > 0 then
+			contract.Visible = true
+			-- curto para caber no celular: empresa, progresso e tempo (o detalhe do pedido veio no aviso)
+			contractText.Text = string.format("📋 %s  %d/%d  ⏱ %d:%02d", contractInfo.Name, contractInfo.Done, contractInfo.Target,
+				math.floor(cleft / 60), math.floor(cleft % 60))
+		else
+			contract.Visible = false
 		end
 		task.wait(0.5)
 	end

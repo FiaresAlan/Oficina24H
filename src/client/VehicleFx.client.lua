@@ -11,8 +11,41 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 
 local SoundIds = require(ReplicatedStorage.Shared.SoundIds)
+local RouteMotion = require(ReplicatedStorage.Shared.RouteMotion)
 
 local MAX_DISTANCE = 160
+
+-- Rotas dos carros (server/LotPath.Drive manda uma vez): a Raiz é animada aqui, liso a cada frame. O servidor só
+-- atualiza a 5 Hz; a pose local é regravada a cada frame por cima. Depois do fim segura a pose final por 0,6 s
+-- (a última atualização do servidor pode chegar atrasada).
+type ClientRoute = { Route: RouteMotion.Route, Start: number, Rotation: CFrame }
+local routes: { [BasePart]: ClientRoute } = {}
+local HOLD_AFTER = 0.6
+
+ReplicatedStorage:WaitForChild("OficinaCarRoute").OnClientEvent:Connect(function(root: BasePart?, points: { Vector3 }, speed: number, backward: boolean, start: number)
+	if typeof(root) ~= "Instance" or not (root :: Instance):IsA("BasePart") or type(points) ~= "table" then
+		return
+	end
+	local route = RouteMotion.Build(points, speed, backward)
+	if route then
+		routes[root :: BasePart] = { Route = route, Start = start, Rotation = (root :: BasePart).CFrame.Rotation }
+	end
+end)
+
+local function stepRoutes()
+	local now = workspace:GetServerTimeNow()
+	for root, r in pairs(routes) do
+		if not root.Parent then
+			routes[root] = nil
+			continue
+		end
+		local elapsed = now - r.Start
+		root.CFrame = RouteMotion.Pose(r.Route, RouteMotion.DistanceAt(r.Route, elapsed), r.Rotation)
+		if elapsed > r.Route.Duration + HOLD_AFTER then
+			routes[root] = nil
+		end
+	end
+end
 
 type WheelGroup = {
 	Parts: { BasePart },
@@ -367,6 +400,7 @@ watch("Arrivals")
 local camera = workspace.CurrentCamera
 
 RunService.RenderStepped:Connect(function(dt: number)
+	stepRoutes()
 	local now = os.clock()
 	local camPos = camera.CFrame.Position
 	for model, fx in pairs(cars) do

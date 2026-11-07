@@ -21,6 +21,9 @@ local CustomerNpcService = require(script.Parent.CustomerNpcService)
 local RivalService = require(script.Parent.RivalService)
 local NpcKit = require(script.Parent.NpcKit)
 local ProgressService = require(script.Parent.ProgressService)
+local ContractService = require(script.Parent.ContractService)
+local ContractRules = require(ReplicatedStorage.Shared.ContractRules)
+local ProgressRules = require(ReplicatedStorage.Shared.ProgressRules)
 
 -- Loja de Autopeças do bairro: comprar só estando nela (prédio Workspace.PublicAreas.LojaAutopecas).
 local function nearShop(player: Player): boolean
@@ -161,13 +164,17 @@ local function rateService(owner: Player, job: any, service: any, defect: any, e
     local context = {
         PriceMultiplier = job.PriceMultiplier or (profile and profile.PriceMultiplier) or 1,
         WaitSeconds = os.time() - job.CreatedAt,
-        PatienceSeconds = Config.CustomerPatienceSeconds,
+        PatienceSeconds = Config.CustomerPatienceSeconds * (job.Regular and Config.RegularPatienceMultiplier or 1),
         LevelMargin = margin,
         ByNpc = byNpc,
         Quality = quality,
     }
     local stars = CustomerRules.RateService(context, math.random)
-    if stars == 5 and profile and job.CustomerName and job.CustomerGender then
+    ProgressService.AddLeague(owner, ProgressRules.LeaguePoints(stars, quality, job.Vip == true)) -- liga semanal
+    if job.Fleet then
+        ContractService.FleetDone(owner, job.Fleet)
+    end
+    if stars == 5 and profile and job.CustomerName and job.CustomerGender and not job.Fleet then
         local found = nil
         for _, r in ipairs(profile.Regulars) do
             if r.Name == job.CustomerName and r.Gender == job.CustomerGender then
@@ -229,6 +236,20 @@ local function defectSymptom(defectId: string?): string
     return defect and defect.Specialization or ""
 end
 
+ContractService.SetOfferBuilder(function(player: Player)
+    local profile = DataService.Get(player)
+    if not profile or not getWorkshop(player) then
+        return nil
+    end
+    local specs = {}
+    for _, specialization in ipairs(Catalog.Specializations) do
+        if JobRules.ServiceableCountIn(specialization, { [specialization] = DataService.GetSkillLevel(player, specialization) }, profile.Equipment) > 0 then
+            table.insert(specs, specialization)
+        end
+    end
+    return ContractRules.Offer(profile.WorkshopLevel or 0, specs, math.random)
+end)
+
 -- `specialization` (opcional): o cliente procurou um especialista nessa área (escolha de mercado, ver DispatchCustomers).
 local function createJob(ownerUserId: number, specialization: string?)
     -- O defeito depende da capacidade da oficina (nível e equipamento), ver shared/JobRules.
@@ -248,17 +269,32 @@ local function createJob(ownerUserId: number, specialization: string?)
     if rookie then
         defectId = math.random(1, 2) == 1 and "FlatTire" or "WeakBattery"
     end
+    -- Contrato de frota ativo: parte das chegadas são carros da frota com defeito da área do contrato.
+    local fleet: any = nil
+    if not rookie and owner then
+        local inFlight = 0
+        local active = ContractService.Active(ownerUserId)
+        for _, other in pairs(Jobs) do
+            if active and other.OwnerUserId == ownerUserId and other.Status ~= "Completed" and other.Fleet == active.Token then
+                inFlight += 1
+            end
+        end
+        fleet = ContractService.WantsFleet(ownerUserId, inFlight, math.random())
+        if fleet then
+            defectId = JobRules.PickDefectId(skillLevels, equipment, math.random, fleet.Offer.Spec)
+        end
+    end
     local defect = Catalog.Defects[defectId]
     -- O preço é fixado quando o cliente chega: mudar a tabela depois não altera ordens já abertas.
     -- Cliente VIP (esportivo) paga o dobro da tabela.
-    local vip = not rookie and math.random() < Catalog.VipChance
+    local vip = not rookie and not fleet and math.random() < Catalog.VipChance
     local referral = false
-    if not rookie and profile and profile.PendingVipReferral then
+    if not rookie and not fleet and profile and profile.PendingVipReferral then
         vip, referral = true, true -- indicação de um freguês: VIP garantido
         profile.PendingVipReferral = false
     end
     local regular: any = nil
-    if not rookie and not vip and profile and #profile.Regulars > 0 and math.random() < Config.RegularChance then
+    if not rookie and not vip and not fleet and profile and #profile.Regulars > 0 and math.random() < Config.RegularChance then
         regular = profile.Regulars[math.random(1, #profile.Regulars)]
         for _, other in pairs(Jobs) do
             if other.OwnerUserId == ownerUserId and other.Status ~= "Completed" and other.CustomerName == regular.Name then
@@ -306,6 +342,8 @@ local function createJob(ownerUserId: number, specialization: string?)
         Vip = vip,
         Regular = regular ~= nil,
         Referral = referral,
+        Fleet = fleet and fleet.Token or nil, -- contrato de frota ao qual este carro pertence
+        FleetName = fleet and fleet.Offer.Name or nil,
         Rush = rush,
         Complaint = complaint,
         ComplaintDefectId = complaintDefectId,
@@ -329,6 +367,7 @@ local function createJob(ownerUserId: number, specialization: string?)
             if current and current.Status == "Available" and ownerNow and eventSender then
                 local text = current.Vip
                     and ((current.Referral and "★ Indicação de freguês! " or "★ Cliente VIP! ") .. tostring(current.CustomerName) .. " chegou com um " .. tostring(current.VehicleName) .. " e paga o DOBRO. Aceite na TV de ordens!")
+                    or current.Fleet and ("📋 Carro da frota " .. tostring(current.FleetName) .. " chegou (" .. tostring(current.VehicleName) .. "). Aceite na TV de ordens!")
                     or current.Regular and ("♥ Seu freguês " .. tostring(current.CustomerName) .. " voltou com o " .. tostring(current.VehicleName) .. " (paga +25%). Aceite na TV de ordens.")
                     or (tostring(current.CustomerName) .. " chegou com " .. tostring(current.VehicleName) .. ". Aceite na TV de ordens.")
                 eventSender(ownerNow, "Notice", { Message = text, Success = true })
@@ -408,6 +447,7 @@ function WorkshopService.GetSnapshot(player: Player)
                     CustomerName = job.CustomerName,
                     Vip = job.Vip == true,
                     Regular = job.Regular == true,
+                    Fleet = job.FleetName,
                     WaitSeconds = os.time() - job.CreatedAt, -- tempo desde a chegada (a paciência acaba em PatienceSeconds)
                     PatienceSeconds = Config.CustomerPatienceSeconds * (job.Regular and Config.RegularPatienceMultiplier or 1),
                     Complaint = job.Complaint,
@@ -482,6 +522,7 @@ function WorkshopService.GetSnapshot(player: Player)
         HasWorkshop = workshop ~= nil,
         Workshop = (workshop and profile) and upgradeInfoRef(player, profile) or nil,
         Progress = profile and ProgressService.Snapshot(player, profile) or nil,
+        Contract = ContractService.Snapshot(player.UserId),
         WorkshopName = workshop and workshop.Name or nil,
         Jobs = jobs,
         CollabJobs = collabJobs,
@@ -1622,20 +1663,27 @@ function refreshPlotDisplays()
         if owner and p and plot then
             local tier, tierName = Catalog.WorkshopTier(p.TotalEarned or 0)
             local rank = rankByName[shop.Name]
+            local badge = ProgressService.LeagueBadge(owner)
+            local rankLine = rank == 1 and "🏆 A MELHOR OFICINA DO SERVIDOR" or (rank and string.format("#%d no servidor  ·  faturou %d", rank, p.TotalEarned or 0) or "")
             StationService.SetSign(plot, {
                 Title = string.upper(tierName),
                 Name = string.upper(shop.Name),
                 Line1 = string.format("Nível %d  ·  ★ %.1f (%d avaliações)", Catalog.BusinessLevel(p.TotalEarned or 0),
                     CustomerRules.AverageRating(p.RatingSum or 0, p.RatingCount or 0), p.RatingCount or 0),
                 Line2 = string.format("Clientes atendidos: %d  ·  Rep. %d", p.RatingCount or 0, p.Reputation or 0),
-                Line3 = rank == 1 and "🏆 A MELHOR OFICINA DO SERVIDOR" or (rank and string.format("#%d no servidor  ·  faturou %d", rank, p.TotalEarned or 0) or ""),
+                Line3 = badge ~= "" and (badge .. (rankLine ~= "" and ("  ·  " .. rankLine) or "")) or rankLine,
                 Color = tier >= 3 and Color3.fromRGB(255, 196, 70) or tier == 2 and Color3.fromRGB(70, 190, 255) or Color3.fromRGB(255, 196, 40),
             })
             local lines = {}
             for _, job in pairs(Jobs) do
                 if job.OwnerUserId == userId and job.Status == "Available" and not CustomerArrivalService.IsArriving(job.Id) and os.time() >= (job.ArrivesAt or 0) then
-                    table.insert(lines, string.format("%s%s · %s", job.Vip and "★ " or "", tostring(job.CustomerName), tostring(job.VehicleName)))
+                    table.insert(lines, string.format("%s%s · %s", job.Vip and "★ " or (job.Fleet and "📋 " or ""), tostring(job.CustomerName), tostring(job.VehicleName)))
                 end
+            end
+            local contract = ContractService.Snapshot(userId)
+            if contract.Active then
+                table.insert(lines, 1, string.format("📋 CONTRATO %s: %d/%d · %d:%02d", string.upper(contract.Name), contract.Done, contract.Target,
+                    math.floor(contract.EndsIn / 60), contract.EndsIn % 60))
             end
             StationService.SetOrdersScreen(plot, #lines > 0 and (table.concat(lines, "\n") .. "\n\nAperte E para aceitar") or "Nenhum cliente esperando.")
         end

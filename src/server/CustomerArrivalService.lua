@@ -224,7 +224,9 @@ function CustomerArrivalService.Arrive(job: any): number
 				animator.Idle()
 			end
 			state.Phase = "Waiting"
-			NpcKit.Say(npc, tostring(job.Complaint or "Olá! Pode olhar meu carro?"), nil, job.Vip and Color3.fromRGB(255, 200, 40) or nil)
+			local greeting = job.Regular and "Voltei! Só confio em você. " or (job.Referral and "Me indicaram sua oficina! " or "")
+			NpcKit.Say(npc, greeting .. tostring(job.Complaint or "Olá! Pode olhar meu carro?"), nil,
+				job.Vip and Color3.fromRGB(255, 200, 40) or (job.Regular and Color3.fromRGB(240, 90, 130) or nil))
 			-- aceitar é só pela TV de ordens dentro da oficina (pedido do PO); aqui o cliente só espera
 		else
 			state.Phase = "Waiting"

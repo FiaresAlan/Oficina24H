@@ -167,6 +167,30 @@ local function rateService(owner: Player, job: any, service: any, defect: any, e
         Quality = quality,
     }
     local stars = CustomerRules.RateService(context, math.random)
+    if stars == 5 and profile and job.CustomerName and job.CustomerGender then
+        local found = nil
+        for _, r in ipairs(profile.Regulars) do
+            if r.Name == job.CustomerName and r.Gender == job.CustomerGender then
+                found = r
+            end
+        end
+        if found then
+            found.Visits += 1
+            found.Vehicle = job.VehicleName
+            if found.Visits == Config.RegularReferralVisit then
+                profile.PendingVipReferral = true
+                if eventSender then
+                    eventSender(owner, "Notice", { Message = "♥ " .. found.Name .. " adorou o serviço e vai indicar um cliente VIP para você!", Success = true })
+                end
+            end
+        elseif #profile.Regulars < Config.RegularsMax and Catalog.VehicleModels[job.VehicleName] then
+            table.insert(profile.Regulars, { Name = job.CustomerName, Gender = job.CustomerGender, Vehicle = job.VehicleName, Visits = 1 })
+            if eventSender then
+                eventSender(owner, "Notice", { Message = "♥ " .. job.CustomerName .. " virou freguês da sua oficina! Ele(a) vai voltar e pagar mais.", Success = true })
+            end
+        end
+        DataService.MarkDirty(owner)
+    end
     local reputationDelta = CustomerRules.ReputationDelta(stars)
     local commentKey = CustomerRules.CommentKey(context, stars)
     DataService.AddRating(owner, stars, service.DisplayName, { CommentKey = commentKey, Customer = job.CustomerName })
@@ -228,11 +252,29 @@ local function createJob(ownerUserId: number, specialization: string?)
     -- O preço é fixado quando o cliente chega: mudar a tabela depois não altera ordens já abertas.
     -- Cliente VIP (esportivo) paga o dobro da tabela.
     local vip = not rookie and math.random() < Catalog.VipChance
+    local referral = false
+    if not rookie and profile and profile.PendingVipReferral then
+        vip, referral = true, true -- indicação de um freguês: VIP garantido
+        profile.PendingVipReferral = false
+    end
+    local regular: any = nil
+    if not rookie and not vip and profile and #profile.Regulars > 0 and math.random() < Config.RegularChance then
+        regular = profile.Regulars[math.random(1, #profile.Regulars)]
+        for _, other in pairs(Jobs) do
+            if other.OwnerUserId == ownerUserId and other.Status ~= "Completed" and other.CustomerName == regular.Name then
+                regular = nil -- já está na oficina
+                break
+            end
+        end
+    end
     local multiplier = profile and profile.PriceMultiplier or 1
     local rush = ProgressService.IsRush() -- Hora do Rush: o cliente aceita pagar mais
     local price = math.max(1, math.floor(Catalog.Services[defect.ServiceId].Reward * multiplier * (vip and Catalog.VipPayMultiplier or 1)
-        * (rush and Config.RushPayMultiplier or 1) + 0.5))
+        * (rush and Config.RushPayMultiplier or 1) * (regular and Config.RegularPayMultiplier or 1) + 0.5))
     local gender, customerName = Catalog.PickCustomer()
+    if regular then
+        gender, customerName = regular.Gender, regular.Name
+    end
     local vehicles = vip and Catalog.VipVehicleNames or Catalog.VehicleNames
 
     -- Nem toda reclamação corresponde ao defeito real: em ~35% dos casos o cliente descreve o sintoma de outro
@@ -258,10 +300,12 @@ local function createJob(ownerUserId: number, specialization: string?)
     Jobs[id] = {
         Id = id,
         OwnerUserId = ownerUserId,
-        VehicleName = vehicles[math.random(1, #vehicles)],
+        VehicleName = regular and regular.Vehicle or vehicles[math.random(1, #vehicles)],
         CustomerName = customerName,
         CustomerGender = gender,
         Vip = vip,
+        Regular = regular ~= nil,
+        Referral = referral,
         Rush = rush,
         Complaint = complaint,
         ComplaintDefectId = complaintDefectId,
@@ -284,7 +328,8 @@ local function createJob(ownerUserId: number, specialization: string?)
             local ownerNow = Players:GetPlayerByUserId(ownerUserId)
             if current and current.Status == "Available" and ownerNow and eventSender then
                 local text = current.Vip
-                    and ("★ Cliente VIP! " .. tostring(current.CustomerName) .. " chegou com um " .. tostring(current.VehicleName) .. " e paga o DOBRO. Aceite na TV de ordens!")
+                    and ((current.Referral and "★ Indicação de freguês! " or "★ Cliente VIP! ") .. tostring(current.CustomerName) .. " chegou com um " .. tostring(current.VehicleName) .. " e paga o DOBRO. Aceite na TV de ordens!")
+                    or current.Regular and ("♥ Seu freguês " .. tostring(current.CustomerName) .. " voltou com o " .. tostring(current.VehicleName) .. " (paga +25%). Aceite na TV de ordens.")
                     or (tostring(current.CustomerName) .. " chegou com " .. tostring(current.VehicleName) .. ". Aceite na TV de ordens.")
                 eventSender(ownerNow, "Notice", { Message = text, Success = true })
             end
@@ -362,8 +407,9 @@ function WorkshopService.GetSnapshot(player: Player)
                     VehicleModel = VehicleService.GetModelName(job.VehicleName),
                     CustomerName = job.CustomerName,
                     Vip = job.Vip == true,
+                    Regular = job.Regular == true,
                     WaitSeconds = os.time() - job.CreatedAt, -- tempo desde a chegada (a paciência acaba em PatienceSeconds)
-                    PatienceSeconds = Config.CustomerPatienceSeconds,
+                    PatienceSeconds = Config.CustomerPatienceSeconds * (job.Regular and Config.RegularPatienceMultiplier or 1),
                     Complaint = job.Complaint,
                     Status = job.Status,
                     Diagnosed = job.Diagnosed,
@@ -1635,7 +1681,7 @@ function WorkshopService.Start()
                 -- Cliente que não foi atendido vai embora; ordens concluídas antigas saem da memória.
                 local age = os.time() - job.CreatedAt
                 local owner = Players:GetPlayerByUserId(job.OwnerUserId)
-                if job.Status == "Available" and age > Config.CustomerPatienceSeconds then
+                if job.Status == "Available" and age > Config.CustomerPatienceSeconds * (job.Regular and Config.RegularPatienceMultiplier or 1) then
                     Jobs[jobId] = nil
                     CustomerArrivalService.Depart(jobId)
                     if owner and eventSender then

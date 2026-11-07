@@ -53,8 +53,9 @@ Implementado nesta rodada:
   registrou → aceitou → diagnosticou → reparou).
 
 ## 4. Próximas mecânicas recomendadas (ordem)
-1. **Clientes fiéis e indicação**: quem dá 5★ entra numa lista de fregueses (até 8); 30% das chegadas vêm dela,
-   pagam +25% e têm +50% de paciência; na 3ª visita indicam um VIP garantido. (Relação → volta no D7.)
+1. ~~Clientes fiéis e indicação~~ **feito**: quem dá 5★ vira freguês (até 8 por oficina); 30% das chegadas são de
+   fregueses, que voltam com o mesmo carro, pagam +25%, têm +50% de paciência, chegam dizendo "Voltei! Só confio em
+   você" (♥ no nome) e, na 3ª visita, indicam um cliente VIP garantido.
 2. **Contratos de frota** na TV a cada 20 min ("Táxi Veloz: 3 pneus em 8 min", 500 moedas + 6 reputação); se não
    cumprir, um rival "pega" e o painel da praça anuncia.
 3. **Liga semanal do bairro** (reputação ganha na semana, faixas Bronze/Prata/Ouro com 300/800/2.000 moedas e selo

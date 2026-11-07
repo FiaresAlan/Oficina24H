@@ -90,6 +90,8 @@ local function makeDefaultData(): any
 		Codes = {}, -- códigos já usados
 		Achievements = {}, -- conquistas ganhas
 		Stats = { Repairs = 0, Earned = 0, Vip = 0, Perfect = 0, FirstTry = 0 }, -- contadores das conquistas
+		Regulars = {}, -- fregueses: { Name, Gender, Vehicle, Visits } (até Config.RegularsMax)
+		PendingVipReferral = false, -- um freguês indicou um VIP: o próximo cliente é VIP
 		Employees = 0, -- mecânicos NPC contratados
 	}
 end
@@ -240,6 +242,15 @@ local function reconcile(data: any): any
 	if type(data.Stats) ~= "table" then
 		data.Stats = {}
 	end
+	local cleanRegulars = {}
+	for _, r in ipairs(type(data.Regulars) == "table" and data.Regulars or {}) do
+		if type(r) == "table" and type(r.Name) == "string" and (r.Gender == "M" or r.Gender == "F") and type(r.Vehicle) == "string"
+			and Catalog.VehicleModels[r.Vehicle] and #cleanRegulars < Config.RegularsMax then
+			table.insert(cleanRegulars, { Name = string.sub(r.Name, 1, 30), Gender = r.Gender, Vehicle = r.Vehicle, Visits = math.max(1, math.floor(num(r.Visits))) })
+		end
+	end
+	data.Regulars = cleanRegulars
+	data.PendingVipReferral = data.PendingVipReferral == true
 	for _, key in ipairs({ "Repairs", "Earned", "Vip", "Perfect", "FirstTry" }) do
 		data.Stats[key] = math.max(0, math.floor(num(data.Stats[key])))
 	end

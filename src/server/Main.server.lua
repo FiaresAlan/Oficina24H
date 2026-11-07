@@ -58,6 +58,11 @@ if game:GetService("RunService"):IsStudio() then
                 EquipmentService.Sync(player, profile.Equipment)
             end
             return profile.WorkshopLevel
+        elseif command == "Regular" then
+            table.insert(profile.Regulars, { Name = "Rafael", Gender = "M", Vehicle = "Sedã azul", Visits = 2 })
+            return #profile.Regulars
+        elseif command == "Dispatch" and type(arg) == "number" then
+            return WorkshopService.DispatchCustomers(arg)
         elseif command == "AgeJobs" then
             return WorkshopService._ageJobsForTesting(player.UserId, 1000)
         elseif command == "Profile" then

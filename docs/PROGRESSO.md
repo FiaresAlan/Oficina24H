@@ -536,3 +536,5 @@ Detalhes em `docs/AUDITORIA_GERAL.md`. Resumo:
   com luz-guia, funil do guia no Analytics.
 - **Testes**: 815 verificações (nova suíte ProgressTest). Play no Studio: tela Metas abriu sozinha, diária, código,
   missão, Hora do Rush com aviso, faixa e clientes em dobro conferidos.
+- **Clientes fiéis** (fregueses): 5★ → freguês que volta com o mesmo carro, paga +25%, tem +50% de paciência e indica
+  um VIP na 3ª visita. Testado em Play: freguês "Rafael" voltou com o Sedã azul, paciência 450 s.

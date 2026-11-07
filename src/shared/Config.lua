@@ -51,6 +51,13 @@ Config.RivalMarketShare = 0.3
 Config.RushEverySeconds = 720
 Config.RushSeconds = 180
 Config.RushFirstDelaySeconds = 240
-Config.RushPayMultiplier = 1.5 -- em ~30% das chegadas os rivais entram na disputa pelo cliente
+Config.RushPayMultiplier = 1.5
+
+-- Clientes fiéis: quem dá 5 estrelas vira freguês e volta (lista de até 8 por oficina).
+Config.RegularsMax = 8
+Config.RegularChance = 0.3 -- parte das chegadas que é de fregueses (se houver)
+Config.RegularPayMultiplier = 1.25
+Config.RegularPatienceMultiplier = 1.5
+Config.RegularReferralVisit = 3 -- na 3ª visita o freguês indica um cliente VIP -- em ~30% das chegadas os rivais entram na disputa pelo cliente
 
 return Config

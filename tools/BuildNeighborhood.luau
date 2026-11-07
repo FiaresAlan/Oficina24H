@@ -43,15 +43,19 @@ local function place(name: string, x: number, z: number, dx: number, dz: number,
 	return m
 end
 
--- Carro estacionado (cópia do modelo de veículo do jogo, escala 3,5): frente do modelo = +Z.
+-- Carro estacionado (cópia do modelo de veículo do jogo): Raiz no chão, frente = LookVector, Casco com colisão.
 local function parkCar(name: string, x: number, z: number, frontDx: number, frontDz: number)
 	local template = Assets.Veiculos:FindFirstChild(name)
 	if not template then
 		return
 	end
 	local m = template:Clone()
-	m:ScaleTo(3.5)
-	m:PivotTo(CFrame.lookAt(Vector3.new(x, 0, z), Vector3.new(x - frontDx, 0, z - frontDz)))
+	local params = RaycastParams.new()
+	params.FilterType = Enum.RaycastFilterType.Exclude
+	params.FilterDescendantsInstances = { groups.Estacionados }
+	local hit = workspace:Raycast(Vector3.new(x, 12, z), Vector3.new(0, -20, 0), params)
+	local y = hit and hit.Position.Y or 0.4
+	m:PivotTo(CFrame.lookAt(Vector3.new(x, y, z), Vector3.new(x + frontDx, y, z + frontDz)))
 	m.Parent = groups.Estacionados
 end
 
@@ -126,7 +130,7 @@ place("Rua_Praca", -440, 130, 0, -1, "Rua", 0)
 place("Rua_Boasvindas", -425, -27, 0, 1, "Rua", 0.5)
 
 -- 5) Carros estacionados (modelos do jogo)
-local carNames = { "Veiculo_Hatch_A", "Veiculo_Sedan_A", "Veiculo_Picape_B", "Veiculo_Hatch_B", "Veiculo_SUV_A", "Veiculo_Sedan_D", "Veiculo_Picape_A", "Veiculo_Hatch_D", "Veiculo_Sedan_B", "Veiculo_SUV_B" }
+local carNames = { "Veiculo_Hatch_MG3", "Veiculo_Sedan_Civic", "Veiculo_Picape_S10", "Veiculo_SUV_RAV4", "Veiculo_Sedan_Fury", "Veiculo_Sedan_Camry", "Veiculo_SUV_Wrangler", "Veiculo_Hatch_AE86", "Veiculo_SUV_Evoque", "Veiculo_Hatch_Punto" }
 for i = 1, 5 do -- estacionamento público (95..165, 55..105)
 	parkCar(carNames[i], 104 + (i - 1) * 14, 66, 0, -1)
 	parkCar(carNames[i + 5], 104 + (i - 1) * 14, 94, 0, 1)
@@ -134,8 +138,8 @@ end
 for i = 1, 6 do -- estacionamento da galeria/lote leste
 	parkCar(carNames[(i % 10) + 1], 306 + (i - 1) * 14, 58, 0, -1)
 end
-parkCar("Veiculo_Picape_D", 200, -26.5 - 6, 1, 0) -- carro ao longo do meio-fio, norte (vaga na rua)
-parkCar("Veiculo_Sedan_C", 245, 40, 1, 0)
+parkCar("Veiculo_Picape_C1500", 200, -26.5 - 6, 1, 0) -- carro ao longo do meio-fio, norte (vaga na rua)
+parkCar("Veiculo_VIP_Charger", 245, 40, 1, 0)
 
 -- 6) Limpa árvores antigas que ficaram dentro dos novos prédios
 local removed = 0

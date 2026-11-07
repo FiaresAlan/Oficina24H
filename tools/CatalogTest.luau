@@ -218,6 +218,60 @@ do
 	check("progresso de nível: negativo vira zero", select(2, Catalog.BusinessProgress(-50)) == 0)
 	check("nomes de clientes definidos", #Catalog.CustomerNames >= 8)
 end
+
+-- Clientes: nome combina com o gênero (listas separadas, sem nome repetido entre elas) e há modelo para cada gênero
+do
+	local male = {}
+	for _, n in ipairs(Catalog.CustomerNamesMale) do male[n] = true end
+	local clash = 0
+	for _, n in ipairs(Catalog.CustomerNamesFemale) do if male[n] then clash += 1 end end
+	check("nomes masculinos e femininos não se repetem", clash == 0, clash)
+	local okPick = true
+	for _ = 1, 200 do
+		local gender, name = Catalog.PickCustomer()
+		local list = gender == "M" and Catalog.CustomerNamesMale or Catalog.CustomerNamesFemale
+		if (gender ~= "M" and gender ~= "F") or not table.find(list, name) then okPick = false end
+	end
+	check("PickCustomer: nome sempre da lista do gênero sorteado", okPick)
+	local clientes = game:GetService("ServerStorage"):FindFirstChild("Assets") and game.ServerStorage.Assets:FindFirstChild("Clientes")
+	local count = { M = 0, F = 0 }
+	for _, m in ipairs(clientes and clientes:GetChildren() or {}) do
+		local g = m:GetAttribute("Genero")
+		if count[g] then count[g] += 1 end
+		local scripts = 0
+		for _, d in ipairs(m:GetDescendants()) do if d:IsA("LuaSourceContainer") then scripts += 1 end end
+		check("NPC " .. m.Name .. ": sem scripts", scripts == 0, scripts)
+	end
+	check("há NPCs masculinos e femininos", count.M >= 3 and count.F >= 3, count.M .. "/" .. count.F)
+end
+
+-- Veículos: todo nome tem modelo no ServerStorage com Raiz, Casco (colisão), banco do motorista e tamanho que cabe na vaga
+do
+	local Layout = require(game.ReplicatedStorage.Shared.Layout)
+	local bay = Layout.Bays[1]
+	local folder = game.ServerStorage:FindFirstChild("Assets") and game.ServerStorage.Assets:FindFirstChild("Veiculos")
+	local all = table.clone(Catalog.VehicleNames)
+	for _, n in ipairs(Catalog.VipVehicleNames) do table.insert(all, n) end
+	for _, name in ipairs(all) do
+		local model = folder and folder:FindFirstChild(Catalog.VehicleModels[name] or "")
+		check("veículo " .. name .. ": modelo existe", model ~= nil, Catalog.VehicleModels[name])
+		if model then
+			local root = model.PrimaryPart
+			local hull = model:FindFirstChild("Casco")
+			check("veículo " .. name .. ": Raiz ancorada", root ~= nil and root.Name == "Raiz" and root.Anchored)
+			check("veículo " .. name .. ": Casco com colisão", hull ~= nil and hull:IsA("BasePart") and hull.CanCollide)
+			check("veículo " .. name .. ": banco do motorista", typeof(model:GetAttribute("Motorista")) == "Vector3")
+			local L, W = model:GetAttribute("Comprimento") or 99, model:GetAttribute("Largura") or 99
+			check("veículo " .. name .. ": cabe na vaga", L <= bay.d - 1 and W <= bay.w + 0.5, string.format("%.1f x %.1f", L, W))
+			local scripts = 0
+			for _, d in ipairs(model:GetDescendants()) do if d:IsA("LuaSourceContainer") then scripts += 1 end end
+			check("veículo " .. name .. ": sem scripts", scripts == 0, scripts)
+		end
+	end
+	for _, name in ipairs(Catalog.VipVehicleNames) do
+		check("VIP " .. name .. " não aparece para cliente comum", table.find(Catalog.VehicleNames, name) == nil)
+	end
+end
 sharedClone:Destroy()
 serverClone:Destroy()
 table.insert(results, string.format("defeitos=%d", defectCount))

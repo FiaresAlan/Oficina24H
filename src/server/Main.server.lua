@@ -7,6 +7,7 @@ local PlotService = require(script.Parent.PlotService)
 local VehicleService = require(script.Parent.VehicleService)
 local EquipmentService = require(script.Parent.EquipmentService)
 local WorkshopService = require(script.Parent.WorkshopService)
+local CustomerArrivalService = require(script.Parent.CustomerArrivalService)
 
 local remotesFolder = Instance.new("Folder")
 remotesFolder.Name = "OficinaRemotes"
@@ -86,6 +87,19 @@ do
         prompt:SetAttribute("OpensPanel", "shop")
     end
 end
+-- Painel "Melhores oficinas do servidor" na praça (Workspace.Bairro.Praca, ver tools/BuildPlaza.luau).
+task.spawn(function()
+    while true do
+        local bairro = workspace:FindFirstChild("Bairro")
+        local praca = bairro and bairro:FindFirstChild("Praca")
+        local label = praca and praca:FindFirstChild("Lista", true)
+        if label and label:IsA("TextLabel") then
+            label.Text = WorkshopService.TopWorkshopsText(5)
+        end
+        task.wait(15)
+    end
+end)
+
 WorkshopService.SetRatingNotifier(function(owner: Player, info: any)
     actionEvent:FireClient(owner, "Rated", info)
 end)
@@ -100,13 +114,18 @@ local lastInteractAt: {[number]: number} = {}
 Players.PlayerRemoving:Connect(function(player)
     lastInteractAt[player.UserId] = nil
 end)
-VehicleService.SetInteractionHandler(function(player: Player, jobId: string, kind: string)
+local function onPrompt(player: Player, jobId: string, kind: string)
     local nowClock = os.clock()
     if nowClock - (lastInteractAt[player.UserId] or 0) < 0.5 then return end
     lastInteractAt[player.UserId] = nowClock
     snapshotCache[player.UserId] = nil
     local ok, message = WorkshopService.Interact(player, jobId, kind)
     sendResult(player, ok, message)
+end
+VehicleService.SetInteractionHandler(onPrompt)
+-- "Atender" no cliente que espera na calçada = aceitar a ordem (mesmas validações do botão da lista).
+CustomerArrivalService.SetAcceptHandler(function(player: Player, jobId: string)
+    onPrompt(player, jobId, "Accept")
 end)
 
 -- GetSnapshot custa CPU (percorre ordens e ranking): resposta em cache por 0,4 s por jogador contra laço de InvokeServer.

@@ -135,8 +135,12 @@ local function createJob(ownerUserId: number, specialization: string?)
     local defectId = JobRules.PickDefectId(skillLevels, equipment, math.random, specialization)
     local defect = Catalog.Defects[defectId]
     -- O preço é fixado quando o cliente chega: mudar a tabela depois não altera ordens já abertas.
+    -- Cliente VIP (esportivo) paga o dobro da tabela.
+    local vip = math.random() < Catalog.VipChance
     local multiplier = profile and profile.PriceMultiplier or 1
-    local price = math.max(1, math.floor(Catalog.Services[defect.ServiceId].Reward * multiplier + 0.5))
+    local price = math.max(1, math.floor(Catalog.Services[defect.ServiceId].Reward * multiplier * (vip and Catalog.VipPayMultiplier or 1) + 0.5))
+    local gender, customerName = Catalog.PickCustomer()
+    local vehicles = vip and Catalog.VipVehicleNames or Catalog.VehicleNames
 
     -- Nem toda reclamação corresponde ao defeito real: em ~35% dos casos o cliente descreve o sintoma de outro
     -- problema (de outra especialização). O jogador precisa diagnosticar para saber o que realmente está errado.
@@ -161,8 +165,10 @@ local function createJob(ownerUserId: number, specialization: string?)
     Jobs[id] = {
         Id = id,
         OwnerUserId = ownerUserId,
-        VehicleName = Catalog.VehicleNames[math.random(1, #Catalog.VehicleNames)],
-        CustomerName = Catalog.CustomerNames[math.random(1, #Catalog.CustomerNames)],
+        VehicleName = vehicles[math.random(1, #vehicles)],
+        CustomerName = customerName,
+        CustomerGender = gender,
+        Vip = vip,
         Complaint = complaint,
         ComplaintDefectId = complaintDefectId,
         DefectId = defectId,
@@ -183,7 +189,10 @@ local function createJob(ownerUserId: number, specialization: string?)
             local current = Jobs[id]
             local ownerNow = Players:GetPlayerByUserId(ownerUserId)
             if current and current.Status == "Available" and ownerNow and eventSender then
-                eventSender(ownerNow, "Notice", { Message = tostring(current.CustomerName) .. " chegou com " .. tostring(current.VehicleName) .. ".", Success = true })
+                local text = current.Vip
+                    and ("★ Cliente VIP! " .. tostring(current.CustomerName) .. " chegou com um " .. tostring(current.VehicleName) .. " e paga o DOBRO. Atenda na calçada!")
+                    or (tostring(current.CustomerName) .. " chegou com " .. tostring(current.VehicleName) .. ". Atenda na calçada.")
+                eventSender(ownerNow, "Notice", { Message = text, Success = true })
             end
         end)
     end
@@ -234,12 +243,14 @@ function WorkshopService.GetSnapshot(player: Player)
 
     if workshop then
         for _, job in pairs(Jobs) do
-            if job.OwnerUserId == player.UserId and os.time() >= (job.ArrivesAt or 0) then -- cliente ainda na rua: ordem fechada
+            if job.OwnerUserId == player.UserId and os.time() >= (job.ArrivesAt or 0)
+                and not CustomerArrivalService.IsArriving(job.Id) then -- cliente ainda na rua: ordem fechada
                 local entry: any = {
                     Id = job.Id,
                     VehicleName = job.VehicleName,
                     VehicleModel = VehicleService.GetModelName(job.VehicleName),
                     CustomerName = job.CustomerName,
+                    Vip = job.Vip == true,
                     WaitSeconds = os.time() - job.CreatedAt, -- tempo desde a chegada (a paciência acaba em PatienceSeconds)
                     PatienceSeconds = Config.CustomerPatienceSeconds,
                     Complaint = job.Complaint,
@@ -316,6 +327,35 @@ function WorkshopService.GetSnapshot(player: Player)
     }
 end
 
+-- Texto do painel "Melhores oficinas do servidor" da praça: as 5 oficinas online por reputação (mesma regra do ranking).
+function WorkshopService.TopWorkshopsText(limit: number): string
+    local list: { any } = {}
+    for userId, shop in pairs(Workshops) do
+        local owner = Players:GetPlayerByUserId(userId)
+        local p = owner and DataService.Get(owner)
+        if p then
+            table.insert(list, {
+                Name = shop.Name,
+                Reputation = p.Reputation,
+                TotalEarned = p.TotalEarned or 0,
+                Level = Catalog.BusinessLevel(p.TotalEarned or 0),
+                Rating = CustomerRules.AverageRating(p.RatingSum or 0, p.RatingCount or 0),
+            })
+        end
+    end
+    if #list == 0 then
+        return "Abra sua oficina e apareça aqui!"
+    end
+    local lines = {}
+    for i, entry in ipairs(CustomerRules.Rank(list)) do
+        if i > limit then
+            break
+        end
+        table.insert(lines, string.format("%d. %s  ·  Nv %d  ·  %d rep  ·  %.1f★", i, entry.Name, entry.Level, entry.Reputation, entry.Rating))
+    end
+    return table.concat(lines, "\n")
+end
+
 function WorkshopService.GenerateCustomer(player: Player)
     local workshop = getWorkshop(player)
     if not workshop then return false, "Registre uma oficina primeiro." end
@@ -370,7 +410,7 @@ function WorkshopService.DeclineJob(player: Player, jobId: string)
         return false, "Ordem não encontrada."
     end
     if job.Status == "Available" then
-        if os.time() < (job.ArrivesAt or 0) then
+        if os.time() < (job.ArrivesAt or 0) or CustomerArrivalService.IsArriving(jobId) then
             return false, "O cliente ainda está chegando."
         end
         Jobs[jobId] = nil
@@ -394,14 +434,17 @@ function WorkshopService.AcceptJob(player: Player, jobId: string)
     if not job or job.OwnerUserId ~= player.UserId then
         return false, "Ordem não encontrada."
     end
-    if job.Status ~= "Available" or os.time() < (job.ArrivesAt or 0) then
+    if job.Status ~= "Available" or (os.time() < (job.ArrivesAt or 0) and not CustomerArrivalService.IsWaiting(jobId)) then
         return false, "Esta ordem não está disponível."
     end
+    if CustomerArrivalService.IsArriving(jobId) then
+        return false, "O cliente ainda está estacionando."
+    end
+    -- O VehicleService assume o carro e o cliente da calçada (CustomerArrivalService.Claim) e entra na vaga.
     local placed, placeMessage = VehicleService.Spawn(player, job)
     if not placed then
         return false, placeMessage
     end
-    CustomerArrivalService.Claim(jobId)
     job.Status = "InProgress"
     job.AcceptedAt = os.time()
     job.AssignedWorkerUserId = player.UserId
@@ -858,6 +901,9 @@ end
 -- Interação física com o veículo (ProximityPrompt). O servidor decide o que o jogador pode fazer.
 function WorkshopService.Interact(player: Player, jobId: string, kind: string): (boolean, string)
     local job = Jobs[jobId]
+    if kind == "Accept" then
+        return WorkshopService.AcceptJob(player, jobId) -- valida dono, status e chegada
+    end
     if not job or job.Status ~= "InProgress" then
         return false, "Ordem não está em andamento."
     end

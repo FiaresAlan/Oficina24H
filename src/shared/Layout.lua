@@ -6,11 +6,18 @@ local Layout = {}
 
 Layout.Interior = { x0 = -20, x1 = 20, z0 = 7, z1 = 33 }
 
--- Vagas dentro do prédio, sob o portão (aberto de x=-1 a x=21). Carros têm no máximo 6,5 x 16,1.
+-- Vagas dentro do prédio, sob o portão (aberto de x=-1 a x=21). Carros têm no máximo 9,4 x 20,5 (picapes).
+-- O carro entra de frente pela calçada e pelo pátio (corredor livre de x=-1 a x=21 entre a rua e o portão).
 Layout.Bays = {
-	{ x = 15, z = 19.5, w = 9, d = 18 },
-	{ x = 4, z = 19.5, w = 9, d = 18 },
+	{ x = 15, z = 19.5, w = 9, d = 22 },
+	{ x = 4, z = 19.5, w = 9, d = 22 },
 }
+
+-- Corredor por onde os carros dos clientes entram (nada pode ficar aqui: placas, vasos, colunas).
+Layout.Driveway = { x0 = -1.5, x1 = 21.5, z0 = -45, z1 = 8 }
+
+-- Placa e entrada do lote (fora do corredor dos carros).
+Layout.Sign = { x = -14, z = -40.5 }
 
 -- Espaços de equipamento: pequenos dentro do prédio (rente às paredes), grandes no pátio ao lado.
 Layout.Slots = {

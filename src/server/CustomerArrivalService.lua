@@ -1,46 +1,49 @@
 --!strict
--- CustomerArrivalService: chegada VISUAL do cliente. O carro entra pela rua e para no meio-fio em frente à oficina, o cliente
--- desce, atravessa a calçada com animação de caminhada e espera na entrada do lote. A ordem só ABRE (aparece na lista e pode
--- ser aceita) quando ele chega: WorkshopService usa o tempo estimado devolvido por Arrive() como `ArrivesAt`.
--- O carro da rua é só cenário (não dirige de verdade, sem colisão). Ao aceitar (Claim) o carro vai embora e o cliente "entra";
--- se for dispensado ou cansar de esperar (Depart) o cliente volta ao carro e os dois vão embora.
--- Servidor é a única autoridade; o cliente só vê objetos replicados (não existe NPC sem ordem).
+-- CustomerArrivalService: chegada do cliente. Ele vem DIRIGINDO o próprio carro pela rua, encosta no meio-fio em frente
+-- à oficina, desce e espera na calçada (balão com a reclamação e prompt "Atender"). A ordem só ABRE quando ele está na
+-- calçada: WorkshopService usa o tempo estimado devolvido por Arrive() como `ArrivesAt`.
+-- Ao aceitar, Claim() entrega carro e cliente ao VehicleService, que o leva de volta ao volante e entra na vaga.
+-- Se for dispensado ou cansar de esperar (Depart), ele volta ao carro e vai embora pela rua.
+-- O cliente nunca anda até a entrada do lote (nada de enroscar em placas): só contorna o próprio carro.
+-- Servidor é a única autoridade; o cliente só vê objetos replicados.
 local Players = game:GetService("Players")
-local TweenService = game:GetService("TweenService")
 local ServerStorage = game:GetService("ServerStorage")
 
 local Catalog = require(game:GetService("ReplicatedStorage").Shared.Catalog)
 local PlotService = require(script.Parent.PlotService)
-local VehicleService = require(script.Parent.VehicleService)
 local NpcKit = require(script.Parent.NpcKit)
+local LotPath = require(script.Parent.LotPath)
 
 local CustomerArrivalService = {}
 
-local ROAD_TOP = 0.4 -- topo do asfalto
-local LANE_Z = 10 -- faixa do lado do lote (a rua principal vai de z=-20 a z=20)
-local SIDEWALK_Z = 24
-local DRIVE_DISTANCE = 130
-local DRIVE_SECONDS = 3.5
-local CAR_FLIP = math.pi -- os modelos novos têm a frente em +Z; com a rotação de 90° isso daria frente para leste, e o carro chega indo para oeste
-local SLOT_SHIFT = { 0, 20, -20 } -- até 3 clientes por oficina, lado a lado no meio-fio
+export type Handoff = {
+	Car: Model,
+	Npc: Model?,
+	Animator: NpcKit.NpcAnimator?,
+	SlotX: number,
+	Board: { Vector3 }?, -- caminho da calçada até a porta do motorista (nil = já está ao volante)
+}
 
 type State = {
 	JobId: string,
 	OwnerUserId: number,
 	Slot: number,
+	SlotX: number,
+	Frame: CFrame,
 	Phase: string, -- "Arriving" | "Waiting"
 	Car: Model?,
-	Root: BasePart?,
 	Npc: Model?,
 	Animator: NpcKit.NpcAnimator?,
-	ParkCf: CFrame,
-	AwayCf: CFrame,
-	ExitPoint: Vector3,
-	DoorPoint: Vector3,
-	Interior: Vector3, -- direção do interior do lote (para o cliente olhar para dentro)
+	Job: any,
 }
 
 local states: { [string]: State } = {}
+local acceptHandler: ((Player, string) -> ())? = nil
+
+-- Quem atende pelo prompt do cliente na calçada (WorkshopService.AcceptJob valida tudo).
+function CustomerArrivalService.SetAcceptHandler(handler: (Player, string) -> ())
+	acceptHandler = handler
+end
 
 local function folder(): Folder
 	local f = workspace:FindFirstChild("Arrivals")
@@ -53,12 +56,32 @@ local function folder(): Folder
 	return f :: Folder
 end
 
+-- Carros que já saíram do controle desta cena mas ainda estão parados no meio-fio (cliente voltando ao volante).
+local lingering: { [string]: { Car: Model, At: Vector3 } } = {}
+
+local function linger(state: State)
+	local car = state.Car
+	if car and car.PrimaryPart then
+		lingering[state.OwnerUserId .. ":" .. state.Slot] = { Car = car, At = car.PrimaryPart.Position }
+	end
+end
+
 local function freeSlot(ownerUserId: number): number?
-	for slot = 1, #SLOT_SHIFT do
+	for slot = 1, #LotPath.SlotX do
 		local used = false
 		for _, state in pairs(states) do
 			if state.OwnerUserId == ownerUserId and state.Slot == slot then
 				used = true
+			end
+		end
+		local key = ownerUserId .. ":" .. slot
+		local still = lingering[key]
+		if still then
+			local root = still.Car.PrimaryPart
+			if still.Car.Parent and root and (root.Position - still.At).Magnitude < 12 then
+				used = true -- o carro ainda não saiu da vaga do meio-fio
+			else
+				lingering[key] = nil
 			end
 		end
 		if not used then
@@ -68,186 +91,241 @@ local function freeSlot(ownerUserId: number): number?
 	return nil
 end
 
-local function buildCar(template: Model, cf: CFrame): (Model, BasePart)
-	local car = template:Clone()
-	car:ScaleTo(VehicleService.Scale)
-	local _, size = car:GetBoundingBox()
-	local yaw = (size.Z > size.X and math.rad(90) or 0) + CAR_FLIP -- eixo longo ao longo da rua (X)
-	car:PivotTo(CFrame.Angles(0, yaw, 0))
-	local boxCf, boxSize = car:GetBoundingBox()
-	car:PivotTo(car:GetPivot() + Vector3.new(-boxCf.Position.X, -(boxCf.Position.Y - boxSize.Y / 2), -boxCf.Position.Z))
-	local root = Instance.new("Part")
-	root.Name = "ArrivalRoot"
-	root.Anchored = true
-	root.CanCollide, root.CanQuery, root.CanTouch = false, false, false
-	root.Transparency = 1
-	root.Size = Vector3.new(1, 1, 1)
-	root.CFrame = CFrame.new(0, 0, 0)
-	root.Parent = car
-	for _, d in ipairs(car:GetDescendants()) do
-		if d:IsA("BasePart") and d ~= root then
-			d.Anchored = false
-			d.CanCollide, d.CanQuery, d.CanTouch = false, false, false
-			local weld = Instance.new("WeldConstraint")
-			weld.Part0 = root
-			weld.Part1 = d
-			weld.Parent = root
-		end
+function CustomerArrivalService.Template(vehicleName: string): Model?
+	local assets = ServerStorage:FindFirstChild("Assets")
+	local vehicles = assets and assets:FindFirstChild("Veiculos")
+	local template = vehicles and vehicles:FindFirstChild(Catalog.VehicleModels[vehicleName] or "")
+	if template and template:IsA("Model") and template.PrimaryPart then
+		return template
 	end
-	car.PrimaryPart = root
-	car:PivotTo(cf)
-	return car, root
+	return nil
 end
 
-local function tweenRoot(root: BasePart, target: CFrame, seconds: number, style: Enum.EasingStyle, direction: Enum.EasingDirection)
-	local tween = TweenService:Create(root, TweenInfo.new(seconds, style, direction), { CFrame = target })
-	tween:Play()
-	tween.Completed:Wait()
+-- Pontos (mundo) da porta do motorista e do caminho até a calçada, para o carro parado no meio-fio.
+-- O carro estacionado aponta para +X do lote; o lado direito do carro (+X da Raiz) é o da calçada.
+local function doorPoint(car: Model): (Vector3, number)
+	local root = car.PrimaryPart :: BasePart
+	local seat = car:GetAttribute("Motorista")
+	local seatX = typeof(seat) == "Vector3" and seat.X or -1.5
+	local seatZ = typeof(seat) == "Vector3" and seat.Z or 0
+	local width = tonumber(car:GetAttribute("Largura")) or 8
+	local side = seatX >= 0 and 1 or -1
+	return root.CFrame * Vector3.new(side * (width / 2 + 1.6), 0, seatZ), side
 end
 
-local function destroyVisuals(state: State)
-	if state.Npc then
-		state.Npc:Destroy()
-		state.Npc = nil
+local function sidewalkRoute(state: State, car: Model): { Vector3 }
+	local root = car.PrimaryPart :: BasePart
+	local door, side = doorPoint(car)
+	local width = tonumber(car:GetAttribute("Largura")) or 8
+	local length = tonumber(car:GetAttribute("Comprimento")) or 18
+	local route = { door }
+	if side < 0 then
+		-- motorista do lado da rua: contorna pela frente do carro
+		table.insert(route, root.CFrame * Vector3.new(-(width / 2 + 1.6), 0, -(length / 2 + 2.2)))
+		table.insert(route, root.CFrame * Vector3.new(width / 2 + 1.6, 0, -(length / 2 + 2.2)))
 	end
-	if state.Car then
-		state.Car:Destroy()
-		state.Car = nil
+	table.insert(route, LotPath.Ground(state.Frame, state.SlotX + 2, LotPath.CurbZ))
+	for i, p in ipairs(route) do
+		local local3 = state.Frame:PointToObjectSpace(p)
+		route[i] = LotPath.Ground(state.Frame, local3.X, local3.Z)
 	end
+	return route
 end
 
-local function driveAwayAndDestroy(state: State)
-	local car, root = state.Car, state.Root
-	state.Car, state.Root = nil, nil
-	if not car or not root then
+local function reverseRoute(route: { Vector3 }): { Vector3 }
+	local out = {}
+	for i = #route, 1, -1 do
+		table.insert(out, route[i])
+	end
+	return out
+end
+
+local function addAcceptPrompt(state: State, npc: Model)
+	local anchor = npc:FindFirstChild("HumanoidRootPart")
+	if not anchor or not anchor:IsA("BasePart") then
 		return
 	end
-	task.spawn(function()
-		if root.Parent then
-			tweenRoot(root, state.AwayCf, DRIVE_SECONDS - 0.5, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+	local prompt = Instance.new("ProximityPrompt")
+	prompt.Name = "Atender"
+	prompt.ActionText = "Atender"
+	prompt.ObjectText = tostring(state.Job.CustomerName)
+	prompt.HoldDuration = 0.3
+	prompt.MaxActivationDistance = 14
+	prompt.RequiresLineOfSight = false
+	prompt.KeyboardKeyCode = Enum.KeyCode.E
+	prompt.Style = Enum.ProximityPromptStyle.Custom -- o HUD desenha (e só para o dono)
+	prompt:SetAttribute("OwnerUserId", state.OwnerUserId)
+	prompt.Parent = anchor
+	prompt.Triggered:Connect(function(player: Player)
+		if acceptHandler and player.UserId == state.OwnerUserId and states[state.JobId] == state then
+			acceptHandler(player, state.JobId)
 		end
-		car:Destroy()
 	end)
 end
 
--- Começa a chegada de um cliente (job: Id, OwnerUserId, VehicleName, CustomerName, Complaint).
--- Retorna os segundos até ele chegar à entrada (0 = sem cena: o cliente conta como já chegado).
+local function removePrompt(npc: Model?)
+	local anchor = npc and npc:FindFirstChild("HumanoidRootPart")
+	local prompt = anchor and anchor:FindFirstChild("Atender")
+	if prompt then
+		prompt:Destroy()
+	end
+end
+
+-- Clona o carro com o cliente ao volante, pronto para andar (Raiz em `cf`).
+function CustomerArrivalService.BuildCar(job: any, cf: CFrame, name: string): (Model?, Model?, NpcKit.NpcAnimator?)
+	local template = CustomerArrivalService.Template(job.VehicleName)
+	if not template then
+		return nil, nil, nil
+	end
+	local car = template:Clone()
+	car.Name = name
+	car:PivotTo(cf)
+	car:SetAttribute("JobId", job.Id)
+	car.Parent = folder()
+	local npc = NpcKit.Clone(job.CustomerGender, tostring(job.CustomerName), "Cliente_" .. job.Id)
+	local animator: NpcKit.NpcAnimator? = nil
+	if npc then
+		npc:SetAttribute("JobId", job.Id)
+		npc:SetAttribute("OwnerUserId", job.OwnerUserId)
+		npc.Parent = car
+		animator = NpcKit.Animate(npc)
+		NpcKit.SeatIn(npc, car, animator)
+		NpcKit.NameTag(npc, tostring(job.CustomerName), job.Vip == true)
+	end
+	return car, npc, animator
+end
+
+-- Começa a chegada de um cliente (job: Id, OwnerUserId, VehicleName, CustomerName, CustomerGender, Complaint, Vip).
+-- Retorna os segundos até ele estar na calçada (0 = sem cena: o cliente conta como já chegado).
 function CustomerArrivalService.Arrive(job: any): number
 	local owner = Players:GetPlayerByUserId(job.OwnerUserId)
 	local plot = owner and PlotService.GetPlot(owner)
-	local entry = plot and plot:FindFirstChild("Entry")
-	if not plot or not entry or not entry:IsA("BasePart") or states[job.Id] then
+	local frame = plot and LotPath.Frame(plot)
+	if not frame or states[job.Id] then
 		return 0
 	end
 	local slot = freeSlot(job.OwnerUserId)
-	local assets = ServerStorage:FindFirstChild("Assets")
-	local vehicles = assets and assets:FindFirstChild("Veiculos")
-	local template = vehicles and vehicles:FindFirstChild(Catalog.VehicleModels[job.VehicleName] or "Veiculo_Hatch")
-	if not slot or not template or not template:IsA("Model") or not NpcKit.Pick(tostring(job.CustomerName)) then
+	if not slot or not CustomerArrivalService.Template(job.VehicleName) then
 		return 0
 	end
-
-	local dir = entry.Position.Z >= 0 and 1 or -1 -- lado do lote em relação à rua (z do lote tem o mesmo sinal)
-	local shift = SLOT_SHIFT[slot]
-	local parkX = entry.Position.X + shift
-	local parkCf = CFrame.new(parkX, ROAD_TOP, dir * LANE_Z)
-	local fromX = parkX + DRIVE_DISTANCE
+	local slotX = LotPath.SlotX[slot]
+	local path = LotPath.Arrival(frame, slotX)
 	local state: State = {
 		JobId = job.Id,
 		OwnerUserId = job.OwnerUserId,
 		Slot = slot,
+		SlotX = slotX,
+		Frame = frame,
 		Phase = "Arriving",
-		ParkCf = parkCf,
-		AwayCf = CFrame.new(parkX - DRIVE_DISTANCE, ROAD_TOP, dir * LANE_Z),
-		ExitPoint = Vector3.new(parkX, ROAD_TOP, dir * (LANE_Z + 4.5)),
-		DoorPoint = Vector3.new(entry.Position.X + shift, entry.Position.Y + entry.Size.Y / 2, entry.Position.Z - dir * 2),
-		Interior = Vector3.new(0, 0, dir),
+		Job = job,
 	}
 	states[job.Id] = state
-
-	local walkDistance = ((state.DoorPoint - state.ExitPoint) * Vector3.new(1, 0, 1)).Magnitude
-	local eta = DRIVE_SECONDS + 0.6 + walkDistance / NpcKit.WalkSpeed + 0.4
+	local eta = LotPath.Duration(path, LotPath.StreetSpeed) + 3.5
 
 	task.spawn(function()
-		local car, root = buildCar(template, CFrame.new(fromX, ROAD_TOP, dir * LANE_Z))
-		car.Name = "CarroRua_" .. job.Id
-		car.Parent = folder()
-		state.Car, state.Root = car, root
-		tweenRoot(root, parkCf, DRIVE_SECONDS, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
-		task.wait(0.6)
+		local first, second = path[1], path[2]
+		local car, npc, animator = CustomerArrivalService.BuildCar(job, CFrame.lookAt(first, second), "CarroRua_" .. job.Id)
+		if not car then
+			states[job.Id] = nil
+			return
+		end
+		state.Car, state.Npc, state.Animator = car, npc, animator
+		LotPath.Drive(car.PrimaryPart :: BasePart, path, LotPath.StreetSpeed)
 		if states[job.Id] ~= state then
 			return -- cancelado durante a chegada (quem cancelou já cuidou do que existia)
 		end
-
-		local npc = NpcKit.Clone(tostring(job.CustomerName), "ClienteRua_" .. job.Id)
-		if not npc then
+		if npc then
+			task.wait(0.4)
+			if states[job.Id] ~= state or not car.Parent or not car.PrimaryPart then
+				return
+			end
+			local route = sidewalkRoute(state, car)
+			npc.Parent = folder()
+			NpcKit.Unseat(npc, route[1], route[2] or route[1])
+			NpcKit.WalkPath(npc, route, animator)
+			if states[job.Id] ~= state or not npc.Parent then
+				return
+			end
+			local feet = route[#route]
+			NpcKit.Place(npc, feet, feet + state.Frame.LookVector * -6) -- olha para a oficina (+Z do lote)
+			NpcKit.ServerOwned(npc)
+			if animator then
+				animator.Idle()
+			end
 			state.Phase = "Waiting"
-			return
-		end
-		NpcKit.Place(npc, state.ExitPoint, state.DoorPoint)
-		npc.Parent = folder()
-		NpcKit.ServerOwned(npc)
-		state.Npc = npc
-		local animator = NpcKit.Animate(npc)
-		state.Animator = animator
-		animator.Walk()
-		local arrived = NpcKit.WalkTo(npc, state.DoorPoint, 14)
-		if states[job.Id] ~= state or not npc.Parent then
-			return
-		end
-		if not arrived then
-			NpcKit.Place(npc, state.DoorPoint, state.DoorPoint + state.Interior) -- travou: teletransporta (a ordem já abriu)
+			NpcKit.Say(npc, tostring(job.Complaint or "Olá! Pode olhar meu carro?"), nil, job.Vip and Color3.fromRGB(255, 200, 40) or nil)
+			addAcceptPrompt(state, npc)
 		else
-			NpcKit.Place(npc, state.DoorPoint, state.DoorPoint + state.Interior)
+			state.Phase = "Waiting"
 		end
-		animator.Idle()
-		NpcKit.ServerOwned(npc)
-		state.Phase = "Waiting"
-		NpcKit.Say(npc, tostring(job.Complaint or "Olá! Pode olhar meu carro?"), nil)
 	end)
 	return eta
 end
 
--- O jogador aceitou a ordem: o carro da rua vai embora (o carro entra na vaga) e o cliente entra na oficina.
-function CustomerArrivalService.Claim(jobId: string)
+-- O jogador aceitou a ordem: entrega carro e cliente (que ainda está na calçada) para entrar na vaga.
+-- Retorna nil se a cena ainda não terminou (o VehicleService então traz o carro direto da rua).
+function CustomerArrivalService.Claim(jobId: string): Handoff?
 	local state = states[jobId]
 	if not state then
-		return
+		return nil
 	end
 	states[jobId] = nil
-	if state.Npc then
-		NpcKit.FadeOut(state.Npc, 0.5)
-		state.Npc = nil
+	removePrompt(state.Npc)
+	local car = state.Car
+	if state.Phase ~= "Waiting" or not car or not car.Parent then
+		if state.Npc then
+			state.Npc:Destroy()
+		end
+		if car then
+			car:Destroy()
+		end
+		return nil
 	end
-	driveAwayAndDestroy(state)
+	linger(state)
+	local npc = state.Npc
+	local board = nil
+	if npc and npc.Parent then
+		board = reverseRoute(sidewalkRoute(state, car)) -- caminho de volta ao volante (quem recebe faz a caminhada)
+	end
+	return { Car = car, Npc = npc, Animator = state.Animator, SlotX = state.SlotX, Board = board }
 end
 
--- Dispensado ou cansou de esperar: o cliente volta ao carro e os dois vão embora.
+-- Dispensado ou cansou de esperar: o cliente volta ao carro e vai embora pela rua.
 function CustomerArrivalService.Depart(jobId: string)
 	local state = states[jobId]
 	if not state then
 		return
 	end
 	states[jobId] = nil
-	local npc = state.Npc
-	if not npc or state.Phase ~= "Waiting" then
+	removePrompt(state.Npc)
+	local car, npc = state.Car, state.Npc
+	if state.Phase ~= "Waiting" then
+		-- ainda chegando: o laço de Arrive move o carro; some na hora para não haver dois comandos no mesmo carro
 		if npc then
-			NpcKit.FadeOut(npc, 0.4)
+			npc:Destroy()
 		end
-		state.Npc = nil
-		driveAwayAndDestroy(state)
+		if car then
+			car:Destroy()
+		end
 		return
 	end
-	state.Npc = nil
+	linger(state)
 	task.spawn(function()
-		NpcKit.Say(npc, "Que pena... até mais!", 2.5)
-		local animator = state.Animator
-		if animator then
-			animator.Walk()
+		if npc and npc.Parent and car and car.Parent then
+			NpcKit.Say(npc, "Que pena... até mais!", 2.5)
+			NpcKit.WalkPath(npc, reverseRoute(sidewalkRoute(state, car)), state.Animator)
+			if npc.Parent then
+				npc.Parent = car
+				NpcKit.SeatIn(npc, car, state.Animator)
+			end
 		end
-		NpcKit.WalkTo(npc, state.ExitPoint, 8)
-		NpcKit.FadeOut(npc, 0.4)
-		driveAwayAndDestroy(state)
+		if car and car.Parent then
+			LotPath.Drive(car.PrimaryPart :: BasePart, LotPath.LeaveCurb(state.Frame, state.SlotX), LotPath.StreetSpeed)
+			car:Destroy()
+		end
+		if npc and npc.Parent then
+			npc:Destroy()
+		end
 	end)
 end
 
@@ -256,9 +334,26 @@ function CustomerArrivalService.Clear(ownerUserId: number)
 	for jobId, state in pairs(states) do
 		if state.OwnerUserId == ownerUserId then
 			states[jobId] = nil
-			destroyVisuals(state)
+			if state.Npc then
+				state.Npc:Destroy()
+			end
+			if state.Car then
+				state.Car:Destroy()
+			end
 		end
 	end
+end
+
+-- O cliente já está na calçada esperando (a ordem pode ser aceita mesmo que o relógio de ArrivesAt arredonde para cima).
+function CustomerArrivalService.IsWaiting(jobId: string): boolean
+	local state = states[jobId]
+	return state ~= nil and state.Phase == "Waiting"
+end
+
+-- O cliente ainda está chegando (dirigindo ou descendo do carro): a ordem não pode ser aceita nem dispensada.
+function CustomerArrivalService.IsArriving(jobId: string): boolean
+	local state = states[jobId]
+	return state ~= nil and state.Phase ~= "Waiting"
 end
 
 function CustomerArrivalService.Count(): number

@@ -1,39 +1,29 @@
 --!strict
--- CustomerNpcService: cliente NPC físico ligado a uma ordem ACEITA. Fica ao lado do veículo na vaga (modelos do assistente 3D),
--- conta o problema num balão e, enquanto o diagnóstico está pendente, abre a conversa (diagnóstico) pelo prompt "Conversar".
--- Some quando a ordem acaba (concluída, dispensada, abandonada, expirada, dono saiu). A chegada pela rua é do
--- CustomerArrivalService; ferramentas comuns (modelo, animação, fala) ficam no NpcKit. Servidor é a única autoridade;
--- não existe NPC sem veículo, então não há duplicata ao entrar/sair.
+-- CustomerNpcService: cliente NPC ligado a uma ordem ACEITA. Depois de estacionar o carro na vaga (VehicleService), ele
+-- desce e fica atrás do carro, perto do portão, conta o problema num balão e, enquanto o diagnóstico está pendente,
+-- abre a conversa (diagnóstico) pelo prompt "Conversar". Quando a ordem acaba, Take() o devolve ao VehicleService, que o
+-- põe de volta ao volante e tira o carro da vaga. Ferramentas comuns (modelo, animação, fala) ficam no NpcKit.
+-- Servidor é a única autoridade; não existe NPC sem veículo, então não há duplicata ao entrar/sair.
 local NpcKit = require(script.Parent.NpcKit)
 
 local CustomerNpcService = {}
 
-local byJob: { [string]: Model } = {}
+type Entry = { Npc: Model, Animator: NpcKit.NpcAnimator? }
+
+local byJob: { [string]: Entry } = {}
 local talkHandler: ((Player, string) -> ())? = nil
 
 function CustomerNpcService.SetTalkHandler(handler: (Player, string) -> ())
 	talkHandler = handler
 end
 
--- Cliente aparece ao lado do carro, de frente para ele.
-function CustomerNpcService.Spawn(car: Model, job: any, ownerUserId: number)
+-- Passa a cuidar de um cliente que já está em pé ao lado do carro estacionado.
+function CustomerNpcService.Adopt(npc: Model, animator: NpcKit.NpcAnimator?, job: any, ownerUserId: number)
 	if byJob[job.Id] then
 		return
 	end
-	local npc = NpcKit.Clone(tostring(job.CustomerName or job.Id), "Cliente_" .. job.Id)
-	if not npc then
-		return -- sem modelo: o jogo segue sem o NPC (a interface continua funcionando)
-	end
-	local carCf, carSize = car:GetBoundingBox()
-	local floorY = carCf.Position.Y - carSize.Y / 2
-	local side = carCf.RightVector
-	side = Vector3.new(side.X, 0, side.Z).Unit
-	local carHalfWidth = math.min(carSize.X, carSize.Z) / 2
-	local feet = Vector3.new(carCf.Position.X, floorY, carCf.Position.Z) + side * (carHalfWidth + 3.2)
-	NpcKit.Place(npc, feet, Vector3.new(carCf.Position.X, floorY, carCf.Position.Z))
 	npc:SetAttribute("JobId", job.Id)
 	npc:SetAttribute("OwnerUserId", ownerUserId)
-
 	local anchor = npc:FindFirstChild("HumanoidRootPart")
 	if anchor and anchor:IsA("BasePart") then
 		local prompt = Instance.new("ProximityPrompt")
@@ -45,6 +35,7 @@ function CustomerNpcService.Spawn(car: Model, job: any, ownerUserId: number)
 		prompt.RequiresLineOfSight = false
 		prompt.KeyboardKeyCode = Enum.KeyCode.E
 		prompt.Style = Enum.ProximityPromptStyle.Custom -- o HUD desenha o prompt (e só mostra para o dono)
+		prompt:SetAttribute("OwnerUserId", ownerUserId)
 		prompt.Enabled = not job.Diagnosed
 		prompt.Parent = anchor
 		prompt.Triggered:Connect(function(player: Player)
@@ -53,47 +44,50 @@ function CustomerNpcService.Spawn(car: Model, job: any, ownerUserId: number)
 			end
 		end)
 	end
-	npc.Parent = workspace:FindFirstChild("Vehicles") or workspace
-	NpcKit.ServerOwned(npc)
-	NpcKit.Animate(npc).Idle()
-	byJob[job.Id] = npc
-	NpcKit.Say(npc, tostring(job.Complaint or "Olá! Pode olhar meu carro?"), nil)
+	if animator then
+		animator.Idle()
+	end
+	byJob[job.Id] = { Npc = npc, Animator = animator }
+	NpcKit.Say(npc, tostring(job.Complaint or "Olá! Pode olhar meu carro?"), nil, job.Vip and Color3.fromRGB(255, 200, 40) or nil)
 end
 
 -- Diagnóstico concluído: o cliente para de pedir conversa e fala da próxima etapa.
 function CustomerNpcService.SetDiagnosed(jobId: string, diagnosed: boolean)
-	local npc = byJob[jobId]
-	if not npc then
+	local entry = byJob[jobId]
+	if not entry then
 		return
 	end
-	local root = npc:FindFirstChild("HumanoidRootPart")
+	local root = entry.Npc:FindFirstChild("HumanoidRootPart")
 	local prompt = root and root:FindFirstChild("Talk")
 	if prompt and prompt:IsA("ProximityPrompt") then
 		prompt.Enabled = not diagnosed
 	end
 	if diagnosed then
-		NpcKit.Say(npc, "Entendi! Pode consertar.", 6)
+		NpcKit.Say(entry.Npc, "Entendi! Pode consertar.", 6)
 	end
 end
 
--- O cliente vai embora: despede-se e desaparece suavemente (sem rastro; sem NPC órfão).
-function CustomerNpcService.Leave(jobId: string)
-	local npc = byJob[jobId]
-	if not npc then
-		return
+-- Devolve o cliente (sem prompt) para quem vai levá-lo embora; nil se não houver.
+function CustomerNpcService.Take(jobId: string): (Model?, NpcKit.NpcAnimator?)
+	local entry = byJob[jobId]
+	if not entry then
+		return nil, nil
 	end
 	byJob[jobId] = nil
-	local root = npc:FindFirstChild("HumanoidRootPart")
+	local root = entry.Npc:FindFirstChild("HumanoidRootPart")
 	local prompt = root and root:FindFirstChild("Talk")
 	if prompt then
 		prompt:Destroy()
 	end
-	NpcKit.Say(npc, "Até mais!", nil)
-	task.delay(1.2, function()
-		if npc.Parent then
-			NpcKit.FadeOut(npc, 0.8)
-		end
-	end)
+	return entry.Npc, entry.Animator
+end
+
+-- O cliente some sem animação (dono saiu).
+function CustomerNpcService.Leave(jobId: string)
+	local npc = CustomerNpcService.Take(jobId)
+	if npc then
+		npc:Destroy()
+	end
 end
 
 function CustomerNpcService.Count(): number

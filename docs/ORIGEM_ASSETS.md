@@ -74,3 +74,39 @@ Todos tratados no Blender (`pipeline/blender_process_prop.py`), enviados ao Robl
 
 Os modelos do Shuriken foram feitos com IA e o autor não promete proteção por direitos autorais nem exclusividade.
 Ids dos 57 assets enviados: `pipeline/prop_ids.json` (e dos 14 veículos: `pipeline/asset_ids.json`).
+
+
+## Esportivo vermelho (modelo fornecido pelo Product Owner, 2026-11-07)
+
+- **Arquivo:** `Corvette_C7_FBX.rar` (Downloads do PO), contém `Corvette_PBR.fbx` (251 MB, 3,69 milhões de triângulos úteis, 83 texturas de 4096 px, 148 peças).
+- **Origem e licença: NÃO CONSTAM no arquivo. A CONFIRMAR pelo PO** (de onde foi baixado e sob qual licença). Fica fora do repositório (`_assets_work`).
+- **Marca:** o modelo é um Chevrolet Corvette C7. Removidos: `Logo`, `Front_Logo`, `Rear_Logo`, `Corvette`, `The_Stingray`, `NumberR` (placa); o nome no jogo é "Esportivo vermelho". O formato do carro ainda é reconhecível como esportivo americano (silhueta), mas sem nome nem emblema.
+- **Tratamento (`pipeline/blender_process_car.py` + `corvette_selection.json`, skills fwjelaa-asset-import, blender-game-optimization e blender-asset-qa):** peças invisíveis descartadas (parafusos, discos, pinças, escapamento), cor média por material no lugar das texturas de 4096 px, tinta principal em vermelho, redução para ~23,7 mil triângulos (15 partes, 22 materiais), limpeza de vértices duplicados e faces degeneradas. Arquivo final de 2,8 MB. Asset Roblox `103666878891556`.
+- **QA (perfil Roblox):** passou nas checagens de escala, normais, material e peças soltas depois da limpeza. Aceitos com motivo: UV de área zero (a textura é cor lisa de 4×4) e algumas dezenas de pares de triângulos coplanares entre lente e cromagem (z-fighting leve, a ~23 mil triângulos totais).
+- **Limite:** 23,7 mil triângulos é o dobro dos outros carros (~12 mil); com 12 carros na tela pesa mais. Se o desempenho no celular pedir, reduzir para ~12 mil.
+
+## Veículos semi-realistas da Creator Store (2026-11-07, revisão geral)
+
+Pedido do Product Owner: carros semi-realistas **com as logos e o brilho originais**, removendo **só a placa**. Os 14 carros sem marca anteriores saíram do jogo; os novos ficam em `ServerStorage/Assets/Veiculos` (o arquivo do place, fora do GitHub). Todos são modelos gratuitos e públicos da Creator Store; scripts, sons, luzes, eventos remotos (`LightsEvent`), câmeras de miniatura, assentos e peças invisíveis foram removidos, e as placas foram apagadas pelo nome (`plate`, `placa`, `licen`, `numberp`, `regist`). O Punto mantém um retângulo branco **sem texto** onde ficava a placa (está na textura única do modelo).
+
+| Asset (id) | Autor | Carros usados (nome no jogo) |
+|---|---|---|
+| Semi-Realistic Car Pack (9432856072) | SubXero_X | AE86 (Clássico japonês), Camry (Sedã branco), Fury 1958 (Clássico rabo-de-peixe), S-10 (Picape antiga), Silverado 454 SS (Picape esportiva), Silverado C1500 (Picape de trabalho), Sierra K1500 (Picape vermelha), Supra (Esportivo turbo), Skyline R34 (Esportivo de pista), Charger 1969 (Muscle car V8), Challenger Hellcat (Muscle car laranja), Silvia S14 (Esportivo drift) |
+| MG3 (1396376221) | xriaou | Hatch amarelo |
+| Fiat Punto 2009-2012 (107224308331830) | Mirosyaplayer | Hatch preto |
+| Honda Civic Realistic Car (9747931348) | Kubston9868 | Sedã azul |
+| Land Rover Evoque Couple (12424932349) | crowxfflies | SUV preto |
+| 2017 Chevrolet Traverse LT (15161873096) | CharlieKins2323 | SUV familiar |
+| ND Cars: Toyota RAV4/Toyota Izoa (11537579368) | JemuelCorsino | SUV compacto, Crossover |
+| 2011 Jeep Wrangler 70th Anniversary (6934203358) | 7elts | Jipe |
+
+Normalização (no Studio): frente pela posição das rodas, escala para 18,5 studs (picapes 20,5; largura até 9,4), PrimaryPart `Raiz` no chão (LookVector = frente), peças soldadas, `Casco` invisível com colisão e atributos `Categoria`, `VIP`, `Nome`, `Motorista` (banco), `Comprimento`, `Largura`, `Altura`. O Esportivo vermelho (Corvette do PO) foi convertido para a mesma convenção. Descartado: o Ford Focus do pacote (era viatura de polícia com letreiro).
+
+**Atenção:** os nomes de modelo/marca aparecem nos logos dos carros por decisão do PO. Antes de publicar, o PO deve aceitar esse risco de moderação/marca registrada.
+
+## Clientes NPC (2026-11-07)
+
+Os avatares gerados por IA (`Assets/Customers`) saíram. Os clientes agora são **pacotes oficiais e gratuitos da Roblox** (criador Roblox), gerados com `Players:CreateHumanoidModelFromDescription` a partir do outfit de cada pacote e guardados em `ServerStorage/Assets/Clientes`, com atributo `Genero`:
+- Masculinos: Casey, Dennis, Denny, John, Kenneth, Man, Oakley, Oliver.
+- Femininos: Cindy, Claire, Lin, Lindsey, Linlin, Serena, Skyler, Summer, Woman.
+Animação de volante: animação padrão de sentar R15 da Roblox (`2506281703`).

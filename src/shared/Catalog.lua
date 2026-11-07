@@ -326,33 +326,71 @@ function Catalog.AveragePartReliability(parts: { [string]: number }?): number
     return count > 0 and sum / count or 1
 end
 
-Catalog.CustomerNames = { "Marcos", "Ana", "Carlos", "Beatriz", "João", "Luiza", "Pedro", "Camila", "Rafael", "Fernanda", "Tiago", "Juliana" }
+-- Nomes por gênero: o modelo do NPC (ServerStorage.Assets.Clientes, atributo Genero "M"/"F") segue o gênero do nome,
+-- então nunca chega uma mulher com nome de homem (nem o contrário).
+Catalog.CustomerNamesMale = {
+    "Marcos", "Carlos", "João", "Pedro", "Rafael", "Tiago", "Lucas", "Bruno", "Diego", "Felipe", "Gustavo", "André",
+    "Ricardo", "Eduardo", "Vinícius", "Paulo", "Sérgio", "Leandro",
+}
+Catalog.CustomerNamesFemale = {
+    "Ana", "Beatriz", "Luiza", "Camila", "Fernanda", "Juliana", "Mariana", "Patrícia", "Larissa", "Gabriela", "Renata",
+    "Aline", "Vanessa", "Carolina", "Débora", "Sílvia", "Tatiane", "Priscila",
+}
+Catalog.CustomerNames = table.clone(Catalog.CustomerNamesMale)
+for _, name in ipairs(Catalog.CustomerNamesFemale) do
+    table.insert(Catalog.CustomerNames, name)
+end
+
+-- Sorteia (gênero, nome) com o gerador dado (math.random por padrão). Gênero: "M" ou "F".
+function Catalog.PickCustomer(rand: ((number, number) -> number)?): (string, string)
+    local r = rand or math.random
+    local gender = r(1, 2) == 1 and "M" or "F"
+    local list = gender == "M" and Catalog.CustomerNamesMale or Catalog.CustomerNamesFemale
+    return gender, list[r(1, #list)]
+end
+
+-- Cliente VIP: chega num esportivo e paga o dobro da tabela. Chance por cliente.
+Catalog.VipChance = 0.08
+Catalog.VipPayMultiplier = 2
 
 -- Nome exibido do veículo -> modelo em ServerStorage.Assets.Veiculos (usado pelo VehicleService e pelas miniaturas 3D).
--- 14 modelos SEM marca (emblemas, placas e letreiros removidos no Blender; origem em docs/ORIGEM_ASSETS.md).
--- Categorias: 4 hatch, 4 sedã, 2 SUV (limitação: só 2 SUVs sem marca ficaram bons), 4 picape.
+-- Modelos semi-realistas da Creator Store (marcas e logos originais mantidos, placas removidas; origem em
+-- docs/ORIGEM_ASSETS.md). Convenção: PrimaryPart "Raiz" no chão, no centro, LookVector = frente; "Casco" = colisão.
 Catalog.VehicleModels = {
-    ["Hatch compacto"] = "Veiculo_Hatch_A",
-    ["Hatch azul"] = "Veiculo_Hatch_B",
-    ["Hatch híbrido"] = "Veiculo_Hatch_C",
-    ["Hatch esportivo"] = "Veiculo_Hatch_D",
-    ["Sedã executivo"] = "Veiculo_Sedan_A",
-    ["Sedã clássico"] = "Veiculo_Sedan_B",
-    ["Compacto retrô"] = "Veiculo_Sedan_C",
-    ["Sedã médio"] = "Veiculo_Sedan_D",
-    ["Jipe 4x4"] = "Veiculo_SUV_A",
-    ["SUV premium"] = "Veiculo_SUV_B",
-    ["Picape cabine estendida"] = "Veiculo_Picape_A",
-    ["Picape antiga"] = "Veiculo_Picape_B",
-    ["Picape de fazenda"] = "Veiculo_Picape_C",
-    ["Caminhonete de carga"] = "Veiculo_Picape_D",
+    ["Hatch amarelo"] = "Veiculo_Hatch_MG3",
+    ["Hatch preto"] = "Veiculo_Hatch_Punto",
+    ["Clássico japonês"] = "Veiculo_Hatch_AE86",
+    ["Sedã azul"] = "Veiculo_Sedan_Civic",
+    ["Sedã branco"] = "Veiculo_Sedan_Camry",
+    ["Clássico rabo-de-peixe"] = "Veiculo_Sedan_Fury",
+    ["SUV familiar"] = "Veiculo_SUV_Traverse",
+    ["SUV preto"] = "Veiculo_SUV_Evoque",
+    ["SUV compacto"] = "Veiculo_SUV_RAV4",
+    ["Crossover"] = "Veiculo_SUV_Izoa",
+    ["Jipe"] = "Veiculo_SUV_Wrangler",
+    ["Picape antiga"] = "Veiculo_Picape_S10",
+    ["Picape esportiva"] = "Veiculo_Picape_454",
+    ["Picape de trabalho"] = "Veiculo_Picape_C1500",
+    ["Picape vermelha"] = "Veiculo_Picape_K1500",
+    ["Esportivo turbo"] = "Veiculo_VIP_Supra",
+    ["Esportivo de pista"] = "Veiculo_VIP_Skyline",
+    ["Muscle car V8"] = "Veiculo_VIP_Charger",
+    ["Muscle car laranja"] = "Veiculo_VIP_Hellcat",
+    ["Esportivo drift"] = "Veiculo_VIP_Silvia",
+    ["Esportivo vermelho"] = "Veiculo_VIP_Corvette",
 } :: { [string]: string }
 
+-- Carros do dia a dia (clientes comuns).
 Catalog.VehicleNames = {
-    "Hatch compacto", "Hatch azul", "Hatch híbrido", "Hatch esportivo",
-    "Sedã executivo", "Sedã clássico", "Compacto retrô", "Sedã médio",
-    "Jipe 4x4", "SUV premium",
-    "Picape cabine estendida", "Picape antiga", "Picape de fazenda", "Caminhonete de carga",
+    "Hatch amarelo", "Hatch preto", "Clássico japonês",
+    "Sedã azul", "Sedã branco", "Clássico rabo-de-peixe",
+    "SUV familiar", "SUV preto", "SUV compacto", "Crossover", "Jipe",
+    "Picape antiga", "Picape esportiva", "Picape de trabalho", "Picape vermelha",
+}
+
+-- Esportivos: só clientes VIP chegam com eles.
+Catalog.VipVehicleNames = {
+    "Esportivo turbo", "Esportivo de pista", "Muscle car V8", "Muscle car laranja", "Esportivo drift", "Esportivo vermelho",
 }
 
 return Catalog

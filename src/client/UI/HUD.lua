@@ -534,7 +534,7 @@ function HUD.start()
 		end
 		-- só o dono vê o prompt do próprio carro (o servidor já recusa ações de outros jogadores)
 		local car = p:FindFirstAncestorOfClass("Model")
-		local ownerId = car and car:GetAttribute("OwnerUserId")
+		local ownerId = p:GetAttribute("OwnerUserId") or (car and car:GetAttribute("OwnerUserId"))
 		if type(ownerId) == "number" and ownerId ~= player.UserId then
 			activePrompt = nil
 			return
@@ -988,7 +988,7 @@ function HUD.start()
 			setModel(job.VehicleModel)
 			local info = column(top, 2, 2)
 			HudParts.text(info, job.VehicleName, 32, { Font = Theme.FontTitle })
-			HudParts.text(info, t("customers_customer", job.CustomerName or "?"), 24, { Font = Theme.FontTitle })
+			HudParts.text(info, t("customers_customer", (job.Vip and "★ VIP " or "") .. (job.CustomerName or "?")), 24, { Font = Theme.FontTitle })
 			local waitRow = row(info, 8)
 			HudParts.text(waitRow, t("customers_wait_label"), 24, { Font = Theme.FontTitle })
 			local waitLabel = HudParts.text(waitRow, "", 24, { Font = Theme.FontTitle })

@@ -98,9 +98,8 @@ local function carModel(ctx: Ctx, vehicleName: string, x: number, y: number, z: 
 		return
 	end
 	local m = template:Clone()
-	m:ScaleTo(3.5)
-	-- frente do carro = +Z (rua = -Z): gira 180 graus para a frente olhar para a rua
-	m:PivotTo(ctx.Root * CFrame.new(x, y, z) * CFrame.Angles(0, math.pi + math.rad(yawDeg), 0))
+	-- Raiz no chão, frente = LookVector (-Z local): sem giro o carro olha para a rua
+	m:PivotTo(ctx.Root * CFrame.new(x, y, z) * CFrame.Angles(0, math.rad(yawDeg), 0))
 	m.Parent = ctx.Model
 end
 
@@ -128,7 +127,7 @@ builders[2] = function(ctx)
 	box(ctx, "MarquiseLaje", -11, 1, 10.2, 10.8, -4.5, 6.1, WHITE)
 	box(ctx, "MarquiseBorda", -11, 1, 10.1, 10.9, -4.7, -4.4, BLUE)
 	box(ctx, "MarquiseColunaEsq", -10.7, -10.1, 0, 10.2, -4.2, -3.6, STEEL)
-	box(ctx, "MarquiseColunaDir", 0.1, 0.7, 0, 10.2, -4.2, -3.6, STEEL)
+	box(ctx, "MarquiseColunaDir", -2.6, -2.0, 0, 10.2, -4.2, -3.6, STEEL) -- fora do corredor dos carros (Layout.Driveway)
 	neon(ctx, "MarquiseLed", -10, 0, 10.05, 10.2, -4.3, 5.5, CYAN)
 	-- Totem
 	box(ctx, "TotemPoste", 37.4, 38.6, 0, 20, -9.4, -8.2, DARK, Enum.Material.Metal, true)
@@ -142,7 +141,7 @@ builders[2] = function(ctx)
 	prop(ctx, "Oficina", "Of_CarrinhoFerramenta", 22.5, -2.5, -30)
 	prop(ctx, "Oficina", "Of_Lixeira", 40, 3)
 	prop(ctx, "Cenario", "Rua_Jardineira", -17, -9, 0, 0.4)
-	prop(ctx, "Cenario", "Rua_Jardineira", 12, -9, 0, 0.4)
+	prop(ctx, "Cenario", "Rua_Jardineira", 28, -9, 0, 0.4)
 end
 
 builders[3] = function(ctx)
@@ -167,7 +166,7 @@ builders[3] = function(ctx)
 	box(ctx, "MarquiseLaje", -11.5, 1.5, 10.2, 10.9, -5, 6.4, GRAPHITE)
 	neon(ctx, "MarquiseLed", -11.5, 1.5, 10.0, 10.2, -5, 6.2, GOLD)
 	box(ctx, "MarquiseColunaEsq", -11.2, -10.4, 0, 10.2, -4.6, -3.8, DARK)
-	box(ctx, "MarquiseColunaDir", 0.4, 1.2, 0, 10.2, -4.6, -3.8, DARK)
+	box(ctx, "MarquiseColunaDir", -2.8, -2.0, 0, 10.2, -4.6, -3.8, DARK) -- fora do corredor dos carros (Layout.Driveway)
 	-- Plataforma de exibição com carro, refletores e piso de LED
 	box(ctx, "VitrinePiso", 20, 46, 0, 0.35, -24, -2, DARK, Enum.Material.SmoothPlastic).Reflectance = 0.2
 	local ring = Instance.new("Part")
@@ -193,7 +192,7 @@ builders[3] = function(ctx)
 	plate.Reflectance = 0.25
 	plate.CastShadow = false
 	plate.Parent = ctx.Model
-	carModel(ctx, "Veiculo_Hatch_D", 33, 1.0, -13, 25)
+	carModel(ctx, "Veiculo_VIP_Corvette", 33, 1.0, -13, 25)
 	for _, spot in ipairs({ { 24, -22 }, { 42, -22 }, { 33, -3 } }) do
 		local post = box(ctx, "RefletorPoste", spot[1] - 0.25, spot[1] + 0.25, 0, 8, spot[2] - 0.25, spot[2] + 0.25, DARK)
 		local head = box(ctx, "Refletor", spot[1] - 0.7, spot[1] + 0.7, 8, 8.8, spot[2] - 0.7, spot[2] + 0.7, DARK)
@@ -211,7 +210,7 @@ builders[3] = function(ctx)
 	neon(ctx, "LedChao2", -40, 18, 0.35, 0.5, -6, -5.6, GOLD)
 	prop(ctx, "Oficina", "Of_Placa", -14, -7, 6)
 	prop(ctx, "Cenario", "Rua_Jardineira", -29, -9, 0, 0.4)
-	prop(ctx, "Cenario", "Rua_Jardineira", 8, -10, 0, 0.4)
+	prop(ctx, "Cenario", "Rua_Jardineira", -24, -28, 0, 0.4)
 end
 
 local function clear(plot: Instance)

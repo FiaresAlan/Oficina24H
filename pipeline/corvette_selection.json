@@ -1,0 +1,33 @@
+{
+ "source_dir": "C:/Users/Administrador/Desktop/OFICINA24h/_assets_work/downloads/corvette",
+ "cars": [
+  {
+   "name": "Esportivo_A",
+   "id": "corvette",
+   "fbx": "C:/Users/Administrador/Desktop/OFICINA24h/_assets_work/downloads/corvette/Corvette_PBR.fbx",
+   "length": 4.6,
+   "tris": 15000,
+   "alloc": "sqrt",
+   "avg_colors": true,
+   "drop": [
+    "Logo",
+    "Corvette",
+    "Stingray",
+    "NumberR",
+    "Bolt",
+    "Brake_rotor",
+    "Calipers",
+    "Muflers",
+    "Airstem",
+    "Infinite_Black"
+   ],
+   "paint": {
+    "CarpaintMain": [
+     0.62,
+     0.012,
+     0.008
+    ]
+   }
+  }
+ ]
+}

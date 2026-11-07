@@ -65,7 +65,10 @@ def normalize(entry):
     """Importa, limpa auxiliares, orienta (frente em +Y), escala e põe o pivô na base. Retorna lista de objetos removidos."""
     cid = entry["id"]
     bpy.ops.wm.read_factory_settings(use_empty=True)
-    bpy.ops.import_scene.gltf(filepath=os.path.join(SRC, cid + ".glb"))
+    if entry.get("fbx"):
+        bpy.ops.import_scene.fbx(filepath=entry["fbx"])
+    else:
+        bpy.ops.import_scene.gltf(filepath=os.path.join(SRC, cid + ".glb"))
     for o in bpy.data.objects:
         if o.parent:
             m = o.matrix_world.copy()
@@ -326,6 +329,46 @@ def apply_patches(name):
     return done
 
 
+def textures_to_average_colors():
+    """Substitui cada textura de cor base pela COR MÉDIA do material (texturas de 4096 px não sobrevivem a uma redução forte).
+    Vidro/translúcido ganha alpha. Normal/roughness/metallic são descartados."""
+    import numpy as np
+    done = 0
+    for mat in bpy.data.materials:
+        if not mat.use_nodes:
+            continue
+        b = next((n for n in mat.node_tree.nodes if n.type == "BSDF_PRINCIPLED"), None)
+        if not b:
+            continue
+        link = b.inputs["Base Color"].links[0].from_node if b.inputs["Base Color"].links else None
+        if link is not None and link.type == "TEX_IMAGE" and link.image is not None:
+            img = link.image
+            if img.size[0] == 0:
+                continue
+            tmp = img.copy()
+            tmp.scale(16, 16)
+            arr = np.empty(16 * 16 * tmp.channels, dtype=np.float32)
+            tmp.pixels.foreach_get(arr)
+            a = arr.reshape(-1, tmp.channels)
+            rgb = a[:, :3].mean(axis=0)
+            bpy.data.images.remove(tmp)
+            def to_lin(c):
+                return c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4
+            col = [to_lin(float(c)) for c in rgb]  # pixels de PNG/JPG chegam codificados em sRGB
+            for l in list(b.inputs["Base Color"].links):
+                mat.node_tree.links.remove(l)
+            b.inputs["Base Color"].default_value = (col[0], col[1], col[2], 1.0)
+            done += 1
+        for sock in ("Normal", "Roughness", "Metallic"):
+            for l in list(b.inputs[sock].links) if sock in b.inputs else []:
+                mat.node_tree.links.remove(l)
+        if "Metallic" in b.inputs:
+            b.inputs["Metallic"].default_value = 0.0
+        if GLASS.search(mat.name):
+            b.inputs["Alpha"].default_value = 0.3
+    return done
+
+
 def flat_colors_to_textures():
     """O importador do Roblox ignora a cor de materiais SEM textura (tudo vira cinza). Cada material liso ganha uma mini-textura
     4x4 da própria cor; vidro/material translúcido ganha alpha na textura (vira SurfaceAppearance com transparência)."""
@@ -384,6 +427,13 @@ def process(entry):
         print("VIEWS", name)
         return
     patched = apply_patches(name)
+    if entry.get("avg_colors"):
+        textures_to_average_colors()
+    for mat_name, rgb in (entry.get("paint") or {}).items():  # cor da tinta escolhida (linear)
+        mat = bpy.data.materials.get(mat_name)
+        b = next((n for n in mat.node_tree.nodes if n.type == "BSDF_PRINCIPLED"), None) if mat and mat.use_nodes else None
+        if b:
+            b.inputs["Base Color"].default_value = (rgb[0], rgb[1], rgb[2], 1.0)
     flats = flat_colors_to_textures()
     # vidro com transparência; texturas <= 1024
     for mat in bpy.data.materials:
@@ -425,16 +475,90 @@ def process(entry):
     total = tri_count(meshes())
     ratio = min(1.0, entry["tris"] / max(1, total))
     if ratio < 1.0:
+        counts = {o.name: tri_count([o]) for o in meshes()}
+        weights = {n: math.sqrt(c) for n, c in counts.items()} if entry.get("alloc") == "sqrt" else None
+        wsum = sum(weights.values()) if weights else 1.0
         for o in meshes():
-            if tri_count([o]) < 300:
+            if counts[o.name] < 300:
                 continue
+            r = ratio if weights is None else min(1.0, max(0.0005, entry["tris"] * weights[o.name] / wsum / counts[o.name]))
             mod = o.modifiers.new("dec", "DECIMATE")
             mod.decimate_type = "COLLAPSE"
-            mod.ratio = ratio
+            mod.ratio = r
             mod.use_collapse_triangulate = True
-            mod.delimit = {"UV"}
+            mod.delimit = set() if entry.get("avg_colors") else {"UV"}  # cor lisa: sem textura a proteger, reduz mais livremente
+            before_n = counts[o.name]
             with bpy.context.temp_override(object=o, active_object=o):
                 bpy.ops.object.modifier_apply(modifier=mod.name)
+            want = max(40, int(counts[o.name] * r))
+            if tri_count([o]) > want * 6:
+                # milhares de peças soltas (grades/aletas): mantém as maiores até caber, descarta o resto
+                import bmesh
+                bm = bmesh.new()
+                bm.from_mesh(o.data)
+                bm.faces.ensure_lookup_table()
+                seen, islands = set(), []
+                for f0 in bm.faces:
+                    if f0.index in seen:
+                        continue
+                    comp, stack = [], [f0]
+                    seen.add(f0.index)
+                    while stack:
+                        f = stack.pop()
+                        comp.append(f)
+                        for e in f.edges:
+                            for g in e.link_faces:
+                                if g.index not in seen:
+                                    seen.add(g.index)
+                                    stack.append(g)
+                    islands.append(comp)
+                islands.sort(key=lambda c: -sum(f.calc_area() for f in c))
+                kept, budget = 0, want * 5
+                drop = []
+                for comp in islands:
+                    if kept + len(comp) <= budget:
+                        kept += len(comp)
+                    else:
+                        drop.extend(comp)
+                if drop:
+                    bmesh.ops.delete(bm, geom=drop, context="FACES")
+                    bm.to_mesh(o.data)
+                    o.data.update()
+                    print("ILHAS %s: %d pedaços, descartados %d faces" % (o.name, len(islands), len(drop)))
+                bm.free()
+            for _pass in range(4):  # malhas com geometria solta podem parar acima do alvo: repete a redução
+                now = tri_count([o])
+                if now <= want * 1.6:
+                    break
+                m2 = o.modifiers.new("dec2", "DECIMATE")
+                m2.decimate_type = "COLLAPSE"
+                m2.ratio = max(0.0005, want / now)
+                m2.use_collapse_triangulate = True
+                with bpy.context.temp_override(object=o, active_object=o):
+                    bpy.ops.object.modifier_apply(modifier=m2.name)
+            print("DEC %s %d -> %d (alvo %d)" % (o.name, before_n, tri_count([o]), want))
+    # Limpeza (skills blender-asset-qa / blender-game-optimization): solda vértices duplicados, remove faces degeneradas e soltas,
+    # dá material às faces sem material e empurra 3 mm as camadas coplanares sobrepostas (z-fighting) ao longo da normal.
+    import bmesh
+    fallback = None
+    for o in meshes():
+        if o.data.materials and o.data.materials[0]:
+            fallback = o.data.materials[0]
+            break
+    for o in meshes():
+        if not o.data.materials and fallback is not None:
+            o.data.materials.append(fallback)
+        bm = bmesh.new()
+        bm.from_mesh(o.data)
+        bmesh.ops.remove_doubles(bm, verts=bm.verts, dist=0.0015)
+        bmesh.ops.dissolve_degenerate(bm, dist=1e-4, edges=bm.edges)
+        loose = [v for v in bm.verts if not v.link_faces]
+        if loose:
+            bmesh.ops.delete(bm, geom=loose, context="VERTS")
+        bm.normal_update()
+        bm.to_mesh(o.data)
+        bm.free()
+        o.data.update()
     final = tri_count(meshes())
     # texturas opacas viram JPEG (PNG de 1024 pesa 1,5 MB; JPEG ~150 KB). Só mantém PNG quem usa transparência.
     import numpy as np

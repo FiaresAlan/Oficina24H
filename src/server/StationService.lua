@@ -59,7 +59,7 @@ local function addPrompt(anchor: BasePart, plot: Instance, action: string, text:
 	prompt.ActionText = text
 	prompt.ObjectText = object
 	prompt.HoldDuration = hold
-	prompt.MaxActivationDistance = Config.StationDistance - 2
+	prompt.MaxActivationDistance = 8 -- curto: as estações ficam perto umas das outras e o HUD mostra um prompt por vez
 	prompt.RequiresLineOfSight = false
 	prompt.KeyboardKeyCode = Enum.KeyCode.E
 	prompt.Style = Enum.ProximityPromptStyle.Custom -- o HUD desenha (e só para o dono)
@@ -162,7 +162,7 @@ local function buildStations(plot: Instance, root: CFrame): Folder
 		addPrompt(anchor, plot, spec[1], spec[2], spec[3], spec[4])
 		local prompt = anchor:FindFirstChild(spec[1]) :: ProximityPrompt
 		prompt.Exclusivity = Enum.ProximityPromptExclusivity.OneGlobally
-		prompt.MaxActivationDistance = 6
+		prompt.MaxActivationDistance = 5
 	end
 	folder.Parent = plot
 	return folder
@@ -173,8 +173,8 @@ local function buildSign(plot: Instance, root: CFrame): Model
 	local sign = Instance.new("Model")
 	sign.Name = "Totem"
 	local cf = root * CFrame.new(Layout.Sign.x, 0, Layout.Sign.z)
-	part(sign, "Base", Vector3.new(14, 1, 3), cf * CFrame.new(0, 0.5, 0), Color3.fromRGB(110, 112, 118), Enum.Material.Slate)
-	for _, x in ipairs({ -5.6, 5.6 }) do
+	part(sign, "Base", Vector3.new(16, 1, 3), cf * CFrame.new(0, 0.5, 0), Color3.fromRGB(110, 112, 118), Enum.Material.Slate)
+	for _, x in ipairs({ -7.1, 7.1 }) do -- postes por fora do painel (não cobrem o texto)
 		part(sign, "Poste", Vector3.new(1, 15, 1), cf * CFrame.new(x, 8, 0), DARK, Enum.Material.Metal)
 	end
 	local panel = part(sign, "Painel", Vector3.new(13, 8, 0.8), cf * CFrame.new(0, 11, 0), DARK, Enum.Material.SmoothPlastic)
@@ -223,10 +223,11 @@ function StationService.SetSign(plot: Instance, data: SignData)
 		end
 	end
 	for _, gui in ipairs((panel :: Instance):GetChildren()) do
-		for _, key in ipairs({ "Nome", "Linha1", "Linha2", "Linha3" }) do
+		local values = { Nome = data.Name, Linha1 = data.Line1, Linha2 = data.Line2, Linha3 = data.Line3 }
+		for key, value in pairs(values) do
 			local t = gui:FindFirstChild(key, true)
 			if t and t:IsA("TextLabel") then
-				t.Text = key == "Nome" and data.Name or (data :: any)[key]
+				t.Text = tostring(value or "")
 			end
 		end
 	end

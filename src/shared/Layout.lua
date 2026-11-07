@@ -23,7 +23,7 @@ Layout.Sign = { x = 33, z = -40.5 }
 Layout.Stations = {
 	Orders = { x = -12, y = 7.5, z = 32.3, yaw = 0 }, -- TV de ordens na parede do fundo
 	Stock = { x = -18.6, y = 0, z = 11.5, yaw = -90 }, -- prateleira na parede esquerda, de frente para dentro
-	Staff = { x = -19.6, y = 5.5, z = 16.6, yaw = -90 }, -- quadro de funcionários na parede esquerda (longe dos boxes)
+	Staff = { x = -1.5, y = 6, z = 32.3, yaw = 0 }, -- quadro de funcionários no fundo, 10 studs à direita da TV
 }
 
 -- Expansão nível 1: anexo no pátio esquerdo com um box (Bay3), carro de frente para o fundo (+Z).

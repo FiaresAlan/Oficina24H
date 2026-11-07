@@ -46,6 +46,9 @@ if game:GetService("RunService"):IsStudio() then
             profile.TotalEarned = arg
             WorkshopService.UpdateSkin(player)
             return "ok"
+        elseif command == "Coins" and type(arg) == "number" then
+            DataService.AddCoins(player, arg, "QA (Studio)")
+            return profile.Coins
         elseif command == "AgeJobs" then
             return WorkshopService._ageJobsForTesting(player.UserId, 1000)
         elseif command == "Profile" then

@@ -9,8 +9,12 @@ local function check(name: string, cond: boolean, detail: any?)
 	table.insert(results, (cond and "PASS " or "FAIL ") .. name .. (cond and "" or (" -> " .. tostring(detail))))
 end
 
+-- o PlotService usa o StationService (totem/anexo): a cópia vai numa pasta junto com uma cópia dele
+local holder = Instance.new("Folder")
+holder.Parent = ServerStorage
+source.Parent:WaitForChild("StationService"):Clone().Parent = holder
 local clone = source:Clone()
-clone.Parent = ServerStorage
+clone.Parent = holder
 local PS = require(clone)
 local plots = workspace:WaitForChild("Plots")
 PS._initForTesting(plots)
@@ -91,6 +95,6 @@ end
 check("nenhum jogador dono de dois lotes", dup == false)
 
 reset()
-clone:Destroy()
+holder:Destroy()
 table.insert(results, failures == 0 and "TODOS OS TESTES PASSARAM" or (failures .. " TESTE(S) FALHARAM"))
 return table.concat(results, "\n")

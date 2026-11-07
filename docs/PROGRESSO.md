@@ -454,8 +454,14 @@ Pedido do PO: carros semi-realistas com logo (só sem placa), NPCs comuns da Rob
 - **Não feito / não testado:** a garagem `ONLY+GRAGE.fbx` (94 MB) dos Downloads não foi importada (Blender fechado e pesada demais para celular; o prédio atual com equipamentos CC0 continua). Movimento do carro é feito pelo servidor (pode parecer menos suave com rede ruim). Não testado em celular nem com 2 jogadores reais. Os logos de marcas são risco de moderação (decisão do PO).
 
 ## 2026-11-07 — Ideias do PO (lote 2): oficina física, carros "de verdade", funcionários, expansão e rivais
-**Escrito e conferido por análise estática (selene: 0 erros de sintaxe, 0 nomes indefinidos), mas AINDA NÃO TESTADO NO STUDIO**
-(o place Oficina24H_Teste estava fechado). Fica no ramo `lote2-oficina-fisica` até o teste no Studio.
+**Testado no Studio (Play) e integrado ao main.** Conferido em jogo: aceitar longe da TV é recusado e na TV funciona;
+conversar a 30 studs do cliente é recusado e de perto abre o diagnóstico; comprar longe da loja é recusado e na loja
+funciona; carro sobe no elevador ao começar o reparo e desce ao cancelar; contratar mecânico pelo quadro e ele concluiu
+um serviço sozinho (+90 moedas, 4 estrelas); expandir pela placa constrói o anexo e o carro entra no Box 3 pelo caminho
+interno; 3 rivais ocupam lotes com placa e fachada; rodas detectadas em todos os carros; placa "LOTE LIVRE" nos lotes vazios.
+Correções achadas no teste: campos da placa 3D (impedia os rivais), postes da placa cobriam o texto, prompts das estações
+perto demais (o HUD mostra um por vez: quadro foi para o fundo e alcance caiu para 8), rivais ganhavam todos os clientes
+(agora disputam ~30% do mercado, Config.RivalMarketShare). 827 verificações automáticas passam.
 - **NPC:** um nome só sobre a cabeça (nome nativo do Humanoid; VIP com ★ e selo "VIP"); balão de fala pequeno, em studs
   (encolhe com a distância) e visível só a até 26 studs.
 - **Carros (client/VehicleFx):** rodas giram conforme a distância percorrida (detectadas pela geometria), som de motor
@@ -479,5 +485,5 @@ Pedido do PO: carros semi-realistas com logo (só sem placa), NPCs comuns da Rob
   totem, fachada pelo tipo, mecânico, clientes chegando de carro, elevador e estatísticas que crescem; disputam clientes
   no mercado e aparecem no ranking e no painel da praça. Quando falta lote para quem entra, um rival "vende" e sai.
 - **Testes:** CatalogTest ganhou checagens de estações, placa, anexo e configurações (rodar no Studio).
-- **Pendente:** teste completo no Studio (chegada → TV → conversar → reparo com elevador/efeitos → saída; funcionário;
-  expansão; rivais), ajustar posição real da TV/prateleira/anexo pelas fotos, conferir se os sons públicos tocam.
+- **Pendente:** ouvir os sons no jogo (ids públicos; não dá para conferir áudio pelo Studio via MCP), testar no celular,
+  2 jogadores reais disputando lotes com rivais.

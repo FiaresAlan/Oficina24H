@@ -225,8 +225,8 @@ local function createJob(ownerUserId: number, specialization: string?)
             local ownerNow = Players:GetPlayerByUserId(ownerUserId)
             if current and current.Status == "Available" and ownerNow and eventSender then
                 local text = current.Vip
-                    and ("★ Cliente VIP! " .. tostring(current.CustomerName) .. " chegou com um " .. tostring(current.VehicleName) .. " e paga o DOBRO. Atenda na calçada!")
-                    or (tostring(current.CustomerName) .. " chegou com " .. tostring(current.VehicleName) .. ". Atenda na calçada.")
+                    and ("★ Cliente VIP! " .. tostring(current.CustomerName) .. " chegou com um " .. tostring(current.VehicleName) .. " e paga o DOBRO. Aceite na TV de ordens!")
+                    or (tostring(current.CustomerName) .. " chegou com " .. tostring(current.VehicleName) .. ". Aceite na TV de ordens.")
                 eventSender(ownerNow, "Notice", { Message = text, Success = true })
             end
         end)
@@ -1052,9 +1052,11 @@ function WorkshopService.DispatchCustomers(arrivals: number?, rand: (() -> numbe
                 Distance = e.Distance,
             }
         end
-        local rivalCandidates = RivalService.Candidates()
-        for _, rc in ipairs(rivalCandidates) do
-            table.insert(candidates, rc)
+        -- Rivais disputam só parte do mercado (Config.RivalMarketShare): dão vida ao bairro sem deixar o jogador sem clientes.
+        if rand() < Config.RivalMarketShare then
+            for _, rc in ipairs(RivalService.Candidates()) do
+                table.insert(candidates, rc)
+            end
         end
         local choice = CustomerRules.Choose(candidates, rand)
         if choice and choice <= #entries then

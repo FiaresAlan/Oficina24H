@@ -44,5 +44,6 @@ Config.EmployeeQuality = 72 -- qualidade (%) do serviço feito por funcionário
 -- Oficinas rivais (NPC) ocupam lotes livres para o bairro não parecer vazio; sempre sobra lote para quem entra.
 Config.RivalMax = 3
 Config.RivalKeepFreePlots = 2
+Config.RivalMarketShare = 0.3 -- em ~30% das chegadas os rivais entram na disputa pelo cliente
 
 return Config

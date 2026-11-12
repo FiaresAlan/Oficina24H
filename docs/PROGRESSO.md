@@ -589,3 +589,13 @@ Detalhes em `docs/AUDITORIA_GERAL.md`. Resumo:
 - **Testes escritos:** 15 novos checks em `tools/DiagnosisEvidenceTest.luau` e registro em `RunAllTests.luau`.
 - **Limite:** a leitura é uma interface contextual baseada em estado do servidor; sem animações de scanner, manômetro ou medidores físicos no place. **Não foi executado no Studio nem verificado no celular.**
 - **Próximo:** três operações de reparo distintas com validação no servidor, preservando minigame legado e cobrando peças somente após sucesso.
+
+## 2026-11-12 — A2b: três reparos-piloto diferentes (GitHub-only; PR draft dependente de A2a)
+
+- **Pneu furado:** identificar ombro interno/centro/externo usando dica visual textual e ajustar pressão ao alvo. Qualidade depende da posição e calibração.
+- **Bateria fraca:** retirar/conectar terminais na sequência orientada; passos fora de ordem penalizam a execução.
+- **Superaquecimento:** ajustar volume de fluido, realizar ciclos de sangria e verificar ventoinha; qualidade depende das três decisões.
+- **Servidor:** `shared/RepairOperations.lua` sorteia contexto da OS, guarda o gabarito apenas no servidor e avalia payload tipado, tempo e modificadores de qualidade. `WorkshopService.StartRepair/FinishRepair` escolhem piloto ou `RepairRules` legado sem mudar a lógica de consumo de peças/pagamento/XP/nota. Preserva `VehicleService.SetRepairing` e efeitos.
+- **Cliente:** `UI/OperationRepairGame.lua` fornece controles de clique/toque por operação e tela de conclusão; `UI/RepairGame.lua` mantém minijogo de timing para todos os demais serviços. HUD reconhece ambos.
+- **Testes escritos:** `tools/RepairOperationsTest.luau` (17 casos) adicionado a `RunAllTests`. **Não rodados** nesta sessão (sem Roblox Studio/CLI Luau).
+- **Limites:** as interações atuais são painéis contextuais e efeitos de carro já existentes; **não são ainda desmontagem física modular nem instrumentos 3D importados**. Testar posição dos botões, legibilidade, som, touch e cancelamento em Studio antes de mesclar.

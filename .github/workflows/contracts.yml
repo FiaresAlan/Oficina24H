@@ -1,0 +1,22 @@
+name: Oficina24H — contratos estáticos
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - "work/**"
+  workflow_dispatch:
+
+jobs:
+  contratos:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verificar caminhos do Rojo e módulos Luau
+        run: python3 tools/check_repo_contracts.py
+      - name: Escopo da validação
+        run: |
+          echo "CI valida somente estrutura/caminhos de módulos."
+          echo "Studio, gameplay, remotes e DataStore precisam de homologação separada."

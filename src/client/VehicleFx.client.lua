@@ -456,7 +456,12 @@ RunService.RenderStepped:Connect(function(dt: number)
 		applyFx(fx)
 		local repairing = model:GetAttribute("Reparando") == true and model:GetAttribute("Estacionado") == true
 		local symptom = tostring(model:GetAttribute("Sintoma") or "")
-		local wantRemove = repairing and (symptom == "Tires" or symptom == "Suspension") and 1 or 0
+		-- Após soltar porcas e apoiar o carro, a roda pode ser deslocada VISUALMENTE
+		-- antes mesmo de abrir o painel. É animação local; não altera encaixes físicos.
+		local prepPoints = model:FindFirstChild("RepairPrepPoints")
+		local jackPoint = prepPoints and prepPoints:FindFirstChild("Prep_JackSupport")
+		local wheelPrepared = jackPoint ~= nil and jackPoint:GetAttribute("Completed") == true
+		local wantRemove = (repairing or wheelPrepared) and (symptom == "Tires" or symptom == "Suspension") and 1 or 0
 		local wantHood = (repairing or model:GetAttribute("PrepHoodOpen") == true)
 			and (symptom == "Engine" or symptom == "Electrical") and 1 or 0
 		fx.Remove += (wantRemove - fx.Remove) * math.min(1, dt * 2)

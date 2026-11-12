@@ -79,7 +79,7 @@ end
 -- Limitador por JOGADOR e por AÇÃO (uma ação rápida não descarta outra diferente). Só ações conhecidas entram na tabela.
 local lastActionAt: {[number]: {[string]: number}} = {}
 local KNOWN_ACTIONS: {[string]: boolean} = {}
-for _, name in ipairs({ "ClaimWorkshop", "GenerateCustomer", "DeclineJob", "AcceptJob", "DiagnoseJob", "CompleteJob", "FinishRepair", "RepairPrefs", "CancelRepair", "SkipOnboarding", "BuyEquipment", "SetPrice", "BuyPart", "Checkout", "HireNpc", "InviteWorker", "CompleteCollaborativeJob", "RespondInvite", "MoveBag", "UpgradeWorkshop", "ClaimDaily", "ClaimMission", "RedeemCode" }) do
+for _, name in ipairs({ "ClaimWorkshop", "GenerateCustomer", "DeclineJob", "AcceptJob", "DiagnoseJob", "ExamineJob", "CompleteJob", "FinishRepair", "RepairPrefs", "CancelRepair", "SkipOnboarding", "BuyEquipment", "SetPrice", "BuyPart", "Checkout", "HireNpc", "InviteWorker", "CompleteCollaborativeJob", "RespondInvite", "MoveBag", "UpgradeWorkshop", "ClaimDaily", "ClaimMission", "RedeemCode" }) do
     KNOWN_ACTIONS[name] = true
 end
 
@@ -172,12 +172,12 @@ local function onPrompt(player: Player, jobId: string, kind: string)
 end
 VehicleService.SetInteractionHandler(onPrompt)
 -- "Usar <equipamento>" na sala dos fundos (reparos que precisam de máquina).
-EquipmentService.SetUseHandler(function(player: Player, equipmentId: string)
+EquipmentService.SetUseHandler(function(player: Player, equipmentId: string, plot: Instance)
     local nowClock = os.clock()
     if nowClock - (lastInteractAt[player.UserId] or 0) < 0.5 then return end
     lastInteractAt[player.UserId] = nowClock
     snapshotCache[player.UserId] = nil
-    local ok, message = WorkshopService.UseEquipment(player, equipmentId)
+    local ok, message = WorkshopService.UseEquipment(player, equipmentId, plot)
     sendResult(player, ok, message)
 end)
 -- Estações físicas do lote (StationService): contratar/demitir mecânico e expandir a oficina pelos prompts.
@@ -246,6 +246,8 @@ actionEvent.OnServerEvent:Connect(function(player: Player, action: any, payload:
         success, message = WorkshopService.AcceptJob(player, payload.JobId)
     elseif action == "DiagnoseJob" and type(payload.JobId) == "string" then
         success, message = WorkshopService.DiagnoseJob(player, payload.JobId, payload.Choice)
+    elseif action == "ExamineJob" and type(payload.JobId) == "string" and type(payload.ExamId) == "string" then
+        success, message = WorkshopService.ExamineJob(player, payload.JobId, payload.ExamId)
     elseif action == "CompleteJob" and type(payload.JobId) == "string" then
         -- Não existe mais conclusão direta: todo reparo passa pelo minijogo (sessão sorteada e cronometrada no servidor).
         success, message = WorkshopService.StartRepair(player, payload.JobId, payload.Assist == true)

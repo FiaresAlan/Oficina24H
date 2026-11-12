@@ -1,0 +1,43 @@
+-- Testes das operacoes piloto. Executar RunAllTests no Roblox Studio.
+local Rules = require(game.ReplicatedStorage.Shared.RepairOperations)
+local mods = { Margin = 0, EquipmentEfficiency = 0, PartReliability = 1, DiagnosisAttempts = 1 }
+local result = {}
+local function check(name, ok)
+	table.insert(result, (ok and "PASS " or "FAIL ") .. name)
+end
+local tire = Rules.BuildPlan("FlatTire", 10)
+local tire2 = Rules.BuildPlan("FlatTire", 10)
+check("pneu: plano determinista", tire.LeakSpot == tire2.LeakSpot and tire.Mode == "Tire")
+check("funilaria tem procedimento de carroceria", Rules.BuildPlan("Dent", 10).Mode == "Surface")
+check("falha fora do catálogo preserva fallback", Rules.BuildPlan("InvalidDefect", 10) == nil)
+check("plano publico nao contem gabarito", Rules.PublicPlan(tire).LeakSpot == nil)
+check("tempo minimo comunicado no plano publico", Rules.PublicPlan(tire).MinSeconds == 2
+	and Rules.PublicPlan(Rules.BuildPlan("WeakBattery", 1)).MinSeconds == 3.5
+	and Rules.PublicPlan(Rules.BuildPlan("Overheating", 1)).MinSeconds == 3)
+local perfectTire = Rules.Evaluate(tire, { Spot = tire.LeakSpot, Pressure = 32 }, 4, mods)
+local poorTire = Rules.Evaluate(tire, { Spot = "Inner" == tire.LeakSpot and "Outer" or "Inner", Pressure = 20 }, 4, mods)
+check("pneu: acerto pontua alto", perfectTire.Valid and perfectTire.Quality >= 90)
+check("pneu: erro custa qualidade", poorTire.Valid and poorTire.Quality < perfectTire.Quality)
+check("pneu: NaN recusado", not Rules.Evaluate(tire, { Spot = tire.LeakSpot, Pressure = 0 / 0 }, 4, mods).Valid)
+check("pneu: valor absurdo recusado", not Rules.Evaluate(tire, { Spot = tire.LeakSpot, Pressure = 400 }, 4, mods).Valid)
+local battery = Rules.BuildPlan("WeakBattery", 11)
+local sequence = { "OffNegative", "OffPositive", "OnPositive", "OnNegative" }
+local okBattery = Rules.Evaluate(battery, { Steps = sequence }, 4, mods)
+local wrongBattery = Rules.Evaluate(battery, { Steps = { "OffPositive", "OffNegative", "OnPositive", "OnNegative" } }, 4, mods)
+check("bateria: sequencia correta", okBattery.Valid and okBattery.Quality >= 90)
+check("bateria: ordem afeta qualidade", wrongBattery.Valid and wrongBattery.Quality < okBattery.Quality)
+check("bateria: repeticao de terminal invalida", not Rules.Evaluate(battery, { Steps = { "OffNegative", "OffNegative", "OnPositive", "OnNegative" } }, 4, mods).Valid)
+check("bateria: incompleto invalido", not Rules.Evaluate(battery, { Steps = { "OffNegative" } }, 4, mods).Valid)
+local cool = Rules.BuildPlan("Overheating", 10)
+local perfectCool = Rules.Evaluate(cool, { Fluid = 2, BleedCycles = 2, FanChecked = true }, 4, mods)
+local poorCool = Rules.Evaluate(cool, { Fluid = 1, BleedCycles = 0, FanChecked = false }, 4, mods)
+check("arrefecimento: preenchimento completo", perfectCool.Valid and perfectCool.Quality >= 90)
+check("arrefecimento: subpreenchimento pior", poorCool.Valid and poorCool.Quality < perfectCool.Quality)
+check("arrefecimento: ciclos nao inteiros invalido", not Rules.Evaluate(cool, { Fluid = 2, BleedCycles = 1.5, FanChecked = true }, 4, mods).Valid)
+check("arrefecimento: campo malicioso invalido", not Rules.Evaluate(cool, { Fluid = "2", BleedCycles = 2, FanChecked = true }, 4, mods).Valid)
+check("qualquer operacao: tempo irreal invalido", not Rules.Evaluate(cool, { Fluid = 2, BleedCycles = 2, FanChecked = true }, 0, mods).Valid)
+check("pneu: conclusao instantanea bloqueada", not Rules.Evaluate(tire, { Spot = tire.LeakSpot, Pressure = 32 }, 0.5, mods).Valid)
+check("bateria: exige tempo minimo de operacao", not Rules.Evaluate(battery, { Steps = sequence }, 2, mods).Valid)
+check("arrefecimento: exige tempo minimo de operacao", not Rules.Evaluate(cool, { Fluid = 2, BleedCycles = 2, FanChecked = true }, 2, mods).Valid)
+check("resultado: fatores da qualidade presentes", type(perfectCool.Breakdown) == "table" and type(perfectCool.Breakdown.Execution) == "number")
+return table.concat(result, "\n")

@@ -1,0 +1,25 @@
+-- Testes de autorizacao de trabalhador real e divisao financeira.
+local C = require(game.ReplicatedStorage.Shared.CollaborationRules)
+local checks = {}
+local function check(name, ok)
+	table.insert(checks, (ok and "PASS " or "FAIL ") .. name)
+end
+local job = { Status = "InProgress", OwnerUserId = 10, CollaboratorUserId = 20, AssignedWorkerUserId = 20 }
+local owner, worker = C.Split(101, 25)
+check("trabalhador autorizado", C.IsWorker(job, 20))
+check("proprietario nao e colaborador", not C.IsWorker(job, 10))
+check("estranho nao autorizado", not C.IsAuthorized(job, 30))
+check("trabalhador autorizado a executar", C.IsAuthorized(job, 20))
+check("proprietario nao executa enquanto delegou", not C.IsAuthorized(job, 10))
+check("proprietario executa quando retoma", C.IsAuthorized({ Status = "InProgress", OwnerUserId = 10, AssignedWorkerUserId = 10 }, 10))
+check("nao executa OS concluida", not C.IsAuthorized({ Status = "Completed", OwnerUserId = 10, AssignedWorkerUserId = 10 }, 10))
+check("sem atribuicao nao vira trabalhador", not C.IsWorker({ Status = "InProgress", OwnerUserId = 10, CollaboratorUserId = 20 }, 20))
+check("repasse nao cria dinheiro", owner + worker == 101 and owner == 76 and worker == 25)
+local a,b = C.Split(100, 999)
+check("repasse limitado a 80 por cento", a == 20 and b == 80)
+local c,d = C.Split(100, -1)
+check("repasse minimo nao negativo", c + d == 100 and d == 1)
+local e,f = C.Split(0 / 0, 40)
+check("valores invalidos nao geram pagamento", e == 0 and f == 0)
+check("divisao sempre inteira", C.Split(99.9, 20) == 80)
+return table.concat(checks, "\n")

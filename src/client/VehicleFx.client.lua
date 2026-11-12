@@ -108,7 +108,8 @@ end
 local function ownParts(model: Model, root: BasePart): { BasePart }
 	local list = {}
 	for _, d in ipairs(model:GetDescendants()) do
-		if d:IsA("BasePart") and d ~= root and d.Name ~= "Casco" and d.Name ~= "InteractPoint" then
+		if d:IsA("BasePart") and d ~= root and d.Name ~= "Casco" and d.Name ~= "InteractPoint"
+			and not d:FindFirstAncestor("InspectionPoints") and not d:FindFirstAncestor("RepairPrepPoints") then
 			local owner = d:FindFirstAncestorWhichIsA("Model")
 			if owner == model or (owner and not owner:FindFirstChildOfClass("Humanoid")) then
 				table.insert(list, d) -- o cliente sentado ao volante (modelo com Humanoid) não é parte do carro
@@ -455,8 +456,14 @@ RunService.RenderStepped:Connect(function(dt: number)
 		applyFx(fx)
 		local repairing = model:GetAttribute("Reparando") == true and model:GetAttribute("Estacionado") == true
 		local symptom = tostring(model:GetAttribute("Sintoma") or "")
-		local wantRemove = repairing and (symptom == "Tires" or symptom == "Suspension") and 1 or 0
-		local wantHood = repairing and (symptom == "Engine" or symptom == "Electrical") and 1 or 0
+		-- Após soltar porcas e apoiar o carro, a roda pode ser deslocada VISUALMENTE
+		-- antes mesmo de abrir o painel. É animação local; não altera encaixes físicos.
+		local prepPoints = model:FindFirstChild("RepairPrepPoints")
+		local jackPoint = prepPoints and prepPoints:FindFirstChild("Prep_JackSupport")
+		local wheelPrepared = jackPoint ~= nil and jackPoint:GetAttribute("Completed") == true
+		local wantRemove = (repairing or wheelPrepared) and (symptom == "Tires" or symptom == "Suspension") and 1 or 0
+		local wantHood = (repairing or model:GetAttribute("PrepHoodOpen") == true)
+			and (symptom == "Engine" or symptom == "Electrical") and 1 or 0
 		fx.Remove += (wantRemove - fx.Remove) * math.min(1, dt * 2)
 		fx.HoodOpen += (wantHood - fx.HoodOpen) * math.min(1, dt * 2)
 		if fx.Light then

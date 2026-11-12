@@ -1,0 +1,47 @@
+name: Oficina24H / Code Health (Rojo)
+
+on:
+  push:
+    branches:
+      - main
+      - 'work/**'
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: code-health-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify-and-build:
+    name: Contracts and Rojo code-only build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v4
+
+      - name: Check catalogue, remotes and tests
+        run: python3 tools/ci/verify_contracts.py
+
+      - name: Setup project-pinned Rokit / Rojo
+        uses: paradoxum-games/setup-rokit@v3
+        with:
+          cache: true
+
+      - name: Print build tool version
+        run: rojo --version
+
+      - name: Build code-only place
+        run: |
+          rojo build default.project.json -o /tmp/Oficina24H-code-only.rbxlx
+          test -s /tmp/Oficina24H-code-only.rbxlx
+
+      - name: Explain environment limits
+        run: |
+          echo "Rojo assembled the source tree; this is NOT a Studio playtest."
+          echo "ServerStorage/Assets models and StarterGui place properties are not in Git."
+          echo "Run StudioPlaceAudit + RunAllTests on the actual place before merge."

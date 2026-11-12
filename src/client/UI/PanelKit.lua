@@ -113,13 +113,13 @@ function PanelKit.window(parent: Instance, spec: WindowSpec): Window
 	header.Size = UDim2.new(1, 0, 0, HEADER_HEIGHT)
 	header.BackgroundColor3 = Color3.new(1, 1, 1)
 	header.BorderSizePixel = 0
-	HudParts.gradient(header, { { 0, rgb(20, 52, 120) }, { 0.5, rgb(11, 30, 70) }, { 1, rgb(8, 20, 46) } })
+	HudParts.gradient(header, { { 0, rgb(44, 62, 69) }, { 1, rgb(20, 36, 42) } })
 	header.Parent = root
 	local line = Instance.new("Frame")
 	line.Size = UDim2.new(1, 0, 0, 2)
 	line.AnchorPoint = Vector2.new(0, 1)
 	line.Position = UDim2.fromScale(0, 1)
-	line.BackgroundColor3 = rgb(40, 130, 230)
+	line.BackgroundColor3 = Theme.Accent
 	line.BackgroundTransparency = 0.35
 	line.BorderSizePixel = 0
 	line.Parent = header
@@ -209,8 +209,19 @@ function PanelKit.window(parent: Instance, spec: WindowSpec): Window
 			applySize()
 		end,
 		Fit = function(logicalWidth: number, logicalHeight: number)
-			fittedWidth = math.min(spec.Width, logicalWidth - 24)
-			fittedHeight = math.min(spec.Height, logicalHeight - 24)
+			-- Desktop: janela lateral, preservando o centro do gameplay.
+			-- Celular/tablet: folha inferior, sem overlay escuro e acima do dock.
+			if logicalWidth < 1180 then
+				root.AnchorPoint = Vector2.new(0.5, 1)
+				root.Position = UDim2.new(0.5, 0, 1, logicalHeight < 640 and -94 or -105)
+				fittedWidth = math.min(spec.Width, logicalWidth - 28)
+				fittedHeight = math.min(spec.Height, math.max(220, math.min(logicalHeight * 0.72, logicalHeight - 170)))
+			else
+				root.AnchorPoint = Vector2.new(1, 0.5)
+				root.Position = UDim2.new(1, -24, 0.5, 0)
+				fittedWidth = math.min(spec.Width, logicalWidth * 0.56)
+				fittedHeight = math.min(spec.Height, logicalHeight - 40)
+			end
 			applySize()
 			if window.OnResize then
 				window.OnResize()

@@ -1,3 +1,8 @@
+> **CHECK-IN OFICIAL / ACOMPANHAMENTO:** [CHECKLIST MESTRE — GitHub Issue #15](https://github.com/FiaresAlan/Oficina24H/issues/15)  
+> Esta página é o **histórico técnico**, não a lista de tarefas. As caixas de seleção por fase, PRs abertos, portões de Studio e próximos passos ficam na Issue #15. Para conferir alterações, atualize a Issue no navegador; o conteúdo é atualizado em cada checkpoint via edição, não automaticamente.
+
+---
+
 # Progresso — Oficina 24H
 
 Atualizado: 2026-11-05
@@ -579,3 +584,113 @@ Detalhes em `docs/AUDITORIA_GERAL.md`. Resumo:
   são cortadas onde encostariam em lote, asfalto, loja, Construtora, estacionamentos ou praça. 115 pinheiros (bordas +
   grupos de 3 a 5 nos gramados, nunca em calçada). Play: carros e rivais andando normalmente, sem erros.
 - **Pendente**: conferir no celular.
+
+## 2026-11-12 — A2a: diagnóstico com evidências (GitHub-only; PR draft)
+
+- **Problema anterior:** seleção entre três nomes de defeitos sem inspeção contextual.
+- **Agora em código:** `shared/DiagnosisEvidence.lua` descreve testes de pressão de pneus, tensão da bateria e temperatura do arrefecimento. `WorkshopService.ExamineJob` só atende o dono da OS em andamento, com conversa iniciada e presença física perto do carro; devolve apenas laudos e não envia `DefectId`.
+- **Pilotos:** FlatTire, WeakBattery e Overheating exigem pelo menos um exame antes de confirmar a hipótese. Serviços das outras áreas mantêm fluxo legado para compatibilidade.
+- **UI:** `DiagnosisGame.lua` ganhou botões de inspeção, laudos acumulados, rolagem e escala proporcional para mobile. `Main.server.lua` valida novo remoto `ExamineJob`.
+- **Testes escritos:** 15 novos checks em `tools/DiagnosisEvidenceTest.luau` e registro em `RunAllTests.luau`.
+- **Limite:** a leitura é uma interface contextual baseada em estado do servidor; sem animações de scanner, manômetro ou medidores físicos no place. **Não foi executado no Studio nem verificado no celular.**
+- **Próximo:** três operações de reparo distintas com validação no servidor, preservando minigame legado e cobrando peças somente após sucesso.
+
+## 2026-11-12 — A2b: três reparos-piloto diferentes (GitHub-only; PR draft dependente de A2a)
+
+- **Pneu furado:** identificar ombro interno/centro/externo usando dica visual textual e ajustar pressão ao alvo. Qualidade depende da posição e calibração.
+- **Bateria fraca:** retirar/conectar terminais na sequência orientada; passos fora de ordem penalizam a execução.
+- **Superaquecimento:** ajustar volume de fluido, realizar ciclos de sangria e verificar ventoinha; qualidade depende das três decisões.
+- **Servidor:** `shared/RepairOperations.lua` sorteia contexto da OS, guarda o gabarito apenas no servidor e avalia payload tipado, tempo e modificadores de qualidade. `WorkshopService.StartRepair/FinishRepair` escolhem piloto ou `RepairRules` legado sem mudar a lógica de consumo de peças/pagamento/XP/nota. Preserva `VehicleService.SetRepairing` e efeitos.
+- **Cliente:** `UI/OperationRepairGame.lua` fornece controles de clique/toque por operação e tela de conclusão; `UI/RepairGame.lua` mantém minijogo de timing para todos os demais serviços. HUD reconhece ambos.
+- **Testes escritos:** `tools/RepairOperationsTest.luau` (17 casos) adicionado a `RunAllTests`. **Não rodados** nesta sessão (sem Roblox Studio/CLI Luau).
+- **Limites:** as interações atuais são painéis contextuais e efeitos de carro já existentes; **não são ainda desmontagem física modular nem instrumentos 3D importados**. Testar posição dos botões, legibilidade, som, touch e cancelamento em Studio antes de mesclar.
+
+## 2026-11-12 — A1b: ciclo de vida das sessões de reparo (GitHub-only; PR draft)
+
+- **Correção:** recusar `StartRepair` enquanto houver sessão ativa do mesmo jogador, evitando sobrescrever o plano já iniciado por outra OS.
+- **Limpeza:** sessão vencida ou invalidação de pré-requisitos em `FinishRepair` agora desliga `VehicleService.SetRepairing`; antes poderia deixar reparo/elevador ativo depois da recusa.
+- **Abandono:** `DeclineJob` limpa sessão correspondente antes de despawnar carro.
+- **Manutenção:** o loop de expiração utiliza a mesma regra pura `shared/RepairSessionRules.lua` e guarda limite máximo.
+- **Testes escritos:** `tools/RepairSessionTest.luau` (10 casos) incluído em `tools/RunAllTests.luau`.
+- **Validação real:** pendente; não se executou Studio, teste multiplayer ou DataStore publicado. Não muda schema de salvamento.
+
+## 2026-11-12 — A3: inspeções no próprio veículo (GitHub-only; PR draft)
+
+- Os três pontos de inspeção (pneu, bateria, arrefecimento) agora existem como peças invisíveis soldadas ao carro, com `ProximityPrompt`, ligados ao `ExamineJob` da fase A2.
+- O jogador vê marcadores locais só após conversar com o cliente; exames confirmados mudam a cor do respectivo marcador.
+- Verificação de distância até o ponto físico e exigência de exame relevante executadas no servidor; a ordem, o dono e os dados continuam sob autoridade server-side.
+- Ajuste dos reparos: tempo mínimo por procedimento (2/3,5/3 s), informado na UI para evitar conclusão automática e frustração.
+- 14 testes escritos para os pontos, mais 5 testes de relevância e 4 de duração mínima/cópia pública; suíte global atualizada.
+- **Validação:** leitura estática do GitHub; sem Play, Studio, Rojo ou teste mobile nesta rodada. Marcadores ainda usam posições relativas, não sockets nos modelos reais. Ver `docs/TESTE_A3_INSPECAO_FISICA_2026-11-12.md`.
+
+## 2026-11-12 — B1: contratado precisa executar reparo real (GitHub-only; PR draft)
+
+- **Removido pagamento sem procedimento** de `CompleteCollaborativeJob`: agora abre `StartRepair` e exige `FinishRepair` válido.
+- `shared/CollaborationRules.lua`: autoridade de executor e divisão financeira que preserva soma.
+- O contratado usa máquinas do lote do contratante com verificação de origem pelo servidor; os prompts na UI aparecem só para o veículo autorizado e equipamentos do dono.
+- `WorkshopService.checkRepairable` valida nível do executor e estoque/equipamentos da oficina proprietária. No acerto, divide serviço+gorjeta, credita XP ao executor e reputação/avaliação/contrato ao dono. Não aplica bônus de combo/amigo do contratado.
+- Contratos limitados a uma OS ativa por contratado; saída do dono, saída do contratado e expiração limpam permissões/estado (sessões ativas não expiram prematuramente).
+- `tools/CollaborationRulesTest.luau`: 13 verificações escritas e incluídas em `RunAllTests`.
+- **Ainda não há dupla operação simultânea** no mesmo carro. **Nenhuma execução de testes no Studio, multiplayer real, celular ou DataStore foi realizada nesta sessão.** `docs/TESTE_B1_COLAB_REPARO_2026-11-12.md` descreve os portões.
+
+## 2026-11-12 — B2a: preparação física para três reparos-piloto (GitHub-only; PR draft)
+
+- `shared/RepairPrepRules.lua` define duas etapas de preparo por reparo (pneu: porcas/apoio; bateria: capô/presilha; arrefecimento: capô/bandeja), com sequência server-side e fallback legado.
+- `VehicleService` cria sockets invisíveis soldados em cada carro, prompts de ação espacial e trava o botão Reparar até terminar o preparo. `WorkshopService.PrepareRepairStep` valida executor, ordem, estágio, peça e distância antes de avançar. `StartRepair` e `FinishRepair` voltam a validar a conclusão.
+- `RepairPrepMarkers.client.lua` exibe etapa em amarelo e concluídas em verde para dono/contratado responsável. `HUD.lua` mostra a preparação no checklist. `VehicleFx.client.lua` abre capô onde disponível, sem incluir sockets na detecção de malha.
+- `employeeWork` recebe fallback para retomada de OS se NPC falha; NPC deixa de sequestrar ordem cujo preparo manual já progrediu.
+- 35 novos checks em `tools/RepairPrepTest.luau` registrados em `RunAllTests` (total acumulado nesta sequência: 134 checks novos escritos).
+- **Limitação explícita:** sockets posicionados relativamente às dimensões declaradas, ainda sem mesh/pivô real validado. Nenhum teste Luau/Studio, multiplayer, celular ou DataStore foi executado nesta rodada. Ver `docs/TESTE_B2_PREPARO_FISICO_2026-11-12.md`.
+
+## 2026-11-12 — B2b: sockets por veículo e feedback das peças (GitHub-only; PR draft)
+
+- `RepairSocketRules.Resolve` usa `Attachment` opcional `OficinaSocket_<StepId>` no modelo de cada carro ou o mesmo fallback geométrico da B2a; `VehicleService` registra `SocketSource` para diagnóstico.
+- `RepairPartVisualRules` limita visualização a carros próximos, ativos e com etapas válidas; não concede recompensas.
+- `RepairPartVisuals.client.lua` desenha props metálicos de porcas, apoio do elevador, trava, presilha e bandeja, além de chave animada ao manter o prompt pressionado; remove os efeitos quando o carro muda de estado ou sai de perto.
+- `VehicleFx.client.lua` desloca visualmente a roda após concluir o apoio (sem alterar física autoritativa), preservando a abertura de capô da B2a.
+- Testes escritos: `RepairSocketTest.luau` (12) e `RepairPartVisualTest.luau` (13), integrados ao `RunAllTests.luau`. **25 checks adicionados, 159 acumulados desde A1 (escritos, não executados).**
+- **Limitações:** geometria procedimental de apresentação local, não modelos PBR licenciados nem desmontagem real do MeshPart. `docs/TESTE_B2B_VISUAL_PECAS_2026-11-12.md` traz convenção dos sockets e homologação necessária em Studio. Nenhum teste Studio/multiplayer/mobile foi executado nesta rodada.
+
+## 2026-11-12 — B3: HUD/UX v2 baseada no trabalho mecânico (GitHub-only; PR draft)
+
+- **Problema do produto:** a barra superior, cinco ações laterais, cinco ações duplicadas no rodapé e três cartões de informação concorriam pela área do carro/NPC. No mobile, valores fixos da HUD permitiam cortes; o componente legado `Kit.panel` escurecia o mundo.
+- **Implementado:** `HudLayoutRules.Plan` define responsividade; `CompactHUD` mostra saldo/nível e cartão de objetivo contextual baseado em Jobs reais. Em desktop, um único menu lateral recolhido por padrão; em touch/compacto, apenas um dock de seis funções com ícones e legendas curtas (Ordens, Habilidades, Loja, Estoque, Ranking, Perfil).
+- **Layout:** lista direita recolhida por padrão no compacto, acionada pelo botão de detalhes; janelas principais ancoradas lateralmente no desktop ou como folhas inferiores no celular, sem overlay escuro. Cartão da oficina redundante sai do HUD persistente, mas Perfil permanece no menu.
+- **Estilo:** grafite, aço e âmbar, menos brilho/neon; toasts e avaliações limitados pela largura, acima do dock. O objetivo volta após fechar painéis e o onboarding mira apenas a navegação atualmente visível.
+- **Contratos preservados:** `Store`, `Panels.*`, trabalho NPC, inventário, reputação, DataStore e remotes não foram alterados.
+- **Verificações:** 23 invariantes de integração observadas estaticamente via GitHub; fórmulas conferidas para desktop, laptop e cinco formatos de tela. **31 casos Luau escritos** (`HudLayoutTest`: 16, `CompactHudTest`: 15), incluídos no `RunAllTests`. Total acumulado de checks novos escritos nesta sequência: **190**. **Nenhum teste Luau/Roblox Studio/mobile foi executado nesta rodada.**
+- **Portão visual:** `docs/HUD_UX_V2_2026-11-12.md` contém wireframes, princípios e roteiro completo para homologar em Studio, PC, touch, gamepad e 2 players. Nenhuma captura do place foi verificada neste ambiente.
+
+## 2026-11-12 — B3a e B4: duas fases incrementais em uma rodada (GitHub-only, PRs draft)
+
+### B3a — estabilização de navegação mobile (PR #13)
+- `HudLayoutRules.Plan` agora mantém alvos de pelo menos ~48 px físicos no menor scale touch e retorna geometria do dock.
+- `HUD.lua`: dock mobile passou para `ScrollingFrame` horizontal de largura limitada à tela; seis funções continuam presentes em telas 320px.
+- `HudLayoutTest.luau`: +5 verificações escritas de tamanho dos botões e largura/scroll.
+- Registro: `docs/TESTE_B3A_HUD_ESTABILIDADE_2026-11-12.md`.
+
+### B4 — próxima ação e localização de serviço (PR draft, dependente de B3a)
+- `ServiceFocusRules`: módulo puro de prioridade com cenários de cliente urgente, diagnóstico, preparo, falta de peças, equipamento e colaboração. Desempate determinístico de múltiplas OS.
+- `CompactHUD` e `HUD`: cartão de objetivo passa a orientar a carro, estação ou loja por `Stations.GuideTo`. Não executa ações server-side.
+- `Panels/Orders.lua`: remove botões abstratos `CompleteJob` e `DiagnoseJob` do painel; serviço começa pela interação no local correto. Preserva HireNpc, convite, abandono e colaboração.
+- `Onboarding.lua`: orientação do novato inclui a preparação física.
+- `ServiceFocusTest.luau`: 30 checks novos escritos, registrados em `RunAllTests`.
+- Registro: `docs/TESTE_B4_ORIENTACAO_ORDENS_2026-11-12.md`.
+
+**Total de verificações novas escritas nesta rodada: 35 (5 B3a + 30 B4); acumulado descrito desde A1: 225.** Estes valores representam casos de teste *escritos*, não testes aprovados em execução. Revisões estáticas do código não substituem testes em Roblox Studio, multiplayer e dispositivos. Nenhuma alteração feita na `main`.
+
+## 2026-11-12 — C1–C3: cobertura integral do catálogo e portões de produto final (GitHub-only; PRs draft)
+
+- **C1 ([#17](https://github.com/FiaresAlan/Oficina24H/pull/17))**: todos os 15 defeitos exigem um exame relevante; nove grupos de inspeção, nove pontos físicos, grade 3×3 e no máximo três marcadores próximos. A leitura continua server-side, com testes de cobertura por catálogo.
+- **C2 ([#18](https://github.com/FiaresAlan/Oficina24H/pull/18))**: 12 serviços que ainda usavam apenas timing ganham procedimentos específicos em quatro famílias: sequência, calibração, circuito e superfície. Somados aos três pilotos anteriores, são **15 serviços com plano de reparo próprio** no código. `WorkshopService` mantém o fluxo de peças, qualidade, XP e pagamento já existente.
+- **C3 ([#19](https://github.com/FiaresAlan/Oficina24H/pull/19))**: `RunAllTests` passa a contabilizar exceções e suites ausentes como falhas e emitir resumo de aprovação; `StudioPlaceAudit` audita carro, NPC, mapa, módulos, scripts em assets e cobertura dos 15 serviços. Critérios completos em `docs/QUALIDADE_PRODUTO_FINAL_2026-11-12.md`.
+- **Checklist atualizado:** [Issue #15](https://github.com/FiaresAlan/Oficina24H/issues/15), com os itens marcados como *código escrito* e QA/polimento/merge permanecendo abertos.
+- **Importante:** não houve execução Roblox Studio, celular, multiplayer ou DataStore publicado nesta rodada. Assets 3D e licenças permanecem pendências externas ao repositório. `main` continua sem essas alterações.
+
+## 2026-11-12 — C4: integração única e build CI automático (GitHub-only)
+
+- [PR geral #20](https://github.com/FiaresAlan/Oficina24H/pull/20) criado **em draft** com o código A1–C3 integrado a partir da `main` sem merge duplo dos PRs empilhados.
+- `.github/workflows/code-health.yml` adiciona validação por commit e PR: Python da stdlib confere o contrato do catálogo, os nove exames, os quinze reparos e as suites; Rokit/Rojo 7.7.1 monta um `.rbxlx` **somente com código**. Não importa assets nem publica o jogo.
+- `tools/ci/verify_contracts.py` é verificação estática independente do Studio. **Não substitui `RunAllTests`** nem performance/visual/multiplayer.
+- O GitHub Actions iniciou a verificação na branch de integração; resultado deve ser consultado na própria página antes de marcar aprovado.
+- Checklist [Issue #15](https://github.com/FiaresAlan/Oficina24H/issues/15) permanece fonte de verdade do produto final. A `main` não foi alterada.

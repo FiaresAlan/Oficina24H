@@ -2,7 +2,17 @@
 
 Simulador social de oficina mecânica para Roblox: o jogador atende clientes, diagnostica o defeito, prepara peças e equipamentos, repara com um minijogo e evolui a oficina. Servidor autoritativo, persistência em DataStore e interface em português.
 
-**Status:** MVP (P0) completo no código e testado no Studio, **ainda não pronto para lançar**. Faltam testes com jogadores reais e celular, medição de desempenho e confirmação de licenças. Veja `docs/AUDITORIA_P0.md` (seção 8) e `docs/PROGRESSO.md`.
+## Acompanhamento do projeto
+
+**[CHECKLIST MESTRE — 14 fases, status e PRs (Issue #15)](https://github.com/FiaresAlan/Oficina24H/issues/15)**
+
+**[PR #20 — Branch de integração geral para homologação no Studio](https://github.com/FiaresAlan/Oficina24H/pull/20)** — código A1–C3 consolidado; PR draft, ainda não integrado à `main`.
+
+**[Build/CI de código](https://github.com/FiaresAlan/Oficina24H/actions/workflows/code-health.yml)** — valida mapeamento dos 15 defeitos e executa build Rojo a cada atualização. **CI verde não equivale a jogo testado no Studio.**
+
+A Issue #15 é o painel único de check-ins. Lá estão as caixas `[x]` para código e documentação registrados e `[ ]` para execução de testes, validação no Studio e merge. O arquivo `docs/PROGRESSO.md` permanece como histórico detalhado.
+
+**Status de desenvolvimento (A1–C3):** regras, HUD, diagnóstico e procedimentos especializados para **15 serviços** estão versionados na [branch mais recente de homologação](https://github.com/FiaresAlan/Oficina24H/tree/work/oficina24h-c3-gates-qualidade-2026-11-12). **Não foram executados testes novos no Roblox Studio nesta sequência e nada foi integrado à `main`.** A meta atual é **produto final**, condicionado a arte, sons, dispositivos reais, licenças, performance e testes com jogadores. O registro de Studio do MVP original não homologa as novas mudanças.
 
 ## Ciclo do MVP
 
@@ -25,7 +35,7 @@ A qualidade do reparo soma 6 fatores: precisão, erros, habilidade, equipamento,
 1. Instale as ferramentas: `rokit install` (Rojo 7.7.1).
 2. `rojo serve default.project.json` e conecte pelo plugin do Rojo no Roblox Studio.
 3. Os modelos 3D (carros, clientes) ficam em `ServerStorage/Assets` dentro do place e **não** estão neste repositório (veja `docs/ORIGEM_ASSETS.md`).
-4. Testes: rode `tools/RunAllTests.luau` no modo Edit (639 verificações).
+4. Testes: rode `tools/RunAllTests.luau` no modo Edit. O runner mostra **PASSOU/REPROVADO**, suites ausentes e avisos; `StudioPlaceAudit` verifica modelos e mundo. Os testes de A1–C3 estão escritos, mas ainda precisam ser executados no Studio. Consulte a Issue #15.
 
 ## O que não está aqui
 

@@ -9,11 +9,13 @@
 --     com portões de entrada e saída.
 -- Posições no espaço local do lote. Prompts das estações só aparecem para o dono (atributo OwnerUserId).
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
 
 local Layout = require(ReplicatedStorage.Shared.Layout)
 local WorkshopLevels = require(ReplicatedStorage.Shared.WorkshopLevels)
 local Config = require(ReplicatedStorage.Shared.Config)
+local LocationRules = require(ReplicatedStorage.Shared.LocationRules)
 
 local StationService = {}
 
@@ -598,16 +600,13 @@ function StationService.NearConstrutora(player: Player): boolean
 	local character = player.Character
 	local hrp = character and character:FindFirstChild("HumanoidRootPart")
 	if not block then
-		return true -- sem o prédio (testes no Edit) não bloqueia
+		-- Falta do prédio só é tolerada no ambiente de teste do Studio.
+		return LocationRules.MissingBlockAllowed(RunService:IsStudio())
 	end
 	if not hrp or not hrp:IsA("BasePart") then
 		return false
 	end
-	local rel = block.CFrame:PointToObjectSpace(hrp.Position)
-	local half = block.Size / 2
-	local dx = math.max(math.abs(rel.X) - half.X, 0)
-	local dz = math.max(math.abs(rel.Z) - half.Z, 0)
-	return math.sqrt(dx * dx + dz * dz) <= Config.ShopDistance
+	return LocationRules.IsNearBlock(block.CFrame, block.Size, hrp.Position, Config.ShopDistance)
 end
 
 local function buildPublicAreas()

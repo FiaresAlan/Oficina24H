@@ -15,10 +15,10 @@ local StationService = require(script.Parent.StationService)
 
 local EquipmentService = {}
 
-local useHandler: ((Player, string) -> ())? = nil
+local useHandler: ((Player, string, Instance) -> ())? = nil
 
 -- Quem trata o "Usar <equipamento>" (WorkshopService.UseEquipment valida dono, ordem, distância...).
-function EquipmentService.SetUseHandler(handler: (Player, string) -> ())
+function EquipmentService.SetUseHandler(handler: (Player, string, Instance) -> ())
 	useHandler = handler
 end
 
@@ -112,8 +112,10 @@ local function addUsePrompt(plot: Instance, model: Model, equipmentId: string)
 	prompt:SetAttribute("EquipmentId", equipmentId)
 	prompt.Parent = anchor
 	prompt.Triggered:Connect(function(player: Player)
-		if plot:GetAttribute("OwnerUserId") == player.UserId and useHandler then
-			useHandler(player, equipmentId)
+		-- O servidor verifica a OS ativa e compara o lote de origem com o lote do dono.
+		-- Não restringir ao dono aqui: mecânicos formalmente contratados também usam a máquina.
+		if useHandler then
+			useHandler(player, equipmentId, plot)
 		end
 	end)
 end

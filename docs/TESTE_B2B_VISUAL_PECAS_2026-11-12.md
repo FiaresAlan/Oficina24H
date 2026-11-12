@@ -31,7 +31,7 @@ Para ajustar o posicionamento de um carro sem mudar código, criar os seguintes 
 
 Os sockets podem ser filhos de qualquer `BasePart` do modelo. `RepairSocketRules.Resolve` usa `Attachment.WorldCFrame` quando encontrado; caso contrário, mantém o offset de dimensões do modelo. `VehicleService` grava `SocketSource = "ModelAttachment"` ou `"DimensionFallback"` no ponto gerado, para auditoria no Studio.
 
-**Importante:** os sockets referenciam a pose inicial da malha do servidor. O posicionamento final da ferramenta e dos efeitos após animações locais precisa ser conferido com cada veículo. A presença de um socket não significa que o componente seja desmontável por física real.
+**Integração com arte definitiva:** quando um componente já tem a malha e a animação visual própria, adicione ao Attachment o atributo booleano \`OficinaUseNativeVisual = true\`. O servidor transmite \`UseNativeVisual\` no ponto de preparo; o cliente deixa de desenhar o proxy genérico naquele ponto, sem remover a interação ou a verificação de conclusão.\n\n**Importante:** os sockets referenciam a pose inicial da malha do servidor. O posicionamento final da ferramenta e dos efeitos após animações locais precisa ser conferido com cada veículo. A presença de um socket não significa que o componente seja desmontável por física real.
 
 ## Arquivos
 
@@ -40,7 +40,7 @@ Os sockets podem ser filhos de qualquer `BasePart` do modelo. `RepairSocketRules
 - `src/shared/RepairPartVisualRules.lua` — estados active/completed e LOD.
 - `src/client/RepairPartVisuals.client.lua` — props metálicos, animação de ferramenta, limpeza automática.
 - `src/client/VehicleFx.client.lua` — roda deslocada após conclusão do apoio.
-- `tools/RepairSocketTest.luau`, `tools/RepairPartVisualTest.luau` — 23 verificações, incluídas em `RunAllTests.luau`.
+- `tools/RepairSocketTest.luau`, `tools/RepairPartVisualTest.luau` — 25 verificações, incluídas em `RunAllTests.luau`.
 
 ## Testar antes de merge
 
@@ -50,7 +50,7 @@ Os sockets podem ser filhos de qualquer `BasePart` do modelo. `RepairSocketRules
 - [ ] Abrir bateria: observar trava do capô e presilha; capô físico abre se o veículo tiver malha separada.
 - [ ] Abrir arrefecimento: confirmar posição da bandeja, sem flutuar ou atravessar chão.
 - [ ] Criar `OficinaSocket_BatteryBracket` num veículo de teste, deslocar o Attachment e confirmar `SocketSource = ModelAttachment`.
-- [ ] Remover o Attachment e confirmar fallback sem erro.
+- [ ] Marcar no Attachment \`OficinaUseNativeVisual = true\` e confirmar que o visual genérico não se sobrepõe à peça modelada; desmarcar e conferir retorno do proxy.\n- [ ] Remover o Attachment e confirmar fallback sem erro.
 - [ ] Repetir duas vezes a mesma OS, cancelar durante reparo, sair do servidor e verificar limpeza de props/ferramenta.
 - [ ] Observar como outro jogador vê o reparo; tentar executar prompt de OS alheia, que deve ser negado pelo servidor.
 - [ ] Celular touch e gamepad: hold de ferramenta, marcadores e HUD responsivos.

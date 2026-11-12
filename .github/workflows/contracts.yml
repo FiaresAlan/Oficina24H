@@ -16,7 +16,26 @@ jobs:
       - uses: actions/checkout@v4
       - name: Verificar caminhos do Rojo e módulos Luau
         run: python3 tools/check_repo_contracts.py
+      - name: Instalar compilador Luau 0.746
+        run: |
+          curl --fail --location --silent --show-error \
+            https://github.com/luau-lang/luau/releases/download/0.746/luau-ubuntu.zip \
+            --output /tmp/luau.zip
+          mkdir -p /tmp/luau
+          unzip -q /tmp/luau.zip -d /tmp/luau
+          chmod +x /tmp/luau/luau-compile
+      - name: Compilar sintaxe de todos os scripts Luau
+        shell: bash
+        run: |
+          set -euo pipefail
+          count=0
+          while IFS= read -r -d '' source; do
+            echo "Compilando $source"
+            /tmp/luau/luau-compile "$source" > /dev/null
+            count=$((count + 1))
+          done < <(find src tools -type f \\( -name '*.lua' -o -name '*.luau' \\) -print0)
+          echo "$count arquivos Luau compilados com sucesso."
       - name: Escopo da validação
         run: |
-          echo "CI valida somente estrutura/caminhos de módulos."
+          echo "CI valida estrutura e sintaxe Luau."
           echo "Studio, gameplay, remotes e DataStore precisam de homologação separada."

@@ -533,11 +533,20 @@ function HUD.start()
 		end
 		activePrompt = p
 		if (repairGameRef and repairGameRef.IsActive()) or (operationGameRef and operationGameRef.IsActive()) then
+			activePrompt = nil
 			return
 		end
 		-- só o dono vê o prompt do próprio carro (o servidor já recusa ações de outros jogadores)
 		local car = p:FindFirstAncestorOfClass("Model")
 		local ownerId = p:GetAttribute("OwnerUserId") or (car and car:GetAttribute("OwnerUserId"))
+		-- Uma OS delegada não deve convidar o dono a executar as etapas do contratado.
+		if car and (p.Name == "Repair" or string.sub(p.Name, 1, 5) == "Prep_") then
+			local assigned = car:GetAttribute("AssignedRepairUserId")
+			if type(assigned) == "number" and assigned ~= player.UserId then
+				activePrompt = nil
+				return
+			end
+		end
 		if type(ownerId) == "number" and ownerId ~= player.UserId then
 			-- Permite apenas o carro da OS contratada ou as máquinas do dono dessa OS.
 			-- O servidor valida novamente job, local, habilidade e inventário.

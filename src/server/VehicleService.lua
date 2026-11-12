@@ -268,7 +268,7 @@ function VehicleService.SetRepairPrepProgress(jobId: string, defectId: string, s
 	if folder then
 		for _, point in ipairs(folder:GetChildren()) do
 			local id = point:GetAttribute("StepId")
-			point:SetAttribute("Completed", id == "HoodRelease" and stepIndex > 1
+			point:SetAttribute("Completed", id == "HoodRelease" and defectId ~= "FlatTire" and stepIndex > 1
 				or id == "WheelBolts" and defectId == "FlatTire" and stepIndex > 1
 				or id == "JackSupport" and defectId == "FlatTire" and stepIndex > 2
 				or id == "BatteryBracket" and defectId == "WeakBattery" and stepIndex > 2

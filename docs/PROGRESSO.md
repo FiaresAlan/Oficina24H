@@ -579,3 +579,13 @@ Detalhes em `docs/AUDITORIA_GERAL.md`. Resumo:
   são cortadas onde encostariam em lote, asfalto, loja, Construtora, estacionamentos ou praça. 115 pinheiros (bordas +
   grupos de 3 a 5 nos gramados, nunca em calçada). Play: carros e rivais andando normalmente, sem erros.
 - **Pendente**: conferir no celular.
+
+## 2026-11-12 — A2a: diagnóstico com evidências (GitHub-only; PR draft)
+
+- **Problema anterior:** seleção entre três nomes de defeitos sem inspeção contextual.
+- **Agora em código:** `shared/DiagnosisEvidence.lua` descreve testes de pressão de pneus, tensão da bateria e temperatura do arrefecimento. `WorkshopService.ExamineJob` só atende o dono da OS em andamento, com conversa iniciada e presença física perto do carro; devolve apenas laudos e não envia `DefectId`.
+- **Pilotos:** FlatTire, WeakBattery e Overheating exigem pelo menos um exame antes de confirmar a hipótese. Serviços das outras áreas mantêm fluxo legado para compatibilidade.
+- **UI:** `DiagnosisGame.lua` ganhou botões de inspeção, laudos acumulados, rolagem e escala proporcional para mobile. `Main.server.lua` valida novo remoto `ExamineJob`.
+- **Testes escritos:** 15 novos checks em `tools/DiagnosisEvidenceTest.luau` e registro em `RunAllTests.luau`.
+- **Limite:** a leitura é uma interface contextual baseada em estado do servidor; sem animações de scanner, manômetro ou medidores físicos no place. **Não foi executado no Studio nem verificado no celular.**
+- **Próximo:** três operações de reparo distintas com validação no servidor, preservando minigame legado e cobrando peças somente após sucesso.

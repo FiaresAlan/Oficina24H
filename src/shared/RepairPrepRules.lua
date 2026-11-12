@@ -5,16 +5,17 @@
 local RepairPrepRules = {}
 
 RepairPrepRules.MaxDistance = 7.5
-RepairPrepRules.Steps = {
+local steps: { [string]: { Id: string, Name: string, Action: string, Hold: number } } = {
 	WheelBolts = { Id = "WheelBolts", Name = "Soltar porcas da roda", Action = "Soltar porcas", Hold = 0.8 },
 	JackSupport = { Id = "JackSupport", Name = "Posicionar apoio do elevador", Action = "Apoiar veículo", Hold = 0.8 },
 	HoodRelease = { Id = "HoodRelease", Name = "Abrir capô", Action = "Abrir capô", Hold = 0.7 },
 	BatteryBracket = { Id = "BatteryBracket", Name = "Liberar presilha da bateria", Action = "Liberar suporte", Hold = 0.8 },
 	DrainPan = { Id = "DrainPan", Name = "Preparar bandeja de fluido", Action = "Posicionar bandeja", Hold = 0.8 },
 }
+RepairPrepRules.Steps = steps
 RepairPrepRules.Order = { "WheelBolts", "JackSupport", "HoodRelease", "BatteryBracket", "DrainPan" }
 
-local recipes = {
+local recipes: { [string]: { string } } = {
 	FlatTire = { "WheelBolts", "JackSupport" },
 	WeakBattery = { "HoodRelease", "BatteryBracket" },
 	Overheating = { "HoodRelease", "DrainPan" },

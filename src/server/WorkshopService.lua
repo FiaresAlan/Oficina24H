@@ -1100,6 +1100,9 @@ function WorkshopService.InviteWorker(owner: Player, workerUserId: number, jobId
     if job.CollaboratorUserId then
         return false, "Esta ordem já tem um colaborador."
     end
+    if Repairs[owner.UserId] and Repairs[owner.UserId].JobId == jobId then
+        return false, "Termine ou cancele seu reparo antes de contratar um profissional."
+    end
     if not isFinite(workerUserId) or not isFinite(splitPercent) then return false, "Convite inválido." end
     if workerUserId == owner.UserId then return false, "Você não pode convidar a si mesmo." end
     if not job.Diagnosed then return false, "Faça o diagnóstico antes de chamar um colaborador." end
@@ -1143,7 +1146,7 @@ function WorkshopService.RespondInvite(worker: Player, inviteId: string, accepte
     end
 
     local job = Jobs[invite.JobId]
-    if not job or job.Status ~= "InProgress" then
+    if not job or job.Status ~= "InProgress" or job.OwnerUserId ~= invite.OwnerUserId or not job.Diagnosed then
         invite.Status = "Expired"
         return false, "A ordem não está mais disponível."
     end
@@ -1153,76 +1156,31 @@ function WorkshopService.RespondInvite(worker: Player, inviteId: string, accepte
         return false, "A ordem já tem um colaborador."
     end
 
+    for _, other in pairs(Jobs) do
+        if other ~= job and CollaborationRules.IsWorker(other, worker.UserId) then
+            return false, "Você já está contratado para outra ordem. Conclua-a primeiro."
+        end
+    end
+    if Repairs[worker.UserId] then
+        return false, "Conclua ou cancele seu reparo antes de aceitar o convite."
+    end
+    local defect = Catalog.Defects[job.DefectId]
+    if DataService.GetSkillLevel(worker, defect.Specialization) < defect.RequiredLevel then
+        return false, "Sua habilidade ainda não atende ao nível necessário deste serviço."
+    end
     invite.Status = "Accepted"
     job.AssignedWorkerUserId = worker.UserId
     job.CollaboratorUserId = worker.UserId
     job.CollaborationSplitPercent = invite.SplitPercent
     job.CollabAt = os.time()
-    return true, "Convite aceito. Você agora participa da ordem."
+    worker:SetAttribute("CollaborationOwnerUserId", invite.OwnerUserId)
+    worker:SetAttribute("CollaborationJobId", job.Id)
+    return true, "Convite aceito. Vá até o carro ou a máquina da oficina contratante para reparar."
 end
 
+-- Compatibilidade com o botão legado: não paga instantaneamente; abre o mesmo minijogo do proprietário.
 function WorkshopService.CompleteCollaborativeJob(worker: Player, jobId: string)
-    local job = Jobs[jobId]
-    if not job or job.Status ~= "InProgress" or job.AssignedWorkerUserId ~= worker.UserId
-        or job.CollaboratorUserId ~= worker.UserId or worker.UserId == job.OwnerUserId then
-        return false, "Você não está responsável por esta ordem."
-    end
-    if not job.Diagnosed then return false, "O diagnóstico ainda não foi feito." end
-    if not VehicleService.IsNear(worker, job.Id, Config.InteractDistance) then
-        return false, "Aproxime-se do veículo para reparar."
-    end
-
-    local defect = Catalog.Defects[job.DefectId]
-    local service = Catalog.Services[job.ServiceId]
-    local owner = Players:GetPlayerByUserId(job.OwnerUserId)
-    if not owner then return false, "O proprietário saiu do servidor; a ordem foi cancelada." end
-
-    local ownerWorkshop = getWorkshop(owner)
-    if not ownerWorkshop or not ownsEquipment(ownerWorkshop, defect.RequiredEquipment) then
-        return false, "A oficina não possui o equipamento necessário."
-    end
-
-    local level = DataService.GetSkillLevel(worker, defect.Specialization)
-    if level < defect.RequiredLevel then
-        return false, "Seu nível de habilidade é insuficiente."
-    end
-    if not VehicleService.IsParked(job.Id) then
-        return false, "Espere o carro estacionar no box."
-    end
-    -- reparo de máquina: o colaborador também precisa estar na máquina da sala dos fundos
-    if defect.RequiredEquipment ~= "BasicToolset" then
-        local plot = PlotService.GetPlot(owner)
-        local pos = plot and EquipmentService.Position(plot, defect.RequiredEquipment)
-        local character = worker.Character
-        local hrp = character and character:FindFirstChild("HumanoidRootPart")
-        if not pos or not hrp or not hrp:IsA("BasePart") or (hrp.Position - pos).Magnitude > 12 then
-            return false, "Use o equipamento " .. Catalog.Equipment[defect.RequiredEquipment].DisplayName .. " na sala dos fundos da oficina."
-        end
-    end
-
-    local workerPercent = job.CollaborationSplitPercent or 25
-    -- sem o minijogo, o serviço do colaborador vale como qualidade padrão (85%) e rende metade do XP
-    local price = math.floor((job.Price or service.Reward) * RepairRules.PayMultiplier(85) + 0.5)
-    local workerPay = math.floor(price * workerPercent / 100)
-    local ownerPay = price - workerPay
-
-    -- As peças saem do estoque do dono da oficina (o colaborador trabalha com o material dela).
-    local missing = missingPartsMessage(owner, defect.Parts)
-    if missing or not DataService.TakeParts(owner, defect.Parts) then
-        return false, missing or "Faltam peças na oficina."
-    end
-
-    job.Status = "Completed"
-    VehicleService.Flash(job.Id, Color3.fromRGB(90, 220, 130))
-    VehicleService.Despawn(job.Id)
-    DataService.AddCoins(worker, workerPay, "Trabalho em oficina alheia: " .. service.DisplayName)
-    DataService.AddSkillXP(worker, defect.Specialization, math.floor(service.XP / 2))
-    DataService.AddCoins(owner, ownerPay, "Serviço (parte do dono): " .. service.DisplayName)
-    DataService.AddReputation(owner, service.Reputation)
-    local stars = rateService(owner, job, service, defect, worker, false)
-
-    return true, "Serviço concluído. Sua parte: " .. tostring(workerPay) .. " moedas e XP. Avaliação do cliente: "
-        .. CustomerRules.StarsText(stars) .. " (" .. tostring(stars) .. ")"
+    return WorkshopService.StartRepair(worker, jobId, false)
 end
 
 function WorkshopService.HireNpc(player: Player, jobId: string)

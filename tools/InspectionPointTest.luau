@@ -1,0 +1,23 @@
+-- Regressões dos pontos de interação física ao redor do carro.
+local I = require(game.ReplicatedStorage.Shared.InspectionPointRules)
+local results = {}
+local function check(name, ok)
+	table.insert(results, (ok and "PASS " or "FAIL ") .. name)
+end
+local offsets = I.Offsets(8, 18, 5)
+check("todos os tres exames possuem ponto", offsets.TirePressure ~= nil and offsets.BatteryVoltage ~= nil and offsets.CoolingTemperature ~= nil)
+check("pneu acessivel pela lateral", offsets.TirePressure.X < -4)
+check("bateria e radiador no cofre dianteiro", offsets.BatteryVoltage.Z < 0 and offsets.CoolingTemperature.Z < 0)
+check("pontos da bateria e arrefecimento distintos", offsets.BatteryVoltage.X ~= offsets.CoolingTemperature.X)
+check("dimensoes ausentes tem fallback seguro", I.Offsets(0/0, 0/0, 0/0).TirePressure ~= nil)
+check("medidas extremas limitadas", I.Offsets(10000, 10000, 10000).BatteryVoltage.Y < 10)
+check("prefixo fisico reconhecido", I.ExamFromKind("Inspect_TirePressure") == "TirePressure")
+check("todos os outros exames reconhecidos", I.ExamFromKind("Inspect_BatteryVoltage") == "BatteryVoltage" and I.ExamFromKind("Inspect_CoolingTemperature") == "CoolingTemperature")
+check("acao desconhecida negada", I.ExamFromKind("Inspect_Hack") == nil and I.ExamFromKind("Repair") == nil)
+local point = Vector3.new(10,2,0)
+check("proximo ao ponto", I.IsNear(point, Vector3.new(11,2,0), 2))
+check("fora do ponto", not I.IsNear(point, Vector3.new(30,2,0), 2))
+check("sem ponto nao autoriza", not I.IsNear(nil, Vector3.new(), 10))
+check("sem personagem nao autoriza", not I.IsNear(point, nil, 10))
+check("distancia NaN recusada", not I.IsNear(point, point, 0/0))
+return table.concat(results, "\n")

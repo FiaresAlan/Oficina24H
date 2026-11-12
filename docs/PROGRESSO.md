@@ -686,3 +686,11 @@ Detalhes em `docs/AUDITORIA_GERAL.md`. Resumo:
 - **C3 ([#19](https://github.com/FiaresAlan/Oficina24H/pull/19))**: `RunAllTests` passa a contabilizar exceções e suites ausentes como falhas e emitir resumo de aprovação; `StudioPlaceAudit` audita carro, NPC, mapa, módulos, scripts em assets e cobertura dos 15 serviços. Critérios completos em `docs/QUALIDADE_PRODUTO_FINAL_2026-11-12.md`.
 - **Checklist atualizado:** [Issue #15](https://github.com/FiaresAlan/Oficina24H/issues/15), com os itens marcados como *código escrito* e QA/polimento/merge permanecendo abertos.
 - **Importante:** não houve execução Roblox Studio, celular, multiplayer ou DataStore publicado nesta rodada. Assets 3D e licenças permanecem pendências externas ao repositório. `main` continua sem essas alterações.
+
+## 2026-11-12 — C4: integração única e build CI automático (GitHub-only)
+
+- [PR geral #20](https://github.com/FiaresAlan/Oficina24H/pull/20) criado **em draft** com o código A1–C3 integrado a partir da `main` sem merge duplo dos PRs empilhados.
+- `.github/workflows/code-health.yml` adiciona validação por commit e PR: Python da stdlib confere o contrato do catálogo, os nove exames, os quinze reparos e as suites; Rokit/Rojo 7.7.1 monta um `.rbxlx` **somente com código**. Não importa assets nem publica o jogo.
+- `tools/ci/verify_contracts.py` é verificação estática independente do Studio. **Não substitui `RunAllTests`** nem performance/visual/multiplayer.
+- O GitHub Actions iniciou a verificação na branch de integração; resultado deve ser consultado na própria página antes de marcar aprovado.
+- Checklist [Issue #15](https://github.com/FiaresAlan/Oficina24H/issues/15) permanece fonte de verdade do produto final. A `main` não foi alterada.

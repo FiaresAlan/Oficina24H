@@ -2,7 +2,7 @@
 -- Requer o Rojo conectado (tools e scripts sincronizados). Duração ~25 s (PersistenceTest espera travas simuladas).
 local ServerStorage = game:GetService("ServerStorage")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local suites = { "CatalogTest", "CustomerTest", "RepairTest", "DiagnosisEvidenceTest", "InspectionPointTest", "RepairOperationsTest", "CollaborationRulesTest", "RepairSessionTest", "LocationTest", "RivalRulesTest", "PlotTest", "PersistenceTest", "ProgressTest" }
+local suites = { "CatalogTest", "CustomerTest", "RepairTest", "DiagnosisEvidenceTest", "InspectionPointTest", "RepairPrepTest", "RepairOperationsTest", "CollaborationRulesTest", "RepairSessionTest", "LocationTest", "RivalRulesTest", "PlotTest", "PersistenceTest", "ProgressTest" }
 local out = {}
 
 -- O cache de require do Edit guarda versões antigas de Shared (Catalog/Config). Durante os testes, uma cópia nova de

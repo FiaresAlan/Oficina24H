@@ -217,6 +217,74 @@ function OperationRepairGame.new(gui: ScreenGui)
 				fan = not fan
 				update()
 			end)
+		elseif currentPlan.Mode == "Sequence" then
+			label(content, tostring(currentPlan.Hint or ""), 5, 60, 21)
+			for i, op in ipairs(currentPlan.Options or {}) do
+				local col = (i - 1) % 2
+				local row = math.floor((i - 1) / 2)
+				button(content, tostring(op.Name), 16 + col * 300, 116 + row * 47, 285, 42, function()
+					if waiting or #sequence >= #(currentPlan.Options or {}) then return end
+					if table.find(sequence, op.Id) then return end
+					table.insert(sequence, tostring(op.Id))
+					update()
+				end)
+			end
+			button(content, "RECOMEÇAR ORDEM", 16, 265, 250, 48, function()
+				if waiting then return end
+				sequence = {}
+				update()
+			end)
+		elseif currentPlan.Mode == "Calibration" then
+			label(content, tostring(currentPlan.Hint or ""), 5, 60, 21)
+			for index, field in ipairs(currentPlan.Fields or {}) do
+				measures[field.Id] = field.Initial
+				local y = 113 + (index - 1) * 61
+				label(content, tostring(field.Name) .. " · alvo " .. tostring(field.Target) .. tostring(field.Unit), y, 44, 20)
+				button(content, "− " .. tostring(field.Step), 345, y, 108, 43, function()
+					if waiting then return end
+					measures[field.Id] = math.max(field.Min, math.round((measures[field.Id] - field.Step) * 100) / 100)
+					update()
+				end)
+				button(content, "+ " .. tostring(field.Step), 471, y, 108, 43, function()
+					if waiting then return end
+					measures[field.Id] = math.min(field.Max, math.round((measures[field.Id] + field.Step) * 100) / 100)
+					update()
+				end)
+			end
+		elseif currentPlan.Mode == "Circuit" then
+			label(content, tostring(currentPlan.Hint or ""), 5, 60, 20)
+			for i, source in ipairs(currentPlan.Sources or {}) do
+				button(content, tostring(source.Name), 16 + (i - 1) * 145, 118, 136, 45, function()
+					if waiting then return end
+					sourceId = source.Id
+					update()
+				end)
+			end
+			label(content, "Selecione o reparo do componente", 173, 30, 20)
+			for i, action in ipairs(currentPlan.Actions or {}) do
+				button(content, tostring(action.Name), 16 + (i - 1) * 197, 209, 185, 44, function()
+					if waiting then return end
+					actionId = action.Id
+					update()
+				end)
+			end
+		elseif currentPlan.Mode == "Surface" then
+			label(content, tostring(currentPlan.Hint or ""), 5, 60, 20)
+			for i, zone in ipairs(currentPlan.Zones or {}) do
+				zoneLevels[zone.Id] = 0
+				local y = 113 + (i - 1) * 51
+				label(content, tostring(zone.Name) .. " · " .. tostring(zone.Reading), y, 43, 19)
+				button(content, "−", 346, y, 106, 43, function()
+					if waiting then return end
+					zoneLevels[zone.Id] = math.max(0, zoneLevels[zone.Id] - 1)
+					update()
+				end)
+				button(content, "+", 470, y, 106, 43, function()
+					if waiting then return end
+					zoneLevels[zone.Id] = math.min(3, zoneLevels[zone.Id] + 1)
+					update()
+				end)
+			end
 		else
 			active = false
 			return

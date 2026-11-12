@@ -1249,6 +1249,10 @@ end
 
 -- Dono saiu: devolve ordens em andamento para "Available" e remove os veículos físicos do lote.
 function WorkshopService.PlayerLeft(userId: number)
+    local ownSession = Repairs[userId]
+    if ownSession then
+        VehicleService.SetRepairing(ownSession.JobId, false)
+    end
     Repairs[userId] = nil -- sessão de minijogo abandonada
     Combo[userId] = nil
     CustomerArrivalService.Clear(userId) -- clientes que ainda esperavam na rua somem junto
@@ -1257,6 +1261,21 @@ function WorkshopService.PlayerLeft(userId: number)
         if job.OwnerUserId == userId and job.Status ~= "InProgress" then
             Jobs[jobId] = nil -- cliente que esperava vai embora com o dono; não fica ordem fantasma para a reentrada
         elseif job.OwnerUserId == userId and job.Status == "InProgress" then
+            if job.CollaboratorUserId then
+                local worker = Players:GetPlayerByUserId(job.CollaboratorUserId)
+                if worker and worker:GetAttribute("CollaborationJobId") == jobId then
+                    worker:SetAttribute("CollaborationOwnerUserId", nil)
+                    worker:SetAttribute("CollaborationJobId", nil)
+                    local session = Repairs[worker.UserId]
+                    if session and session.JobId == jobId then
+                        Repairs[worker.UserId] = nil
+                        VehicleService.SetRepairing(jobId, false)
+                    end
+                    if eventSender then
+                        eventSender(worker, "Notice", { Message = "O proprietário saiu: a ordem colaborativa foi cancelada.", Success = false })
+                    end
+                end
+            end
             job.Status = "Available"
             job.AssignedWorkerUserId = nil
             job.CollaboratorUserId = nil
@@ -1811,8 +1830,19 @@ function WorkshopService.Start()
                     if owner then
                         breakCombo(job.OwnerUserId)
                     end
-                elseif job.Status == "InProgress" and job.CollaboratorUserId and os.time() - (job.CollabAt or os.time()) > Config.CollabMaxSeconds then
-                    -- colaborador que não conclui não prende a vaga: a ordem volta ao dono
+                elseif job.Status == "InProgress" and job.CollaboratorUserId and os.time() - (job.CollabAt or os.time()) > Config.CollabMaxSeconds
+                    and not (Repairs[job.CollaboratorUserId]
+                        and Repairs[job.CollaboratorUserId].JobId == jobId
+                        and RepairSessionRules.IsActive(Repairs[job.CollaboratorUserId], os.clock(), RepairRules.MaxSessionSeconds)) then
+                    -- Não retirar o trabalho de alguém no meio de um reparo válido.
+                    local oldWorker = Players:GetPlayerByUserId(job.CollaboratorUserId)
+                    if oldWorker and oldWorker:GetAttribute("CollaborationJobId") == jobId then
+                        oldWorker:SetAttribute("CollaborationOwnerUserId", nil)
+                        oldWorker:SetAttribute("CollaborationJobId", nil)
+                        if eventSender then
+                            eventSender(oldWorker, "Notice", { Message = "Prazo do contrato encerrado: a OS voltou ao proprietário.", Success = false })
+                        end
+                    end
                     job.CollaboratorUserId = nil
                     job.CollaborationSplitPercent = nil
                     job.CollabAt = nil

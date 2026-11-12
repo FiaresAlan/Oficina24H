@@ -14,16 +14,16 @@ function RepairSocketRules.Name(stepId: any): string?
 	return RepairSocketRules.Prefix .. stepId
 end
 
-function RepairSocketRules.Resolve(car: Model, root: BasePart, stepId: string, fallbackOffset: Vector3): (CFrame, string)
+function RepairSocketRules.Resolve(car: Model, root: BasePart, stepId: string, fallbackOffset: Vector3): (CFrame, string, boolean)
 	local name = RepairSocketRules.Name(stepId)
 	if name then
 		local native = car:FindFirstChild(name, true)
 		if native and native:IsA("Attachment") and native:IsDescendantOf(car)
 			and native.Parent and native.Parent:IsA("BasePart") then
-			return native.WorldCFrame, "ModelAttachment"
+			return native.WorldCFrame, "ModelAttachment", native:GetAttribute("OficinaUseNativeVisual") == true
 		end
 	end
-	return root.CFrame * CFrame.new(fallbackOffset), "DimensionFallback"
+	return root.CFrame * CFrame.new(fallbackOffset), "DimensionFallback", false
 end
 
 return RepairSocketRules

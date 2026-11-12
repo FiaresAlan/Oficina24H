@@ -712,8 +712,7 @@ function HUD.start()
 		local roots = {}
 		for _, b in ipairs(navButtons[name] or {}) do
 			-- Não guiar o tutorial para botões no trilho invisível.
-			if b.Root.Parent == bottomNav and bottomNav.Visible
-				or b.Root.Parent == sideMenu and sideMenu.Visible then
+			if b.Root.Parent and b.Root.Parent:IsA("GuiObject") and b.Root.Parent.Visible then
 				table.insert(roots, b.Root)
 			end
 		end
@@ -835,7 +834,7 @@ function HUD.start()
 		-- Painel de gestão substitui o quadro de contexto; nada empilha sobre o outro.
 		rightColumn.Visible = visible == true and selectedName == nil
 		infoToggle.BackgroundColor3 = rightColumn.Visible and Theme.Surface2 or Theme.Surface
-		compactHUD.Fit(logicalWidth, compact, rightColumn.Visible)
+		compactHUD.Fit(logicalWidth, compact, rightColumn.Visible or selectedName ~= nil)
 	end
 	refreshInfoVisibility = applyInfo
 

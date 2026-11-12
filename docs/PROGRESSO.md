@@ -678,3 +678,11 @@ Detalhes em `docs/AUDITORIA_GERAL.md`. Resumo:
 - Registro: `docs/TESTE_B4_ORIENTACAO_ORDENS_2026-11-12.md`.
 
 **Total de verificações novas escritas nesta rodada: 35 (5 B3a + 30 B4); acumulado descrito desde A1: 225.** Estes valores representam casos de teste *escritos*, não testes aprovados em execução. Revisões estáticas do código não substituem testes em Roblox Studio, multiplayer e dispositivos. Nenhuma alteração feita na `main`.
+
+## 2026-11-12 — C1–C3: cobertura integral do catálogo e portões de produto final (GitHub-only; PRs draft)
+
+- **C1 ([#17](https://github.com/FiaresAlan/Oficina24H/pull/17))**: todos os 15 defeitos exigem um exame relevante; nove grupos de inspeção, nove pontos físicos, grade 3×3 e no máximo três marcadores próximos. A leitura continua server-side, com testes de cobertura por catálogo.
+- **C2 ([#18](https://github.com/FiaresAlan/Oficina24H/pull/18))**: 12 serviços que ainda usavam apenas timing ganham procedimentos específicos em quatro famílias: sequência, calibração, circuito e superfície. Somados aos três pilotos anteriores, são **15 serviços com plano de reparo próprio** no código. `WorkshopService` mantém o fluxo de peças, qualidade, XP e pagamento já existente.
+- **C3 ([#19](https://github.com/FiaresAlan/Oficina24H/pull/19))**: `RunAllTests` passa a contabilizar exceções e suites ausentes como falhas e emitir resumo de aprovação; `StudioPlaceAudit` audita carro, NPC, mapa, módulos, scripts em assets e cobertura dos 15 serviços. Critérios completos em `docs/QUALIDADE_PRODUTO_FINAL_2026-11-12.md`.
+- **Checklist atualizado:** [Issue #15](https://github.com/FiaresAlan/Oficina24H/issues/15), com os itens marcados como *código escrito* e QA/polimento/merge permanecendo abertos.
+- **Importante:** não houve execução Roblox Studio, celular, multiplayer ou DataStore publicado nesta rodada. Assets 3D e licenças permanecem pendências externas ao repositório. `main` continua sem essas alterações.

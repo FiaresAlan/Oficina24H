@@ -1,6 +1,7 @@
 --!strict
 -- Regras puras do mercado: como um cliente NPC escolhe oficina. Sem acesso ao jogo, portanto testável sem jogadores.
 -- Fatores: preço, reputação, especialização (nível na área que o cliente precisa), distância, fila e disponibilidade.
+local CustomerPersonaRules = require(script.Parent.CustomerPersonaRules)
 local CustomerRules = {}
 
 CustomerRules.MinPrice = 0.7
@@ -16,6 +17,7 @@ export type Candidate = {
 	Capacity: number, -- máximo de ordens abertas
 	Distance: number, -- studs entre o ponto de chegada e a entrada do lote
 	Rating: number?, -- nota média (bayesiana) da oficina; ausente = neutra
+	PriceSensitivity: number?, -- elasticidade do arquétipo: ausente = regra clássica 2
 }
 
 -- ===== Avaliações =====
@@ -40,6 +42,7 @@ export type ServiceContext = {
 	LevelMargin: number, -- nível de quem executou menos o exigido (>= 0)
 	ByNpc: boolean, -- feito por mecânico NPC
 	Quality: number?, -- qualidade do minijogo de reparo (0-100); nil = sem minijogo (NPC/colaborador)
+	PersonaId: string?, -- ausência = cliente clássico
 }
 
 -- Nota de 1 a 5 que o cliente dá ao serviço. rand() em [0,1) acrescenta uma variação de ±0,5.
@@ -86,6 +89,7 @@ function CustomerRules.RateService(ctx: ServiceContext, rand: () -> number): num
 			score -= 0.75
 		end
 	end
+	score += CustomerPersonaRules.RatingAdjustment(ctx.PersonaId, ctx)
 	score += (rand() - 0.5) -- variação de humor do cliente
 	return math.clamp(math.floor(score + 0.5), 1, 5)
 end
@@ -150,7 +154,8 @@ function CustomerRules.Score(c: Candidate): number
 	end
 	local price = math.max(c.Price, 0.01)
 	-- Elasticidade 2: contra um rival igual, o preço de tabela (1.0) maximiza a receita esperada; subir ou baixar demais perde.
-	local priceFactor = (1 / price) ^ 2
+	local sensitivity = type(c.PriceSensitivity) == "number" and math.clamp(c.PriceSensitivity, 0.5, 3.5) or 2
+	local priceFactor = (1 / price) ^ sensitivity
 	local repFactor = 1 + math.log(1 + math.max(c.Reputation, 0)) * 0.6
 	local specFactor = 1 + (math.max(c.SpecLevel, 1) - 1) * 0.25
 	local distFactor = 1 / (1 + math.max(c.Distance, 0) / 250)

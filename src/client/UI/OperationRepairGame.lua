@@ -305,8 +305,26 @@ function OperationRepairGame.new(gui: ScreenGui)
 					return
 				end
 				input = { Steps = table.clone(sequence) }
-			else
+			elseif currentPlan.Mode == "Cooling" then
 				input = { Fluid = fluid, BleedCycles = bleed, FanChecked = fan }
+			elseif currentPlan.Mode == "Sequence" then
+				if #sequence ~= #(currentPlan.Options or {}) then
+					status.Text = "Conclua todas as etapas antes de entregar."
+					return
+				end
+				input = { Steps = table.clone(sequence) }
+			elseif currentPlan.Mode == "Calibration" then
+				input = { Values = table.clone(measures) }
+			elseif currentPlan.Mode == "Circuit" then
+				if not sourceId or not actionId then
+					status.Text = "Selecione o circuito e a ação de reparo."
+					return
+				end
+				input = { Source = sourceId, Action = actionId }
+			elseif currentPlan.Mode == "Surface" then
+				input = { Levels = table.clone(zoneLevels) }
+			else
+				return
 			end
 			local minSeconds = tonumber(currentPlan.MinSeconds) or 0
 			local remaining = minSeconds - (os.clock() - startedAt)

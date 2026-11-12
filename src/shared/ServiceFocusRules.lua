@@ -46,6 +46,30 @@ function ServiceFocusRules.MissingParts(job: any, profile: any): boolean
 	return false
 end
 
+function ServiceFocusRules.ForActive(active: any, profile: any): Focus
+	if type(active) ~= "table" or type(active.Id) ~= "string" then
+		return focus("Idle", "OFICINA DISPONÍVEL", "Aguarde o próximo cliente", "orders")
+	end
+	local vehicle = tostring(active.VehicleName or "Veículo")
+	if active.CollaboratorUserId ~= nil then
+		return focus("Delegated", "SERVIÇO DELEGADO", vehicle .. " · acompanhe o profissional", "orders", active.Id)
+	end
+	if not active.Diagnosed then
+		return focus("Diagnose", "DIAGNOSTICAR", vehicle .. " · examine o carro", "vehicle", active.Id)
+	end
+	if ServiceFocusRules.MissingParts(active, profile) then
+		return focus("Stock", "FALTAM PEÇAS", vehicle .. " · vá à loja de autopeças", "shop", active.Id)
+	end
+	if active.PrepRequired == true and active.PrepComplete ~= true then
+		return focus("Prepare", "PREPARAR VEÍCULO", vehicle .. " · siga os pontos amarelos", "vehicle", active.Id)
+	end
+	local eq = type(active.Requirement) == "table" and active.Requirement.EquipmentId or nil
+	if type(eq) == "string" and eq ~= "BasicToolset" then
+		return focus("Equipment", "USAR EQUIPAMENTO", vehicle .. " · vá até a máquina da oficina", "equipment", active.Id, eq)
+	end
+	return focus("Repair", "EXECUTAR REPARO", vehicle .. " · use a ferramenta", "vehicle", active.Id)
+end
+
 function ServiceFocusRules.Select(snapshot: any): Focus
 	if type(snapshot) ~= "table" then
 		return focus("Loading", "CARREGANDO OFICINA", "Buscando próximas ordens", "orders")
@@ -67,26 +91,7 @@ function ServiceFocusRules.Select(snapshot: any): Focus
 			end
 		end
 	end
-	if active then
-		local vehicle = tostring(active.VehicleName or "Veículo")
-		if active.CollaboratorUserId ~= nil then
-			return focus("Delegated", "SERVIÇO DELEGADO", vehicle .. " · acompanhe o profissional", "orders", active.Id)
-		end
-		if not active.Diagnosed then
-			return focus("Diagnose", "DIAGNOSTICAR", vehicle .. " · examine o carro", "vehicle", active.Id)
-		end
-		if ServiceFocusRules.MissingParts(active, snapshot.Profile) then
-			return focus("Stock", "FALTAM PEÇAS", vehicle .. " · vá à loja de autopeças", "shop", active.Id)
-		end
-		if active.PrepRequired == true and active.PrepComplete ~= true then
-			return focus("Prepare", "PREPARAR VEÍCULO", vehicle .. " · siga os pontos amarelos", "vehicle", active.Id)
-		end
-		local eq = type(active.Requirement) == "table" and active.Requirement.EquipmentId or nil
-		if type(eq) == "string" and eq ~= "BasicToolset" then
-			return focus("Equipment", "USAR EQUIPAMENTO", vehicle .. " · vá até a máquina da oficina", "equipment", active.Id, eq)
-		end
-		return focus("Repair", "EXECUTAR REPARO", vehicle .. " · use a ferramenta", "vehicle", active.Id)
-	end
+	if active then return ServiceFocusRules.ForActive(active, snapshot.Profile) end
 
 	for _, job in ipairs(type(snapshot.CollabJobs) == "table" and snapshot.CollabJobs or {}) do
 		if type(job) == "table" and type(job.Id) == "string" then

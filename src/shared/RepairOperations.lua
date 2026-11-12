@@ -53,7 +53,7 @@ function RepairOperations.Evaluate(plan: any, input: any, elapsed: number, mods:
 	if type(plan) ~= "table" or plan.Kind ~= "Operations" or type(input) ~= "table" then
 		return invalid("procedimento inválido")
 	end
-	if not finite(elapsed) or elapsed < 1.2 or elapsed > RepairRules.MaxSessionSeconds then
+	if not finite(elapsed) or elapsed < 0.25 or elapsed > RepairRules.MaxSessionSeconds then
 		return invalid("duração do procedimento inválida")
 	end
 	local execution, successes, errors = 0, 0, 0

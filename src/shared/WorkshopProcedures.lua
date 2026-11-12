@@ -166,11 +166,14 @@ function WorkshopProcedures.Evaluate(plan: any, input: any, elapsed: number, mod
 		if type(input.Steps) ~= "table" or #input.Steps ~= #plan.Correct then return invalid("etapas incompletas") end
 		local seen = {}
 		count = #plan.Correct
+		local received = 0
 		for index, id in ipairs(input.Steps) do
 			if not hasOption(plan.Options, id) or seen[id] then return invalid("sequência adulterada") end
 			seen[id] = true
+			received += 1
 			if id == plan.Correct[index] then successes += 1 end
 		end
+		if received ~= count then return invalid("etapas ausentes") end
 		execution = successes / count * 100
 	elseif plan.Mode == "Calibration" then
 		if type(input.Values) ~= "table" then return invalid("medidas ausentes") end

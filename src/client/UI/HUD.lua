@@ -24,6 +24,7 @@ local Stock = require(script.Parent.Panels.Stock)
 local Ranking = require(script.Parent.Panels.Ranking)
 local Notifications = require(script.Parent.Panels.Notifications)
 local RepairGame = require(script.Parent.RepairGame)
+local OperationRepairGame = require(script.Parent.OperationRepairGame)
 local DiagnosisGame = require(script.Parent.DiagnosisGame)
 local Onboarding = require(script.Parent.Onboarding)
 local Stations = require(script.Parent.Stations)
@@ -504,7 +505,8 @@ function HUD.start()
 	local activePrompt: ProximityPrompt? = nil
 	local diagnosisRefFit: ((number, number) -> ())? = nil
 	local onboardingFit: ((number) -> ())? = nil
-	local repairGameRef: { IsActive: () -> boolean, Fit: (number, number) -> () }? = nil -- definido adiante; o prompt "E" some enquanto o minijogo está aberto
+	local repairGameRef: { IsActive: () -> boolean, Fit: (number, number) -> () }? = nil -- minijogo legado
+	local operationGameRef: { IsActive: () -> boolean, Fit: (number, number) -> () }? = nil -- reparos pilotos
 	local promptHoldTween: Tween? = nil
 	local promptFill = Instance.new("Frame")
 	promptFill.Name = "HoldFill"
@@ -530,7 +532,7 @@ function HUD.start()
 			return
 		end
 		activePrompt = p
-		if repairGameRef and repairGameRef.IsActive() then
+		if (repairGameRef and repairGameRef.IsActive()) or (operationGameRef and operationGameRef.IsActive()) then
 			return
 		end
 		-- só o dono vê o prompt do próprio carro (o servidor já recusa ações de outros jogadores)
@@ -674,6 +676,8 @@ function HUD.start()
 	-- Minijogo de reparo: ao começar, fecha o painel aberto para liberar a tela.
 	repairGameRef = RepairGame.new(gui)
 	repairGameRef.Fit(1672, 941)
+	operationGameRef = OperationRepairGame.new(gui)
+	operationGameRef.Fit(1672, 941)
 	local diagnosisRef = DiagnosisGame.new(gui)
 	diagnosisRef.Fit(1672, 941)
 	diagnosisRefFit = diagnosisRef.Fit
@@ -867,6 +871,9 @@ function HUD.start()
 		fitRightColumn()
 		if repairGameRef then
 			repairGameRef.Fit(logicalWidth, logicalHeight)
+		end
+		if operationGameRef then
+			operationGameRef.Fit(logicalWidth, logicalHeight)
 		end
 		if diagnosisRefFit then
 			diagnosisRefFit(logicalWidth, logicalHeight)

@@ -9,6 +9,7 @@ local JobRules = require(ReplicatedStorage.Shared.JobRules)
 local CustomerRules = require(ReplicatedStorage.Shared.CustomerRules)
 local RepairRules = require(ReplicatedStorage.Shared.RepairRules)
 local RepairSessionRules = require(ReplicatedStorage.Shared.RepairSessionRules)
+local CollaborationRules = require(ReplicatedStorage.Shared.CollaborationRules)
 local RepairOperations = require(ReplicatedStorage.Shared.RepairOperations)
 local DiagnosisRules = require(ReplicatedStorage.Shared.DiagnosisRules)
 local DiagnosisEvidence = require(ReplicatedStorage.Shared.DiagnosisEvidence)
@@ -765,50 +766,51 @@ end
 
 -- Confere TUDO que o reparo exige (responsável, diagnóstico, distância, equipamento, nível, peças) SEM consumir nada.
 -- Retorna (ok, mensagem, job, defect, service).
-local function checkRepairable(player: Player, jobId: string): (boolean, string, any, any, any)
+local function checkRepairable(player: Player, jobId: string): (boolean, string, any, any, any, Player?)
     local job = Jobs[jobId]
-    if not job or job.OwnerUserId ~= player.UserId then
-        return false, "Ordem não encontrada.", nil, nil, nil
-    end
-    if job.Status ~= "InProgress" or job.AssignedWorkerUserId ~= player.UserId then
-        return false, "Você não está responsável por esta ordem.", nil, nil, nil
+    if not CollaborationRules.IsAuthorized(job, player.UserId) then
+        return false, "Você não está responsável por esta ordem.", nil, nil, nil, nil
     end
     if not job.Diagnosed then
-        return false, "Faça o diagnóstico antes do reparo.", nil, nil, nil
+        return false, "Faça o diagnóstico antes do reparo.", nil, nil, nil, nil
     end
-    local workshop = getWorkshop(player)
+    local owner: Player? = Players:GetPlayerByUserId(job.OwnerUserId)
+    if not owner or not DataService.Get(owner) then
+        return false, "O dono da oficina está desconectado.", nil, nil, nil, nil
+    end
+    local workshop = getWorkshop(owner)
     local defect = Catalog.Defects[job.DefectId]
     local service = Catalog.Services[job.ServiceId]
     if not workshop or not ownsEquipment(workshop, defect.RequiredEquipment) then
         local equipment = Catalog.Equipment[defect.RequiredEquipment]
-        return false, "Sua oficina não possui o equipamento necessário: " .. (equipment and equipment.DisplayName or defect.RequiredEquipment), nil, nil, nil
+        return false, "A oficina não possui o equipamento necessário: " .. (equipment and equipment.DisplayName or defect.RequiredEquipment), nil, nil, nil, nil
     end
     if not VehicleService.IsParked(job.Id) then
-        return false, "Espere o carro estacionar no box.", nil, nil, nil
+        return false, "Espere o carro estacionar no box.", nil, nil, nil, nil
     end
-    -- Ferramenta de mão: reparo no carro. Máquina: o jogador usa a máquina na sala dos fundos (prompt "Usar").
+    -- Ferramenta: junto ao carro. Máquina: na sala de equipamentos da oficina DONA da OS.
     if defect.RequiredEquipment == "BasicToolset" then
         if not VehicleService.IsNear(player, job.Id, Config.InteractDistance) then
-            return false, "Aproxime-se do veículo para reparar.", nil, nil, nil
+            return false, "Aproxime-se do veículo para reparar.", nil, nil, nil, nil
         end
     else
-        local plot = PlotService.GetPlot(player)
+        local plot = PlotService.GetPlot(owner)
         local pos = plot and EquipmentService.Position(plot, defect.RequiredEquipment)
         local character = player.Character
         local hrp = character and character:FindFirstChild("HumanoidRootPart")
         if not pos or not hrp or not hrp:IsA("BasePart") or (hrp.Position - pos).Magnitude > 12 then
-            return false, "Use o equipamento " .. Catalog.Equipment[defect.RequiredEquipment].DisplayName .. " na sala dos fundos da oficina.", nil, nil, nil
+            return false, "Use o equipamento " .. Catalog.Equipment[defect.RequiredEquipment].DisplayName .. " na sala dos fundos da oficina.", nil, nil, nil, nil
         end
     end
     local level = DataService.GetSkillLevel(player, defect.Specialization)
     if level < defect.RequiredLevel then
-        return false, "Nível insuficiente em " .. defect.Specialization .. ". Requer nível " .. tostring(defect.RequiredLevel) .. ".", nil, nil, nil
+        return false, "Nível insuficiente em " .. defect.Specialization .. ". Requer nível " .. tostring(defect.RequiredLevel) .. ".", nil, nil, nil, nil
     end
-    local missing = missingPartsMessage(player, defect.Parts)
+    local missing = missingPartsMessage(owner, defect.Parts)
     if missing then
-        return false, missing, nil, nil, nil
+        return false, missing, nil, nil, nil, nil
     end
-    return true, "", job, defect, service
+    return true, "", job, defect, service, owner
 end
 
 -- Inicia o minijogo: o servidor sorteia o plano e guarda o instante de início. Nada é cobrado até o envio final.

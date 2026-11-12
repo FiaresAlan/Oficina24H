@@ -194,6 +194,8 @@ function Onboarding.new(gui: ScreenGui, navRoots: (string) -> { GuiObject })
 			else
 				step, text, kind, target = "buy:" .. active.Id, t("ob_buy"), "button", "shop"
 			end
+		elseif active.PrepRequired and not active.PrepComplete then
+			step, text, kind, target = "prep:" .. active.Id, "Prepare o carro nos pontos amarelos antes do reparo", "world", vehicleOf(active.Id)
 		else
 			step, text, kind, target = "repair:" .. active.Id, t("ob_repair"), "world", vehicleOf(active.Id)
 		end

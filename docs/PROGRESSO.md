@@ -599,3 +599,12 @@ Detalhes em `docs/AUDITORIA_GERAL.md`. Resumo:
 - **Cliente:** `UI/OperationRepairGame.lua` fornece controles de clique/toque por operação e tela de conclusão; `UI/RepairGame.lua` mantém minijogo de timing para todos os demais serviços. HUD reconhece ambos.
 - **Testes escritos:** `tools/RepairOperationsTest.luau` (17 casos) adicionado a `RunAllTests`. **Não rodados** nesta sessão (sem Roblox Studio/CLI Luau).
 - **Limites:** as interações atuais são painéis contextuais e efeitos de carro já existentes; **não são ainda desmontagem física modular nem instrumentos 3D importados**. Testar posição dos botões, legibilidade, som, touch e cancelamento em Studio antes de mesclar.
+
+## 2026-11-12 — A1b: ciclo de vida das sessões de reparo (GitHub-only; PR draft)
+
+- **Correção:** recusar `StartRepair` enquanto houver sessão ativa do mesmo jogador, evitando sobrescrever o plano já iniciado por outra OS.
+- **Limpeza:** sessão vencida ou invalidação de pré-requisitos em `FinishRepair` agora desliga `VehicleService.SetRepairing`; antes poderia deixar reparo/elevador ativo depois da recusa.
+- **Abandono:** `DeclineJob` limpa sessão correspondente antes de despawnar carro.
+- **Manutenção:** o loop de expiração utiliza a mesma regra pura `shared/RepairSessionRules.lua` e guarda limite máximo.
+- **Testes escritos:** `tools/RepairSessionTest.luau` (10 casos) incluído em `tools/RunAllTests.luau`.
+- **Validação real:** pendente; não se executou Studio, teste multiplayer ou DataStore publicado. Não muda schema de salvamento.

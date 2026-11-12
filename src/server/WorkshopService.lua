@@ -7,6 +7,7 @@ local Catalog = require(ReplicatedStorage.Shared.Catalog)
 local JobRules = require(ReplicatedStorage.Shared.JobRules)
 local CustomerRules = require(ReplicatedStorage.Shared.CustomerRules)
 local RepairRules = require(ReplicatedStorage.Shared.RepairRules)
+local RepairSessionRules = require(ReplicatedStorage.Shared.RepairSessionRules)
 local RepairOperations = require(ReplicatedStorage.Shared.RepairOperations)
 local DiagnosisRules = require(ReplicatedStorage.Shared.DiagnosisRules)
 local DiagnosisEvidence = require(ReplicatedStorage.Shared.DiagnosisEvidence)
@@ -615,6 +616,11 @@ function WorkshopService.DeclineJob(player: Player, jobId: string)
     if job.CollaboratorUserId then
         return false, "Há um colaborador nesta ordem; aguarde ele concluir ou sair."
     end
+    local active = Repairs[player.UserId]
+    if active and active.JobId == jobId then
+        Repairs[player.UserId] = nil
+        VehicleService.SetRepairing(jobId, false)
+    end
     VehicleService.Despawn(job.Id)
     Jobs[jobId] = nil
     DataService.AddReputation(player, -1)
@@ -816,6 +822,15 @@ function WorkshopService.StartRepair(player: Player, jobId: string, assist: bool
     if not ok then
         return false, message
     end
+    local previous = Repairs[player.UserId]
+    if previous then
+        if RepairSessionRules.IsActive(previous, os.clock(), RepairRules.MaxSessionSeconds) then
+            return false, "Você já tem um reparo em andamento. Conclua ou cancele antes de iniciar outro."
+        end
+        -- Sessão abandonada/expirada: libere a animação antes de criar uma nova.
+        Repairs[player.UserId] = nil
+        VehicleService.SetRepairing(previous.JobId, false)
+    end
     local margin = math.max(0, DataService.GetSkillLevel(player, defect.Specialization) - defect.RequiredLevel)
     local operation = RepairOperations.BuildPlan(job.DefectId, math.random(1, 2147483646))
     local plan = operation or RepairRules.BuildPlan(math.random(1, 2147483646), defect.RequiredLevel, margin, assist == true or RepairAssist[player.UserId] == true, Catalog.EquipmentEfficiency[defect.RequiredEquipment])
@@ -848,12 +863,15 @@ function WorkshopService.FinishRepair(player: Player, jobId: string, presses: an
         return false, "Nenhum reparo em andamento."
     end
     Repairs[player.UserId] = nil -- sessão de uso único: reenviar não paga duas vezes
-    local elapsed = os.clock() - session.StartedAt
-    if elapsed > RepairRules.MaxSessionSeconds then
+    local now = os.clock()
+    if not RepairSessionRules.IsActive(session, now, RepairRules.MaxSessionSeconds) then
+        VehicleService.SetRepairing(session.JobId, false)
         return false, "O reparo demorou demais e foi cancelado."
     end
+    local elapsed = now - session.StartedAt
     local ok, message, job, defect, service = checkRepairable(player, jobId)
     if not ok then
+        VehicleService.SetRepairing(session.JobId, false)
         return false, message
     end
     local mods: RepairRules.Mods = {
@@ -1769,7 +1787,7 @@ function WorkshopService.Start()
                 end
             end
             for userId, session in pairs(Repairs) do
-                if os.clock() - session.StartedAt > RepairRules.MaxSessionSeconds + 5 then
+                if not RepairSessionRules.IsActive(session, os.clock(), RepairRules.MaxSessionSeconds + 5) then
                     Repairs[userId] = nil -- sessão esquecida não prende a ordem
                     VehicleService.SetRepairing(session.JobId, false)
                 end

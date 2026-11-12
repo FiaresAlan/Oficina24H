@@ -167,7 +167,9 @@ local function redraw()
 					car:GetAttribute("Etapa"), car:GetAttribute("Estacionado"), car:GetAttribute("PrepRequired"),
 					id, car:GetAttribute("PrepStepId"), point:GetAttribute("Completed"), distance
 				)
-				if not state or type(id) ~= "string" then continue end
+				-- O artista pode declarar o visual nativo da peça no Attachment.
+				-- Neste caso mantemos prompt/estado, mas não cobrimos a malha com proxy genérico.
+				if not state or type(id) ~= "string" or point:GetAttribute("UseNativeVisual") == true then continue end
 				seen[point] = true
 				local visual = visuals[point]
 				if not visual or visual.StepId ~= id or not visual.Model.Parent then

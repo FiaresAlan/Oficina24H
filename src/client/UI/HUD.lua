@@ -1066,15 +1066,20 @@ function HUD.start()
 			HudParts.text(orderText, t("order_none"), 25, { Font = Theme.FontTitle, TextWrapped = true, AutomaticSize = Enum.AutomaticSize.Y, Size = UDim2.new(1, 0, 0, 0) })
 			return
 		end
-		HudParts.text(orderText, active.Diagnosed and t("order_intro_repair") or t("order_intro_diagnose"), 25, {
+		local intro = active.Diagnosed and t("order_intro_repair") or t("order_intro_diagnose")
+		if active.Diagnosed and active.PrepRequired and not active.PrepComplete then
+			intro = "Siga os marcadores amarelos no carro para preparar o serviço."
+		end
+		HudParts.text(orderText, intro, 25, {
 			Font = Theme.FontTitle, TextWrapped = true, AutomaticSize = Enum.AutomaticSize.Y, Size = UDim2.new(1, 0, 0, 0),
 		})
-		-- Etapas reais: diagnosticar -> reparar -> entregar (reparo e entrega fecham juntos, quando a ordem some)
-		local steps = {
-			{ t("order_step_diagnose"), active.Diagnosed == true },
-			{ t("order_step_repair"), false },
-			{ t("order_step_deliver"), false },
-		}
+		-- O preparo do carro é uma etapa própria, antes de abrir o minijogo de execução.
+		local steps = { { t("order_step_diagnose"), active.Diagnosed == true } }
+		if active.PrepRequired then
+			table.insert(steps, { "Preparar o veículo", active.PrepComplete == true })
+		end
+		table.insert(steps, { t("order_step_repair"), false })
+		table.insert(steps, { t("order_step_deliver"), false })
 		local currentFound = false
 		for index, step in ipairs(steps) do
 			local done = step[2] :: boolean

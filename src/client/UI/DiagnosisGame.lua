@@ -83,7 +83,7 @@ function DiagnosisGame.new(gui: ScreenGui): { IsActive: () -> boolean, Fit: (num
 	local customerLabel = HudParts.text(body, "", 24, { Font = Theme.FontSemi, TextColor3 = rgb(190, 205, 230), LayoutOrder = 1, ZIndex = 22 })
 	local complaintLabel = HudParts.text(body, "", 28, { Font = Theme.FontTitle, LayoutOrder = 2, ZIndex = 22, TextWrapped = true, AutomaticSize = Enum.AutomaticSize.Y, Size = UDim2.new(1, 0, 0, 0) })
 	HudParts.text(body, t("dg_hint"), 21, { Font = Theme.FontSemi, TextColor3 = Theme.Muted, LayoutOrder = 3, ZIndex = 22, TextWrapped = true, AutomaticSize = Enum.AutomaticSize.Y, Size = UDim2.new(1, 0, 0, 0) })
-	HudParts.text(body, "EXAMES NO VEÍCULO · aproxime-se do carro e escolha um teste", 18, { Font = Theme.FontSemi, TextColor3 = rgb(190, 205, 230), LayoutOrder = 4, ZIndex = 22 })
+	HudParts.text(body, "INSPEÇÃO NO CARRO · use os marcadores ou selecione um exame estando ao lado da peça", 18, { Font = Theme.FontSemi, TextColor3 = rgb(190, 205, 230), LayoutOrder = 4, ZIndex = 22 })
 	local exams = Instance.new("Frame")
 	exams.Name = "Exams"
 	exams.BackgroundTransparency = 1

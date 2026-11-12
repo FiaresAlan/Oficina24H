@@ -10,6 +10,9 @@ local tire2 = Rules.BuildPlan("FlatTire", 10)
 check("pneu: plano determinista", tire.LeakSpot == tire2.LeakSpot and tire.Mode == "Tire")
 check("legado: outros defeitos nao mudam", Rules.BuildPlan("Dent", 10) == nil)
 check("plano publico nao contem gabarito", Rules.PublicPlan(tire).LeakSpot == nil)
+check("tempo minimo comunicado no plano publico", Rules.PublicPlan(tire).MinSeconds == 2
+	and Rules.PublicPlan(Rules.BuildPlan("WeakBattery", 1)).MinSeconds == 3.5
+	and Rules.PublicPlan(Rules.BuildPlan("Overheating", 1)).MinSeconds == 3)
 local perfectTire = Rules.Evaluate(tire, { Spot = tire.LeakSpot, Pressure = 32 }, 4, mods)
 local poorTire = Rules.Evaluate(tire, { Spot = "Inner" == tire.LeakSpot and "Outer" or "Inner", Pressure = 20 }, 4, mods)
 check("pneu: acerto pontua alto", perfectTire.Valid and perfectTire.Quality >= 90)
@@ -32,5 +35,8 @@ check("arrefecimento: subpreenchimento pior", poorCool.Valid and poorCool.Qualit
 check("arrefecimento: ciclos nao inteiros invalido", not Rules.Evaluate(cool, { Fluid = 2, BleedCycles = 1.5, FanChecked = true }, 4, mods).Valid)
 check("arrefecimento: campo malicioso invalido", not Rules.Evaluate(cool, { Fluid = "2", BleedCycles = 2, FanChecked = true }, 4, mods).Valid)
 check("qualquer operacao: tempo irreal invalido", not Rules.Evaluate(cool, { Fluid = 2, BleedCycles = 2, FanChecked = true }, 0, mods).Valid)
+check("pneu: conclusao instantanea bloqueada", not Rules.Evaluate(tire, { Spot = tire.LeakSpot, Pressure = 32 }, 0.5, mods).Valid)
+check("bateria: exige tempo minimo de operacao", not Rules.Evaluate(battery, { Steps = sequence }, 2, mods).Valid)
+check("arrefecimento: exige tempo minimo de operacao", not Rules.Evaluate(cool, { Fluid = 2, BleedCycles = 2, FanChecked = true }, 2, mods).Valid)
 check("resultado: fatores da qualidade presentes", type(perfectCool.Breakdown) == "table" and type(perfectCool.Breakdown.Execution) == "number")
 return table.concat(result, "\n")

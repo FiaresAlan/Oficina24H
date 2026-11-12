@@ -608,3 +608,12 @@ Detalhes em `docs/AUDITORIA_GERAL.md`. Resumo:
 - **Manutenção:** o loop de expiração utiliza a mesma regra pura `shared/RepairSessionRules.lua` e guarda limite máximo.
 - **Testes escritos:** `tools/RepairSessionTest.luau` (10 casos) incluído em `tools/RunAllTests.luau`.
 - **Validação real:** pendente; não se executou Studio, teste multiplayer ou DataStore publicado. Não muda schema de salvamento.
+
+## 2026-11-12 — A3: inspeções no próprio veículo (GitHub-only; PR draft)
+
+- Os três pontos de inspeção (pneu, bateria, arrefecimento) agora existem como peças invisíveis soldadas ao carro, com `ProximityPrompt`, ligados ao `ExamineJob` da fase A2.
+- O jogador vê marcadores locais só após conversar com o cliente; exames confirmados mudam a cor do respectivo marcador.
+- Verificação de distância até o ponto físico e exigência de exame relevante executadas no servidor; a ordem, o dono e os dados continuam sob autoridade server-side.
+- Ajuste dos reparos: tempo mínimo por procedimento (2/3,5/3 s), informado na UI para evitar conclusão automática e frustração.
+- 14 testes escritos para os pontos, mais 5 testes de relevância e 4 de duração mínima/cópia pública; suíte global atualizada.
+- **Validação:** leitura estática do GitHub; sem Play, Studio, Rojo ou teste mobile nesta rodada. Marcadores ainda usam posições relativas, não sockets nos modelos reais. Ver `docs/TESTE_A3_INSPECAO_FISICA_2026-11-12.md`.

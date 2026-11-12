@@ -705,13 +705,14 @@ function WorkshopService.DiagnoseJob(player: Player, jobId: string, choice: any?
 
     ensureDiagnosisOptions(job)
     if choice == nil then
+        VehicleService.EnableInspection(job.Id)
         sendDiagnosisOptions(player, job)
         return true, ""
     end
 
     -- Para os três casos-piloto, o cliente não pode resolver apenas escolhendo por sorte.
-    if DiagnosisEvidence.RequiresExam(job.DefectId) and not DiagnosisEvidence.HasAnyExam(job.DiagnoseExams) then
-        return false, "Faça pelo menos uma inspeção no carro antes de confirmar o diagnóstico."
+    if DiagnosisEvidence.RequiresExam(job.DefectId) and not DiagnosisEvidence.HasRelevantExam(job.DefectId, job.DiagnoseExams) then
+        return false, "O laudo ainda é inconclusivo. Examine os pontos indicados no veículo."
     end
     local verdict = DiagnosisRules.Judge(job.DiagnoseOptions, job.DiagnoseWrong, job.DefectId, choice)
     if verdict == "invalid" then
@@ -752,11 +753,12 @@ function WorkshopService.ExamineJob(player: Player, jobId: string, examId: any)
     if not DiagnosisEvidence.IsValidExam(examId) then
         return false, "Exame inválido."
     end
-    if not VehicleService.IsNear(player, job.Id, Config.InteractDistance) then
-        return false, "Aproxime-se do carro para realizar a inspeção."
+    if not VehicleService.IsNearInspectionPoint(player, job.Id, examId) then
+        return false, "Vá até o ponto de inspeção correspondente no carro. Procure o marcador iluminado."
     end
     job.DiagnoseExams = job.DiagnoseExams or {}
     job.DiagnoseExams[examId] = true
+    VehicleService.MarkInspected(job.Id, examId)
     sendDiagnosisOptions(player, job)
     return true, ""
 end
@@ -1242,6 +1244,8 @@ function WorkshopService.Interact(player: Player, jobId: string, kind: string): 
     end
     if kind == "Diagnose" then
         return WorkshopService.DiagnoseJob(player, jobId)
+    elseif string.sub(kind, 1, 8) == "Inspect_" then
+        return WorkshopService.ExamineJob(player, jobId, string.sub(kind, 9))
     elseif kind == "Repair" then
         if job.CollaboratorUserId == player.UserId then
             return WorkshopService.CompleteCollaborativeJob(player, jobId)

@@ -12,6 +12,12 @@ check("outros defeitos mantem fluxo legado", not E.RequiresExam("Dent") and not 
 check("sem exame nao comprova nada", not E.HasAnyExam({}))
 check("id adulterado nao conta", not E.HasAnyExam({ Fake = true }))
 check("exame completo conta", E.HasAnyExam({ TirePressure = true }))
+check("exame relevante de pneu conta", E.HasRelevantExam("FlatTire", { TirePressure = true }))
+check("outro exame nao substitui o de pneu", not E.HasRelevantExam("FlatTire", { BatteryVoltage = true }))
+check("exame relevante de bateria conta", E.HasRelevantExam("WeakBattery", { BatteryVoltage = true }))
+check("outro exame nao substitui o de arrefecimento", not E.HasRelevantExam("Overheating", { TirePressure = true }))
+check("defeitos legados nao exigem evidencias", E.HasRelevantExam("Dent", nil))
+
 check("pneu furado gera evidencia", string.find(E.Read("FlatTire", "TirePressure") or "", "17 psi", 1, true) ~= nil)
 check("bateria ruim gera evidencia", string.find(E.Read("WeakBattery", "BatteryVoltage") or "", "10,9 V", 1, true) ~= nil)
 check("motor quente gera evidencia", string.find(E.Read("Overheating", "CoolingTemperature") or "", "115", 1, true) ~= nil)

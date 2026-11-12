@@ -7,6 +7,12 @@ InspectionPointRules.Exams = {
 	{ Id = "TirePressure", Name = "Pneu", Action = "Medir pressão" },
 	{ Id = "BatteryVoltage", Name = "Bateria", Action = "Testar tensão" },
 	{ Id = "CoolingTemperature", Name = "Arrefecimento", Action = "Medir temperatura" },
+	{ Id = "WheelInspection", Name = "Rodas", Action = "Inspecionar rodas" },
+	{ Id = "BrakeInspection", Name = "Freios", Action = "Medir pastilhas" },
+	{ Id = "ChassisInspection", Name = "Chassi", Action = "Verificar suspensão" },
+	{ Id = "EngineScan", Name = "Motor", Action = "Ler diagnóstico" },
+	{ Id = "CircuitTest", Name = "Circuitos", Action = "Testar continuidade" },
+	{ Id = "BodySurface", Name = "Carroceria", Action = "Inspecionar superfície" },
 }
 InspectionPointRules.MaxDistance = 7.5
 
@@ -23,6 +29,12 @@ function InspectionPointRules.Offsets(width: number, length: number, height: num
 		TirePressure = Vector3.new(-w / 2 - 0.35, math.max(1.25, h * 0.33), -l * 0.28),
 		BatteryVoltage = Vector3.new(-w * 0.22, math.max(1.8, h * 0.7), -l * 0.36),
 		CoolingTemperature = Vector3.new(w * 0.22, math.max(1.8, h * 0.7), -l * 0.36),
+		WheelInspection = Vector3.new(w / 2 + 0.4, math.max(1.25, h * 0.33), l * 0.28),
+		BrakeInspection = Vector3.new(w / 2 + 0.4, math.max(1.1, h * 0.27), -l * 0.28),
+		ChassisInspection = Vector3.new(-w / 2 - 0.15, math.max(1, h * 0.20), l * 0.08),
+		EngineScan = Vector3.new(0, math.max(2.0, h * 0.82), -l * 0.45),
+		CircuitTest = Vector3.new(w / 2 + 0.3, math.max(1.6, h * 0.55), -l * 0.10),
+		BodySurface = Vector3.new(w / 2 + 0.45, math.max(1.8, h * 0.65), l * 0.05),
 	}
 end
 

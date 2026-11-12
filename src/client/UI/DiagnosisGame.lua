@@ -83,17 +83,23 @@ function DiagnosisGame.new(gui: ScreenGui): { IsActive: () -> boolean, Fit: (num
 	local customerLabel = HudParts.text(body, "", 24, { Font = Theme.FontSemi, TextColor3 = rgb(190, 205, 230), LayoutOrder = 1, ZIndex = 22 })
 	local complaintLabel = HudParts.text(body, "", 28, { Font = Theme.FontTitle, LayoutOrder = 2, ZIndex = 22, TextWrapped = true, AutomaticSize = Enum.AutomaticSize.Y, Size = UDim2.new(1, 0, 0, 0) })
 	HudParts.text(body, t("dg_hint"), 21, { Font = Theme.FontSemi, TextColor3 = Theme.Muted, LayoutOrder = 3, ZIndex = 22, TextWrapped = true, AutomaticSize = Enum.AutomaticSize.Y, Size = UDim2.new(1, 0, 0, 0) })
-	HudParts.text(body, "INSPEÇÃO NO CARRO · use os marcadores ou selecione um exame estando ao lado da peça", 18, { Font = Theme.FontSemi, TextColor3 = rgb(190, 205, 230), LayoutOrder = 4, ZIndex = 22 })
+	HudParts.text(body, "INSPEÇÃO FÍSICA · aproxime-se do componente indicado antes de realizar o exame", 18, {
+		Font = Theme.FontSemi, TextColor3 = Theme.Muted, LayoutOrder = 4, ZIndex = 22,
+		TextWrapped = true, AutomaticSize = Enum.AutomaticSize.Y,
+		Size = UDim2.new(1, 0, 0, 0),
+	})
 	local exams = Instance.new("Frame")
 	exams.Name = "Exams"
 	exams.BackgroundTransparency = 1
-	exams.Size = UDim2.new(1, 0, 0, 48)
+	exams.Size = UDim2.new(1, 0, 0, 160)
 	exams.LayoutOrder = 5
 	exams.ZIndex = 22
 	exams.Parent = body
-	local examLayout = Instance.new("UIListLayout")
-	examLayout.FillDirection = Enum.FillDirection.Horizontal
-	examLayout.Padding = UDim.new(0, 6)
+	local examLayout = Instance.new("UIGridLayout")
+	examLayout.CellSize = UDim2.fromOffset(190, 44)
+	examLayout.CellPadding = UDim2.fromOffset(6, 6)
+	examLayout.FillDirectionMaxCells = 3
+	examLayout.SortOrder = Enum.SortOrder.LayoutOrder
 	examLayout.Parent = exams
 	local findingLabel = HudParts.text(body, "Nenhum exame realizado.", 19, { Font = Theme.FontSemi, TextColor3 = rgb(190, 220, 240), LayoutOrder = 6, ZIndex = 22, TextWrapped = true, AutomaticSize = Enum.AutomaticSize.Y, Size = UDim2.new(1, 0, 0, 0) })
 	local options = Instance.new("Frame")

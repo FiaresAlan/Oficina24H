@@ -20,4 +20,16 @@ check("fora do ponto", not I.IsNear(point, Vector3.new(30,2,0), 2))
 check("sem ponto nao autoriza", not I.IsNear(nil, Vector3.new(), 10))
 check("sem personagem nao autoriza", not I.IsNear(point, nil, 10))
 check("distancia NaN recusada", not I.IsNear(point, point, 0/0))
+local seen = {}
+for _, exam in ipairs(I.Exams) do
+	check("socket do exame " .. exam.Id, offsets[exam.Id] ~= nil)
+	check("exame tem texto de ação " .. exam.Id, type(exam.Action) == "string" and #exam.Action > 0)
+	check("ID de prompt válido " .. exam.Id, I.ExamFromKind("Inspect_" .. exam.Id) == exam.Id)
+	check("ID não repetido " .. exam.Id, seen[exam.Id] == nil)
+	seen[exam.Id] = true
+end
+check("nove pontos de exame", #I.Exams == 9)
+check("ponto de freios ao lado direito", offsets.BrakeInspection.X > 0)
+check("ponto de lataria na lateral", offsets.BodySurface.X > 0)
+check("scanner acessível no capô", offsets.EngineScan.Z < 0)
 return table.concat(results, "\n")

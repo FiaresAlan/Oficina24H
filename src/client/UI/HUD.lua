@@ -12,6 +12,8 @@ local Workspace = game:GetService("Workspace")
 local Catalog = require(ReplicatedStorage.Shared.Catalog)
 local CustomerRules = require(ReplicatedStorage.Shared.CustomerRules)
 local Theme = require(script.Parent.Theme)
+local HudLayoutRules = require(ReplicatedStorage.Shared.HudLayoutRules)
+local CompactHUD = require(script.Parent.CompactHUD)
 local Kit = require(script.Parent.Kit)
 local Motion = require(script.Parent.Motion)
 local Store = require(script.Parent.Store)
@@ -136,44 +138,44 @@ function HUD.start()
 	local topBar = HudParts.panel(gui, "TopBar")
 	topBar.AutomaticSize = Enum.AutomaticSize.XY
 	topBar.Position = UDim2.fromOffset(22, 14)
-	pad(topBar, 10, 30, 10, 22)
-	local topLayout = list(topBar, 22, true)
+	pad(topBar, 9, 20, 9, 18)
+	local topLayout = list(topBar, 14, true)
 	topLayout.VerticalAlignment = Enum.VerticalAlignment.Center
 
 	local logo = row(topBar, 10, 1, "Logo")
-	HudParts.sprite(logo, "logo", Vector2.new(78, 78))
+	HudParts.sprite(logo, "logo", Vector2.new(52, 52))
 	local logoText = column(logo, -6)
-	HudParts.text(logoText, "OFICINA", 33, { Font = Theme.FontTitle })
-	HudParts.text(logoText, "24H", 52, { Font = Theme.FontTitle, TextColor3 = rgb(255, 176, 32) })
+	HudParts.text(logoText, "OFICINA", 24, { Font = Theme.FontTitle })
+	HudParts.text(logoText, "24H", 37, { Font = Theme.FontTitle, TextColor3 = rgb(255, 176, 32) })
 	local logoDivider = divider(topBar, 2)
 
 	local levelBlock = row(topBar, 12, 3, "Level")
-	HudParts.sprite(levelBlock, "star_level", Vector2.new(60, 60))
+	HudParts.sprite(levelBlock, "star_level", Vector2.new(42, 42))
 	local levelColumn = column(levelBlock, 0)
-	local levelCaption = HudParts.text(levelColumn, t("hud_level_pro"), 22, { Font = Theme.FontTitle })
+	local levelCaption = HudParts.text(levelColumn, t("hud_level_pro"), 18, { Font = Theme.FontTitle })
 	local levelRow = row(levelColumn, 10)
-	local levelValue = HudParts.text(levelRow, "01", 50, { Font = Theme.FontTitle })
+	local levelValue = HudParts.text(levelRow, "01", 36, { Font = Theme.FontTitle })
 	local xpColumn = column(levelRow, 4)
-	local xpValue = HudParts.text(xpColumn, "0 / 0 XP", 20, { Font = Theme.FontTitle })
-	local xpTrack, setXp = HudParts.progress(xpColumn, 12, { { 0, rgb(120, 220, 255) }, { 0.5, rgb(0, 170, 245) }, { 1, rgb(0, 120, 215) } })
-	xpTrack.Size = UDim2.fromOffset(150, 12)
+	local xpValue = HudParts.text(xpColumn, "0 / 0 XP", 16, { Font = Theme.FontTitle })
+	local xpTrack, setXp = HudParts.progress(xpColumn, 9, { { 0, rgb(120, 220, 255) }, { 0.5, rgb(0, 170, 245) }, { 1, rgb(0, 120, 215) } })
+	xpTrack.Size = UDim2.fromOffset(125, 9)
 	divider(topBar, 4)
 
 	local balanceBlock = row(topBar, 12, 5, "Balance")
-	HudParts.sprite(balanceBlock, "dollar", Vector2.new(58, 62))
+	HudParts.sprite(balanceBlock, "dollar", Vector2.new(42, 44))
 	local balanceColumn = column(balanceBlock, 0)
-	local balanceCaption = HudParts.text(balanceColumn, t("hud_balance"), 22, { Font = Theme.FontTitle })
-	local coinsValue = HudParts.text(balanceColumn, "0", 48, { Font = Theme.FontTitle })
+	local balanceCaption = HudParts.text(balanceColumn, t("hud_balance"), 18, { Font = Theme.FontTitle })
+	local coinsValue = HudParts.text(balanceColumn, "0", 36, { Font = Theme.FontTitle })
 	divider(topBar, 6)
 
 	local repBlock = row(topBar, 12, 7, "Reputation")
-	HudParts.sprite(repBlock, "trophy_top", Vector2.new(62, 62))
+	HudParts.sprite(repBlock, "trophy_top", Vector2.new(42, 42))
 	local repColumn = column(repBlock, 0)
-	local repCaption = HudParts.text(repColumn, t("hud_rep_title"), 22, { Font = Theme.FontTitle })
+	local repCaption = HudParts.text(repColumn, t("hud_rep_title"), 18, { Font = Theme.FontTitle })
 	local repRow = row(repColumn, 8)
-	local repValue = HudParts.text(repRow, "0", 48, { Font = Theme.FontTitle })
-	local repStar = HudParts.sprite(repRow, "star_gold", Vector2.new(34, 34))
-	local ratingValue = HudParts.text(repRow, "", 24, { Font = Theme.FontTitle, TextColor3 = rgb(255, 200, 40) })
+	local repValue = HudParts.text(repRow, "0", 36, { Font = Theme.FontTitle })
+	local repStar = HudParts.sprite(repRow, "star_gold", Vector2.new(24, 24))
+	local ratingValue = HudParts.text(repRow, "", 20, { Font = Theme.FontTitle, TextColor3 = rgb(255, 200, 40) })
 
 	----------------------------------------------------------------------------------------------------------------
 	-- Controles superiores
@@ -182,11 +184,14 @@ function HUD.start()
 	controls.AnchorPoint = Vector2.new(1, 0)
 	controls.Position = UDim2.new(1, -19, 0, 14)
 	list(controls, 8, true).HorizontalAlignment = Enum.HorizontalAlignment.Right
-	local infoToggle = HudParts.iconButton(controls, "InfoToggle", "chart", 72, nil)
+	local infoToggle = HudParts.iconButton(controls, "InfoToggle", "chart", 56, nil)
 	infoToggle.LayoutOrder = 1
-	local bell, _, setBellBadge = HudParts.iconButton(controls, "BellButton", "bell", 72, nil)
+	local bell, _, setBellBadge = HudParts.iconButton(controls, "BellButton", "bell", 56, nil)
 	bell.LayoutOrder = 2
-	-- Configurações e Sair não existem no jogo: sem botões decorativos (Product Master Document, seção 14).
+	-- Configurações e Sair não existem no jogo: sem botões decorativos.
+	local compactHUD = CompactHUD.new(gui, function()
+		HUD.openPanel("orders")
+	end)
 
 	----------------------------------------------------------------------------------------------------------------
 	-- Menu lateral
@@ -225,7 +230,7 @@ function HUD.start()
 	----------------------------------------------------------------------------------------------------------------
 	-- Coluna direita: clientes aguardando, painel de ordem, perfil da oficina
 	----------------------------------------------------------------------------------------------------------------
-	local rightColumn = Instance.new("ScrollingFrame") -- rola quando a tela é baixa (celular deitado)
+	local rightColumn = Instance.new("ScrollingFrame") -- contextual; recolhido em telas compactas
 	rightColumn.Name = "RightColumn"
 	rightColumn.BackgroundTransparency = 1
 	rightColumn.BorderSizePixel = 0
@@ -311,6 +316,7 @@ function HUD.start()
 
 	-- Perfil da oficina
 	local shopCard = card(3, "ShopCard")
+	shopCard.Visible = false -- perfil e gestão vivem no painel próprio, não ocupam o gameplay
 	list(shopCard, 0, false)
 	local shopHeader = HudParts.header(shopCard, 56)
 	shopHeader.LayoutOrder = 1
@@ -613,6 +619,7 @@ function HUD.start()
 	local panels: { [string]: any } = {}
 	local navButtons: { [string]: { HudParts.NavButton } } = {}
 	local selectedName: string? = nil
+	local refreshInfoVisibility: (() -> ())? = nil
 	local previousSelection: GuiObject? = nil
 
 	local function updateBell()
@@ -689,6 +696,7 @@ function HUD.start()
 			end
 		end
 		paintSelection()
+		if refreshInfoVisibility then refreshInfoVisibility() end
 	end
 
 	-- Botão B do gamepad fecha o painel aberto
@@ -780,6 +788,7 @@ function HUD.start()
 		addNav(bottomNav, bottomSpec("B_Loja", t("nav_shop"), "b_cart", 108), "shop", 3),
 		addNav(bottomNav, bottomSpec("B_Estoque", t("nav_stock"), "b_box", 134), "stock", 4),
 		addNav(bottomNav, bottomSpec("B_Ranking", t("nav_ranking"), "b_trophy", 142), "ranking", 5),
+		addNav(bottomNav, bottomSpec("B_Perfil", t("nav_profile"), "person", 126), "profile", 6),
 	}
 	local ordersBottomButton = bottomButtons[1]
 

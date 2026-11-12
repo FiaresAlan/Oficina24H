@@ -60,8 +60,9 @@ local function refresh()
 				or car:GetAttribute("Estacionado") ~= true or car:GetAttribute("PrepRequired") ~= true then
 				continue
 			end
-			local owned = car:GetAttribute("OwnerUserId") == player.UserId
-			local contracted = car:GetAttribute("JobId") == player:GetAttribute("CollaborationJobId")
+			local responsible = car:GetAttribute("AssignedRepairUserId") == player.UserId
+			local owned = responsible and car:GetAttribute("OwnerUserId") == player.UserId
+			local contracted = responsible and car:GetAttribute("JobId") == player:GetAttribute("CollaborationJobId")
 				and car:GetAttribute("OwnerUserId") == player:GetAttribute("CollaborationOwnerUserId")
 			if not owned and not contracted then continue end
 			local stepId = tostring(car:GetAttribute("PrepStepId") or "")

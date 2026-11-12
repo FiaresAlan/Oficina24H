@@ -11,6 +11,7 @@ local RepairRules = require(ReplicatedStorage.Shared.RepairRules)
 local RepairSessionRules = require(ReplicatedStorage.Shared.RepairSessionRules)
 local CollaborationRules = require(ReplicatedStorage.Shared.CollaborationRules)
 local RepairOperations = require(ReplicatedStorage.Shared.RepairOperations)
+local RepairActionRules = require(ReplicatedStorage.Shared.RepairActionRules)
 local RepairPrepRules = require(ReplicatedStorage.Shared.RepairPrepRules)
 local DiagnosisRules = require(ReplicatedStorage.Shared.DiagnosisRules)
 local DiagnosisEvidence = require(ReplicatedStorage.Shared.DiagnosisEvidence)
@@ -875,7 +876,10 @@ function WorkshopService.StartRepair(player: Player, jobId: string, assist: bool
     local margin = math.max(0, DataService.GetSkillLevel(player, defect.Specialization) - defect.RequiredLevel)
     local operation = RepairOperations.BuildPlan(job.DefectId, math.random(1, 2147483646))
     local plan = operation or RepairRules.BuildPlan(math.random(1, 2147483646), defect.RequiredLevel, margin, assist == true or RepairAssist[player.UserId] == true, Catalog.EquipmentEfficiency[defect.RequiredEquipment])
-    Repairs[player.UserId] = { JobId = job.Id, Plan = plan, StartedAt = os.clock() }
+    Repairs[player.UserId] = {
+        JobId = job.Id, Plan = plan, StartedAt = os.clock(),
+        Progress = plan.Kind == "Operations" and RepairActionRules.New(plan) or nil,
+    }
     VehicleService.SetRepairing(job.Id, true) -- carro sobe no elevador / capô abre / pneu sai (efeitos no cliente)
     if eventSender then
         eventSender(player, "RepairStart", {
@@ -886,6 +890,33 @@ function WorkshopService.StartRepair(player: Player, jobId: string, assist: bool
         })
     end
     return true, ""
+end
+
+-- O servidor recebe cada interação do procedimento e confirma uma revisão antes de aceitar a próxima.
+-- A UI não pode substituir ações ausentes por um formulário final fabricado.
+function WorkshopService.RepairAction(player: Player, jobId: string, command: any): (boolean, string, number)
+    local session = Repairs[player.UserId]
+    if not session or session.JobId ~= jobId or session.Plan.Kind ~= "Operations" or not session.Progress then
+        return false, "Não há um procedimento válido em andamento.", 0
+    end
+    local now = os.clock()
+    if not RepairSessionRules.IsActive(session, now, RepairRules.MaxSessionSeconds) then
+        Repairs[player.UserId] = nil
+        VehicleService.SetRepairing(jobId, false)
+        return false, "Sessão expirada. Inicie novamente.", 0
+    end
+    -- Limite curto para ajustes touch, mas não aceita rajadas de remotes automáticos.
+    if session.LastActionAt and now - session.LastActionAt < 0.07 then
+        return false, "Aguarde a confirmação do ajuste anterior.", session.Progress.Revision
+    end
+    local ok, message = checkRepairable(player, jobId)
+    if not ok then return false, message, session.Progress.Revision end
+    local accepted, reason = RepairActionRules.Apply(session.Plan, session.Progress, command)
+    if accepted then
+        session.LastActionAt = now
+        return true, "", session.Progress.Revision
+    end
+    return false, reason, session.Progress.Revision
 end
 
 function WorkshopService.CancelRepair(player: Player)
@@ -927,7 +958,13 @@ function WorkshopService.FinishRepair(player: Player, jobId: string, presses: an
     }
     local result
     if session.Plan.Kind == "Operations" then
-        result = RepairOperations.Evaluate(session.Plan, presses, elapsed, mods)
+        local verifiedInput, reason = RepairActionRules.FinalInput(session.Plan, session.Progress)
+        if not verifiedInput then
+            VehicleService.SetRepairing(jobId, false)
+            return false, reason or "Ações do reparo incompletas."
+        end
+        -- presses nunca é fonte de verdade em operações: só conta o estado observado no servidor.
+        result = RepairOperations.Evaluate(session.Plan, verifiedInput, elapsed, mods)
     else
         result = RepairRules.Evaluate(session.Plan, presses, elapsed, mods)
     end

@@ -166,9 +166,10 @@ local function addPrompts(car: Model, job: any)
 		point.Massless, point.Anchored = true, false
 		point.Transparency = 1
 		point.CanCollide, point.CanQuery, point.CanTouch = false, false, false
-		local socketFrame, source = RepairSocketRules.Resolve(car, root, stepId, prepOffsets[stepId])
+		local socketFrame, source, nativeVisual = RepairSocketRules.Resolve(car, root, stepId, prepOffsets[stepId])
 		point.CFrame = socketFrame
 		point:SetAttribute("SocketSource", source)
+		point:SetAttribute("UseNativeVisual", nativeVisual)
 		point:SetAttribute("StepId", stepId)
 		point.Parent = prepFolder
 		local weld = Instance.new("WeldConstraint")

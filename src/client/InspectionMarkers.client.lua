@@ -8,6 +8,12 @@ local names = {
 	TirePressure = "PNEU",
 	BatteryVoltage = "BATERIA",
 	CoolingTemperature = "ARREFECIMENTO",
+	WheelInspection = "RODAS",
+	BrakeInspection = "FREIOS",
+	ChassisInspection = "CHASSI",
+	EngineScan = "MOTOR",
+	CircuitTest = "CIRCUITOS",
+	BodySurface = "LATARIA",
 }
 local markers: { [BasePart]: BillboardGui } = {}
 
@@ -54,7 +60,10 @@ end
 local function refresh()
 	local vehicles = workspace:FindFirstChild("Vehicles")
 	local seen: { [BasePart]: boolean } = {}
-	if vehicles then
+	local character = player.Character
+	local hrp = character and character:FindFirstChild("HumanoidRootPart")
+	if vehicles and hrp and hrp:IsA("BasePart") then
+		local candidates: { { Point: BasePart, Id: string, Distance: number } } = {}
 		for _, car in ipairs(vehicles:GetChildren()) do
 			if car:IsA("Model") and car:GetAttribute("OwnerUserId") == player.UserId
 				and car:GetAttribute("Estacionado") == true and car:GetAttribute("Etapa") == "Diagnose"
@@ -64,26 +73,38 @@ local function refresh()
 					for _, point in ipairs(points:GetChildren()) do
 						if point:IsA("BasePart") then
 							local examId = point:GetAttribute("ExamId")
-							if type(examId) == "string" and names[examId] then
-								seen[point] = true
-								local marker = markers[point]
-								if not marker then
-									marker = makeMarker(point, examId)
-									markers[point] = marker
-								end
-								local plate = marker:FindFirstChild("Plate")
-								local text = plate and plate:FindFirstChild("Status")
-								local inspected = point:GetAttribute("Inspected") == true
-								if plate and plate:IsA("Frame") then
-									plate.BackgroundColor3 = inspected and Color3.fromRGB(26, 65, 42) or Color3.fromRGB(18, 39, 56)
-								end
-								if text and text:IsA("TextLabel") then
-									text.Text = (inspected and "✓ " or "• ") .. names[examId]
-								end
+							local distance = (point.Position - hrp.Position).Magnitude
+							if type(examId) == "string" and names[examId] and distance <= 24 then
+								table.insert(candidates, { Point = point, Id = examId, Distance = distance })
 							end
 						end
 					end
 				end
+			end
+		end
+		table.sort(candidates, function(a, b)
+			if a.Distance == b.Distance then return a.Id < b.Id end
+			return a.Distance < b.Distance
+		end)
+		-- Só os três marcadores mais próximos: evita nove etiquetas cobrindo o carro.
+		for index = 1, math.min(3, #candidates) do
+			local candidate = candidates[index]
+			local point = candidate.Point
+			seen[point] = true
+			local marker = markers[point]
+			if not marker then
+				marker = makeMarker(point, candidate.Id)
+				markers[point] = marker
+			end
+			local plate = marker:FindFirstChild("Plate")
+			local statusText = plate and plate:FindFirstChild("Status")
+			local inspected = point:GetAttribute("Inspected") == true
+			if plate and plate:IsA("Frame") then
+				plate.BackgroundColor3 = inspected and Color3.fromRGB(26, 65, 42)
+					or Color3.fromRGB(18, 39, 56)
+			end
+			if statusText and statusText:IsA("TextLabel") then
+				statusText.Text = (inspected and "✓ " or "• ") .. names[candidate.Id]
 			end
 		end
 	end

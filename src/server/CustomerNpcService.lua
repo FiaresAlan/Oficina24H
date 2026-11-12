@@ -6,6 +6,7 @@
 -- Servidor é a única autoridade; não existe NPC sem veículo, então não há duplicata ao entrar/sair.
 local NpcKit = require(script.Parent.NpcKit)
 local Config = require(game:GetService("ReplicatedStorage").Shared.Config)
+local CustomerPersonaRules = require(game:GetService("ReplicatedStorage").Shared.CustomerPersonaRules)
 
 local TALK_DISTANCE = Config.TalkDistance
 
@@ -51,7 +52,14 @@ function CustomerNpcService.Adopt(npc: Model, animator: NpcKit.NpcAnimator?, job
 		animator.Idle()
 	end
 	byJob[job.Id] = { Npc = npc, Animator = animator }
-	NpcKit.Say(npc, tostring(job.Complaint or "Olá! Pode olhar meu carro?"), nil, job.Vip and Color3.fromRGB(255, 200, 40) or nil)
+	local persona = CustomerPersonaRules.Get(job.PersonaId)
+	local prefix = job.PersonaId == "Urgent" and "Estou com pressa! "
+		or job.PersonaId == "Budget" and "Pode verificar o valor? "
+		or job.PersonaId == "Demanding" and "Quero um serviço caprichado. "
+		or job.PersonaId == "Friendly" and "Confio na oficina! "
+		or ""
+	NpcKit.Say(npc, prefix .. tostring(job.Complaint or persona.Hint), nil,
+		job.Vip and Color3.fromRGB(255, 200, 40) or nil)
 end
 
 -- Diagnóstico concluído: o cliente para de pedir conversa e fala da próxima etapa.

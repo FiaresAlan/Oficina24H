@@ -1342,9 +1342,12 @@ function WorkshopService.PlayerLeft(userId: number)
                     end
                 end
             end
-            job.Status = "Available"
+            -- O carro/NPC também será removido por DespawnOwner. Nunca deixar a ordem
+            -- órfã e reaproveitável quando o proprietário reconectar.
+            job.Status = "Cancelled"
             job.AssignedWorkerUserId = nil
             job.CollaboratorUserId = nil
+            Jobs[jobId] = nil
         elseif job.CollaboratorUserId == userId and job.Status == "InProgress" then
             -- O colaborador pode sair a qualquer momento: a ordem volta ao dono, sem prendê-lo ao trabalho.
             job.CollaboratorUserId = nil

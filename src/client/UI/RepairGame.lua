@@ -448,8 +448,10 @@ function RepairGame.new(gui: ScreenGui): { Start: (any) -> (), IsActive: () -> b
 	end
 
 	local function start(payload: any)
-		if type(payload) ~= "table" or type(payload.Plan) ~= "table" or payload.Plan.Kind == "Operations" then
-			return -- procedimentos piloto usam OperationRepairGame; legado permanece intacto
+		if type(payload) ~= "table" or type(payload.Plan) ~= "table" then return end
+		if payload.Plan.Kind == "Operations" then
+			close(false) -- fechar eventual resultado do minijogo anterior
+			return -- procedimentos piloto usam OperationRepairGame
 		end
 		close(false)
 		plan = payload.Plan :: RepairRules.Plan

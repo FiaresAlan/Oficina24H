@@ -462,6 +462,8 @@ function WorkshopService.GetSnapshot(player: Player)
                 }
                 -- Requisitos e pagamento só são revelados após o diagnóstico (o defeito real fica no servidor).
                 if job.Diagnosed then
+                    entry.PrepRequired = RepairPrepRules.Requires(job.DefectId)
+                    entry.PrepComplete = RepairPrepRules.Ready(job.DefectId, job.PreparationStep)
                     local defect = Catalog.Defects[job.DefectId]
                     local service = Catalog.Services[job.ServiceId]
                     entry.Requirement = {

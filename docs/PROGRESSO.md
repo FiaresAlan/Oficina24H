@@ -1,3 +1,8 @@
+> **CHECK-IN OFICIAL / ACOMPANHAMENTO:** [CHECKLIST MESTRE — GitHub Issue #15](https://github.com/FiaresAlan/Oficina24H/issues/15)  
+> Esta página é o **histórico técnico**, não a lista de tarefas. As caixas de seleção por fase, PRs abertos, portões de Studio e próximos passos ficam na Issue #15. Para conferir alterações, atualize a Issue no navegador; o conteúdo é atualizado em cada checkpoint via edição, não automaticamente.
+
+---
+
 # Progresso — Oficina 24H
 
 Atualizado: 2026-11-05

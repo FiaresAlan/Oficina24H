@@ -539,8 +539,18 @@ function HUD.start()
 		local car = p:FindFirstAncestorOfClass("Model")
 		local ownerId = p:GetAttribute("OwnerUserId") or (car and car:GetAttribute("OwnerUserId"))
 		if type(ownerId) == "number" and ownerId ~= player.UserId then
-			activePrompt = nil
-			return
+			-- Permite apenas o carro da OS contratada ou as máquinas do dono dessa OS.
+			-- O servidor valida novamente job, local, habilidade e inventário.
+			local hiredJob = player:GetAttribute("CollaborationJobId")
+			local hiredOwner = player:GetAttribute("CollaborationOwnerUserId")
+			local isContractedCar = type(hiredJob) == "string"
+				and car ~= nil and car:GetAttribute("JobId") == hiredJob
+			local isContractedMachine = type(hiredOwner) == "number" and ownerId == hiredOwner
+				and type(p:GetAttribute("EquipmentId")) == "string"
+			if not isContractedCar and not isContractedMachine then
+				activePrompt = nil
+				return
+			end
 		end
 		promptAction.Text = p.ActionText
 		promptObject.Text = p.ObjectText

@@ -9,6 +9,7 @@ local JobRules = require(ReplicatedStorage.Shared.JobRules)
 local CustomerRules = require(ReplicatedStorage.Shared.CustomerRules)
 local RepairRules = require(ReplicatedStorage.Shared.RepairRules)
 local RepairSessionRules = require(ReplicatedStorage.Shared.RepairSessionRules)
+local CollaborationRules = require(ReplicatedStorage.Shared.CollaborationRules)
 local RepairOperations = require(ReplicatedStorage.Shared.RepairOperations)
 local DiagnosisRules = require(ReplicatedStorage.Shared.DiagnosisRules)
 local DiagnosisEvidence = require(ReplicatedStorage.Shared.DiagnosisEvidence)
@@ -765,50 +766,51 @@ end
 
 -- Confere TUDO que o reparo exige (responsável, diagnóstico, distância, equipamento, nível, peças) SEM consumir nada.
 -- Retorna (ok, mensagem, job, defect, service).
-local function checkRepairable(player: Player, jobId: string): (boolean, string, any, any, any)
+local function checkRepairable(player: Player, jobId: string): (boolean, string, any, any, any, Player?)
     local job = Jobs[jobId]
-    if not job or job.OwnerUserId ~= player.UserId then
-        return false, "Ordem não encontrada.", nil, nil, nil
-    end
-    if job.Status ~= "InProgress" or job.AssignedWorkerUserId ~= player.UserId then
-        return false, "Você não está responsável por esta ordem.", nil, nil, nil
+    if not CollaborationRules.IsAuthorized(job, player.UserId) then
+        return false, "Você não está responsável por esta ordem.", nil, nil, nil, nil
     end
     if not job.Diagnosed then
-        return false, "Faça o diagnóstico antes do reparo.", nil, nil, nil
+        return false, "Faça o diagnóstico antes do reparo.", nil, nil, nil, nil
     end
-    local workshop = getWorkshop(player)
+    local owner: Player? = Players:GetPlayerByUserId(job.OwnerUserId)
+    if not owner or not DataService.Get(owner) then
+        return false, "O dono da oficina está desconectado.", nil, nil, nil, nil
+    end
+    local workshop = getWorkshop(owner)
     local defect = Catalog.Defects[job.DefectId]
     local service = Catalog.Services[job.ServiceId]
     if not workshop or not ownsEquipment(workshop, defect.RequiredEquipment) then
         local equipment = Catalog.Equipment[defect.RequiredEquipment]
-        return false, "Sua oficina não possui o equipamento necessário: " .. (equipment and equipment.DisplayName or defect.RequiredEquipment), nil, nil, nil
+        return false, "A oficina não possui o equipamento necessário: " .. (equipment and equipment.DisplayName or defect.RequiredEquipment), nil, nil, nil, nil
     end
     if not VehicleService.IsParked(job.Id) then
-        return false, "Espere o carro estacionar no box.", nil, nil, nil
+        return false, "Espere o carro estacionar no box.", nil, nil, nil, nil
     end
-    -- Ferramenta de mão: reparo no carro. Máquina: o jogador usa a máquina na sala dos fundos (prompt "Usar").
+    -- Ferramenta: junto ao carro. Máquina: na sala de equipamentos da oficina DONA da OS.
     if defect.RequiredEquipment == "BasicToolset" then
         if not VehicleService.IsNear(player, job.Id, Config.InteractDistance) then
-            return false, "Aproxime-se do veículo para reparar.", nil, nil, nil
+            return false, "Aproxime-se do veículo para reparar.", nil, nil, nil, nil
         end
     else
-        local plot = PlotService.GetPlot(player)
+        local plot = PlotService.GetPlot(owner)
         local pos = plot and EquipmentService.Position(plot, defect.RequiredEquipment)
         local character = player.Character
         local hrp = character and character:FindFirstChild("HumanoidRootPart")
         if not pos or not hrp or not hrp:IsA("BasePart") or (hrp.Position - pos).Magnitude > 12 then
-            return false, "Use o equipamento " .. Catalog.Equipment[defect.RequiredEquipment].DisplayName .. " na sala dos fundos da oficina.", nil, nil, nil
+            return false, "Use o equipamento " .. Catalog.Equipment[defect.RequiredEquipment].DisplayName .. " na sala dos fundos da oficina.", nil, nil, nil, nil
         end
     end
     local level = DataService.GetSkillLevel(player, defect.Specialization)
     if level < defect.RequiredLevel then
-        return false, "Nível insuficiente em " .. defect.Specialization .. ". Requer nível " .. tostring(defect.RequiredLevel) .. ".", nil, nil, nil
+        return false, "Nível insuficiente em " .. defect.Specialization .. ". Requer nível " .. tostring(defect.RequiredLevel) .. ".", nil, nil, nil, nil
     end
-    local missing = missingPartsMessage(player, defect.Parts)
+    local missing = missingPartsMessage(owner, defect.Parts)
     if missing then
-        return false, missing, nil, nil, nil
+        return false, missing, nil, nil, nil, nil
     end
-    return true, "", job, defect, service
+    return true, "", job, defect, service, owner
 end
 
 -- Inicia o minijogo: o servidor sorteia o plano e guarda o instante de início. Nada é cobrado até o envio final.
@@ -870,7 +872,7 @@ function WorkshopService.FinishRepair(player: Player, jobId: string, presses: an
         return false, "O reparo demorou demais e foi cancelado."
     end
     local elapsed = now - session.StartedAt
-    local ok, message, job, defect, service = checkRepairable(player, jobId)
+    local ok, message, job, defect, service, owner = checkRepairable(player, jobId)
     if not ok then
         VehicleService.SetRepairing(session.JobId, false)
         return false, message
@@ -891,45 +893,76 @@ function WorkshopService.FinishRepair(player: Player, jobId: string, presses: an
     if not result.Valid then
         return false, "Reparo inválido (" .. tostring(result.Reason) .. ")."
     end
-    if not DataService.TakeParts(player, defect.Parts) then
-        return false, "Faltam peças."
+    -- As peças pertencem sempre ao dono da OS, nunca ao estoque particular do contratado.
+    local workshopOwner = owner :: Player
+    if not DataService.TakeParts(workshopOwner, defect.Parts) then
+        return false, "Faltam peças na oficina."
     end
 
+    -- Autoridade: depois do consumo único da peça, qualquer retransmissão não volta a pagar.
+    local delegated = CollaborationRules.IsWorker(job, player.UserId)
     job.Status = "Completed"
     VehicleService.Flash(job.Id, Color3.fromRGB(90, 220, 130))
     VehicleService.Despawn(job.Id)
     local basePrice = job.Price or service.Reward
-    local combo = comboMultiplier(player.UserId)
-    local friend = ProgressService.FriendMultiplier(player) -- jogando com amigo: +10%
+    -- Bônus por combo/amigos pertencem ao trabalho individual, não se multiplicam em contratos terceirizados.
+    local combo = delegated and 1 or comboMultiplier(player.UserId)
+    local friend = delegated and 1 or ProgressService.FriendMultiplier(player)
     local price = math.floor(basePrice * RepairRules.PayMultiplier(result.Quality) * combo * friend + 0.5)
-    if result.Quality >= COMBO_MIN_QUALITY then
-        Combo[player.UserId] = (Combo[player.UserId] or 0) + 1
-    else
-        breakCombo(player.UserId)
+    if not delegated then
+        if result.Quality >= COMBO_MIN_QUALITY then
+            Combo[player.UserId] = (Combo[player.UserId] or 0) + 1
+        else
+            breakCombo(player.UserId)
+        end
     end
     local tip = RepairRules.Tip(basePrice, result.Quality)
     local xp = RepairRules.XPBonus(service.XP, result.Quality)
-    DataService.AddCoins(player, price + tip, "Serviço: " .. service.DisplayName .. (tip > 0 and " (+gorjeta)" or ""))
+    local actorPay, ownerPay = price + tip, 0
+    if delegated then
+        ownerPay, actorPay = CollaborationRules.Split(price + tip, job.CollaborationSplitPercent or 25)
+        DataService.AddCoins(player, actorPay, "Reparo contratado: " .. service.DisplayName)
+        DataService.AddCoins(workshopOwner, ownerPay, "Reparo colaborativo: " .. service.DisplayName)
+        player:SetAttribute("CollaborationOwnerUserId", nil)
+        player:SetAttribute("CollaborationJobId", nil)
+    else
+        DataService.AddCoins(player, actorPay, "Serviço: " .. service.DisplayName .. (tip > 0 and " (+gorjeta)" or ""))
+    end
     DataService.AddSkillXP(player, defect.Specialization, xp)
-    DataService.AddReputation(player, service.Reputation)
-    local stars = rateService(player, job, service, defect, player, false, result.Quality)
-    ProgressService.Record(player, {
-        Kind = "RepairDone", Amount = price + tip, Spec = defect.Specialization, Quality = result.Quality, Stars = stars,
-        Vip = job.Vip == true, FirstTry = (job.DiagnoseAttempts or 1) <= 1, Rush = job.Rush == true or ProgressService.IsRush(),
+    DataService.AddReputation(workshopOwner, service.Reputation)
+    local stars = rateService(workshopOwner, job, service, defect, player, false, result.Quality)
+    ProgressService.Record(workshopOwner, {
+        Kind = "RepairDone", Amount = delegated and ownerPay or actorPay, Spec = defect.Specialization,
+        Quality = result.Quality, Stars = stars, Vip = job.Vip == true,
+        FirstTry = (job.DiagnoseAttempts or 1) <= 1, Rush = job.Rush == true or ProgressService.IsRush(),
     })
-    local bonus = DataService.CompleteOnboarding(player, Config.OnboardingBonus)
-    WorkshopService.UpdateSkin(player)
+    local bonus = DataService.CompleteOnboarding(workshopOwner, Config.OnboardingBonus)
+    WorkshopService.UpdateSkin(workshopOwner)
     if eventSender then
         eventSender(player, "RepairDone", {
-            Bonus = bonus,
+            Bonus = delegated and 0 or bonus,
             Quality = result.Quality, Perfect = result.Perfect, Good = result.Good, Miss = result.Miss,
             Corrected = result.Corrected, Uncorrected = result.Uncorrected, Breakdown = result.Breakdown,
-            Tip = tip, Price = price, XP = xp, Stars = stars, Combo = combo, NextCombo = comboMultiplier(player.UserId),
+            Tip = delegated and 0 or tip, Price = delegated and actorPay or price,
+            XP = xp, Stars = stars, Combo = combo, NextCombo = delegated and 1 or comboMultiplier(player.UserId),
         })
+        if delegated then
+            eventSender(workshopOwner, "Notice", {
+                Message = string.format("%s concluiu %s com %d%% de qualidade: sua parte foi %d moedas.",
+                    player.DisplayName, service.DisplayName, result.Quality, ownerPay),
+                Success = true,
+            })
+        end
     end
-    funnel(player, "Repaired")
-    return true, "Serviço concluído. +" .. tostring(price + tip) .. " moedas (qualidade " .. tostring(result.Quality) .. "%"
-        .. (combo > 1 and string.format(", combo x%.1f", combo) or "") .. (friend > 1 and ", bônus de amigo" or "") .. "), +" .. tostring(xp)
+    funnel(workshopOwner, "Repaired")
+    if delegated then
+        return true, "Serviço colaborativo concluído. Sua parte: +" .. tostring(actorPay)
+            .. " moedas e +" .. tostring(xp) .. " XP. Nota: "
+            .. CustomerRules.StarsText(stars)
+    end
+    return true, "Serviço concluído. +" .. tostring(actorPay) .. " moedas (qualidade " .. tostring(result.Quality) .. "%"
+        .. (combo > 1 and string.format(", combo x%.1f", combo) or "")
+        .. (friend > 1 and ", bônus de amigo" or "") .. "), +" .. tostring(xp)
         .. " XP. Avaliação: " .. CustomerRules.StarsText(stars) .. " (" .. tostring(stars) .. ")"
         .. (bonus > 0 and (" Bônus do primeiro serviço: +" .. tostring(bonus) .. ".") or "")
 end
@@ -1067,6 +1100,9 @@ function WorkshopService.InviteWorker(owner: Player, workerUserId: number, jobId
     if job.CollaboratorUserId then
         return false, "Esta ordem já tem um colaborador."
     end
+    if Repairs[owner.UserId] and Repairs[owner.UserId].JobId == jobId then
+        return false, "Termine ou cancele seu reparo antes de contratar um profissional."
+    end
     if not isFinite(workerUserId) or not isFinite(splitPercent) then return false, "Convite inválido." end
     if workerUserId == owner.UserId then return false, "Você não pode convidar a si mesmo." end
     if not job.Diagnosed then return false, "Faça o diagnóstico antes de chamar um colaborador." end
@@ -1110,7 +1146,7 @@ function WorkshopService.RespondInvite(worker: Player, inviteId: string, accepte
     end
 
     local job = Jobs[invite.JobId]
-    if not job or job.Status ~= "InProgress" then
+    if not job or job.Status ~= "InProgress" or job.OwnerUserId ~= invite.OwnerUserId or not job.Diagnosed then
         invite.Status = "Expired"
         return false, "A ordem não está mais disponível."
     end
@@ -1120,76 +1156,31 @@ function WorkshopService.RespondInvite(worker: Player, inviteId: string, accepte
         return false, "A ordem já tem um colaborador."
     end
 
+    for _, other in pairs(Jobs) do
+        if other ~= job and CollaborationRules.IsWorker(other, worker.UserId) then
+            return false, "Você já está contratado para outra ordem. Conclua-a primeiro."
+        end
+    end
+    if Repairs[worker.UserId] then
+        return false, "Conclua ou cancele seu reparo antes de aceitar o convite."
+    end
+    local defect = Catalog.Defects[job.DefectId]
+    if DataService.GetSkillLevel(worker, defect.Specialization) < defect.RequiredLevel then
+        return false, "Sua habilidade ainda não atende ao nível necessário deste serviço."
+    end
     invite.Status = "Accepted"
     job.AssignedWorkerUserId = worker.UserId
     job.CollaboratorUserId = worker.UserId
     job.CollaborationSplitPercent = invite.SplitPercent
     job.CollabAt = os.time()
-    return true, "Convite aceito. Você agora participa da ordem."
+    worker:SetAttribute("CollaborationOwnerUserId", invite.OwnerUserId)
+    worker:SetAttribute("CollaborationJobId", job.Id)
+    return true, "Convite aceito. Vá até o carro ou a máquina da oficina contratante para reparar."
 end
 
+-- Compatibilidade com o botão legado: não paga instantaneamente; abre o mesmo minijogo do proprietário.
 function WorkshopService.CompleteCollaborativeJob(worker: Player, jobId: string)
-    local job = Jobs[jobId]
-    if not job or job.Status ~= "InProgress" or job.AssignedWorkerUserId ~= worker.UserId
-        or job.CollaboratorUserId ~= worker.UserId or worker.UserId == job.OwnerUserId then
-        return false, "Você não está responsável por esta ordem."
-    end
-    if not job.Diagnosed then return false, "O diagnóstico ainda não foi feito." end
-    if not VehicleService.IsNear(worker, job.Id, Config.InteractDistance) then
-        return false, "Aproxime-se do veículo para reparar."
-    end
-
-    local defect = Catalog.Defects[job.DefectId]
-    local service = Catalog.Services[job.ServiceId]
-    local owner = Players:GetPlayerByUserId(job.OwnerUserId)
-    if not owner then return false, "O proprietário saiu do servidor; a ordem foi cancelada." end
-
-    local ownerWorkshop = getWorkshop(owner)
-    if not ownerWorkshop or not ownsEquipment(ownerWorkshop, defect.RequiredEquipment) then
-        return false, "A oficina não possui o equipamento necessário."
-    end
-
-    local level = DataService.GetSkillLevel(worker, defect.Specialization)
-    if level < defect.RequiredLevel then
-        return false, "Seu nível de habilidade é insuficiente."
-    end
-    if not VehicleService.IsParked(job.Id) then
-        return false, "Espere o carro estacionar no box."
-    end
-    -- reparo de máquina: o colaborador também precisa estar na máquina da sala dos fundos
-    if defect.RequiredEquipment ~= "BasicToolset" then
-        local plot = PlotService.GetPlot(owner)
-        local pos = plot and EquipmentService.Position(plot, defect.RequiredEquipment)
-        local character = worker.Character
-        local hrp = character and character:FindFirstChild("HumanoidRootPart")
-        if not pos or not hrp or not hrp:IsA("BasePart") or (hrp.Position - pos).Magnitude > 12 then
-            return false, "Use o equipamento " .. Catalog.Equipment[defect.RequiredEquipment].DisplayName .. " na sala dos fundos da oficina."
-        end
-    end
-
-    local workerPercent = job.CollaborationSplitPercent or 25
-    -- sem o minijogo, o serviço do colaborador vale como qualidade padrão (85%) e rende metade do XP
-    local price = math.floor((job.Price or service.Reward) * RepairRules.PayMultiplier(85) + 0.5)
-    local workerPay = math.floor(price * workerPercent / 100)
-    local ownerPay = price - workerPay
-
-    -- As peças saem do estoque do dono da oficina (o colaborador trabalha com o material dela).
-    local missing = missingPartsMessage(owner, defect.Parts)
-    if missing or not DataService.TakeParts(owner, defect.Parts) then
-        return false, missing or "Faltam peças na oficina."
-    end
-
-    job.Status = "Completed"
-    VehicleService.Flash(job.Id, Color3.fromRGB(90, 220, 130))
-    VehicleService.Despawn(job.Id)
-    DataService.AddCoins(worker, workerPay, "Trabalho em oficina alheia: " .. service.DisplayName)
-    DataService.AddSkillXP(worker, defect.Specialization, math.floor(service.XP / 2))
-    DataService.AddCoins(owner, ownerPay, "Serviço (parte do dono): " .. service.DisplayName)
-    DataService.AddReputation(owner, service.Reputation)
-    local stars = rateService(owner, job, service, defect, worker, false)
-
-    return true, "Serviço concluído. Sua parte: " .. tostring(workerPay) .. " moedas e XP. Avaliação do cliente: "
-        .. CustomerRules.StarsText(stars) .. " (" .. tostring(stars) .. ")"
+    return WorkshopService.StartRepair(worker, jobId, false)
 end
 
 function WorkshopService.HireNpc(player: Player, jobId: string)
@@ -1258,6 +1249,10 @@ end
 
 -- Dono saiu: devolve ordens em andamento para "Available" e remove os veículos físicos do lote.
 function WorkshopService.PlayerLeft(userId: number)
+    local ownSession = Repairs[userId]
+    if ownSession then
+        VehicleService.SetRepairing(ownSession.JobId, false)
+    end
     Repairs[userId] = nil -- sessão de minijogo abandonada
     Combo[userId] = nil
     CustomerArrivalService.Clear(userId) -- clientes que ainda esperavam na rua somem junto
@@ -1266,6 +1261,27 @@ function WorkshopService.PlayerLeft(userId: number)
         if job.OwnerUserId == userId and job.Status ~= "InProgress" then
             Jobs[jobId] = nil -- cliente que esperava vai embora com o dono; não fica ordem fantasma para a reentrada
         elseif job.OwnerUserId == userId and job.Status == "InProgress" then
+            if job.CollaboratorUserId then
+                local worker = Players:GetPlayerByUserId(job.CollaboratorUserId)
+                if worker and worker:GetAttribute("CollaborationJobId") == jobId then
+                    worker:SetAttribute("CollaborationOwnerUserId", nil)
+                    worker:SetAttribute("CollaborationJobId", nil)
+                    local session = Repairs[worker.UserId]
+                    if session and session.JobId == jobId then
+                        Repairs[worker.UserId] = nil
+                        VehicleService.SetRepairing(jobId, false)
+                        if eventSender then
+                            -- Fecha o minijogo do contratado; não credita nada.
+                            eventSender(worker, "Result", {
+                                Action = "FinishRepair", Success = false, Message = "O dono da oficina desconectou.",
+                            })
+                        end
+                    end
+                    if eventSender then
+                        eventSender(worker, "Notice", { Message = "O proprietário saiu: a ordem colaborativa foi cancelada.", Success = false })
+                    end
+                end
+            end
             job.Status = "Available"
             job.AssignedWorkerUserId = nil
             job.CollaboratorUserId = nil
@@ -1679,18 +1695,30 @@ local function staffTick()
 end
 
 -- "Usar <equipamento>" na sala dos fundos: começa o reparo da ordem do jogador que precisa desta máquina.
-function WorkshopService.UseEquipment(player: Player, equipmentId: string)
+-- "Usar <equipamento>": trabalhador convidado só pode usar a máquina localizada
+-- no MESMO lote do dono da ordem atribuída a ele.
+function WorkshopService.UseEquipment(player: Player, equipmentId: string, sourcePlot: Instance?)
+    local equipment = Catalog.Equipment[equipmentId]
+    if not equipment or equipmentId == "BasicToolset" then
+        return false, "Equipamento inválido."
+    end
+    if not sourcePlot then
+        return false, "Use uma máquina instalada no local da oficina."
+    end
     local chosen: any = nil
     for _, job in pairs(Jobs) do
-        if job.OwnerUserId == player.UserId and job.Status == "InProgress" and job.AssignedWorkerUserId == player.UserId
+        if CollaborationRules.IsAuthorized(job, player.UserId) and job.Diagnosed
             and Catalog.Defects[job.DefectId].RequiredEquipment == equipmentId then
-            if job.Diagnosed and (not chosen or (job.AcceptedAt or 0) < (chosen.AcceptedAt or 0)) then
-                chosen = job
+            local owner = Players:GetPlayerByUserId(job.OwnerUserId)
+            if owner and PlotService.GetPlot(owner) == sourcePlot then
+                if not chosen or (job.AcceptedAt or 0) < (chosen.AcceptedAt or 0) then
+                    chosen = job
+                end
             end
         end
     end
     if not chosen then
-        return false, "Nenhum carro diagnosticado precisa de " .. Catalog.Equipment[equipmentId].DisplayName .. " agora."
+        return false, "Nenhuma ordem atribuída a você usa esta máquina nesta oficina."
     end
     return WorkshopService.StartRepair(player, chosen.Id, false)
 end
@@ -1808,8 +1836,19 @@ function WorkshopService.Start()
                     if owner then
                         breakCombo(job.OwnerUserId)
                     end
-                elseif job.Status == "InProgress" and job.CollaboratorUserId and os.time() - (job.CollabAt or os.time()) > Config.CollabMaxSeconds then
-                    -- colaborador que não conclui não prende a vaga: a ordem volta ao dono
+                elseif job.Status == "InProgress" and job.CollaboratorUserId and os.time() - (job.CollabAt or os.time()) > Config.CollabMaxSeconds
+                    and not (Repairs[job.CollaboratorUserId]
+                        and Repairs[job.CollaboratorUserId].JobId == jobId
+                        and RepairSessionRules.IsActive(Repairs[job.CollaboratorUserId], os.clock(), RepairRules.MaxSessionSeconds)) then
+                    -- Não retirar o trabalho de alguém no meio de um reparo válido.
+                    local oldWorker = Players:GetPlayerByUserId(job.CollaboratorUserId)
+                    if oldWorker and oldWorker:GetAttribute("CollaborationJobId") == jobId then
+                        oldWorker:SetAttribute("CollaborationOwnerUserId", nil)
+                        oldWorker:SetAttribute("CollaborationJobId", nil)
+                        if eventSender then
+                            eventSender(oldWorker, "Notice", { Message = "Prazo do contrato encerrado: a OS voltou ao proprietário.", Success = false })
+                        end
+                    end
                     job.CollaboratorUserId = nil
                     job.CollaborationSplitPercent = nil
                     job.CollabAt = nil

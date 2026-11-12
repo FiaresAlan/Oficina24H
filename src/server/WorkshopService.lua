@@ -8,6 +8,7 @@ local JobRules = require(ReplicatedStorage.Shared.JobRules)
 local CustomerRules = require(ReplicatedStorage.Shared.CustomerRules)
 local RepairRules = require(ReplicatedStorage.Shared.RepairRules)
 local DiagnosisRules = require(ReplicatedStorage.Shared.DiagnosisRules)
+local DiagnosisEvidence = require(ReplicatedStorage.Shared.DiagnosisEvidence)
 local WorkshopLevels = require(ReplicatedStorage.Shared.WorkshopLevels)
 
 local WorkshopService = {}
@@ -648,8 +649,30 @@ function WorkshopService.AcceptJob(player: Player, jobId: string)
     return true, "Ordem aceita. " .. placeMessage
 end
 
--- Diagnóstico por escolha: sem escolha abre a tela com 3 candidatos; com escolha, o servidor valida. Palpite errado bloqueia a
--- opção e reduz a qualidade do reparo; acertar revela o defeito (e só então o serviço pode começar).
+-- Exames e hipóteses formam a MESMA ordem: o servidor guarda o defeito verdadeiro.
+local function ensureDiagnosisOptions(job: any)
+    if not job.DiagnoseOptions then
+        job.DiagnoseOptions = DiagnosisRules.BuildOptions(Catalog.Defects, job.DefectId, job.ComplaintDefectId, math.random)
+        job.DiagnoseWrong = {}
+        job.DiagnoseAttempts = 0
+    end
+end
+
+local function sendDiagnosisOptions(player: Player, job: any)
+    if not eventSender then return end
+    local options = {}
+    for _, id in ipairs(job.DiagnoseOptions) do
+        table.insert(options, { Id = id, Name = Catalog.Defects[id].DisplayName, Wrong = job.DiagnoseWrong[id] == true })
+    end
+    eventSender(player, "DiagnoseStart", {
+        JobId = job.Id, Vehicle = job.VehicleName, Customer = job.CustomerName, Complaint = job.Complaint,
+        Options = options, Attempts = job.DiagnoseAttempts,
+        Exams = DiagnosisEvidence.Exams,
+        Findings = DiagnosisEvidence.Findings(job.DefectId, job.DiagnoseExams),
+    })
+end
+
+-- Conversa com o cliente libera hipóteses. O diagnóstico real é sempre validado no servidor.
 function WorkshopService.DiagnoseJob(player: Player, jobId: string, choice: any?)
     local job = Jobs[jobId]
     if not job or job.OwnerUserId ~= player.UserId then
@@ -658,7 +681,6 @@ function WorkshopService.DiagnoseJob(player: Player, jobId: string, choice: any?
     if job.Status ~= "InProgress" or job.AssignedWorkerUserId ~= player.UserId then
         return false, "Você não está responsável por esta ordem."
     end
-    -- Diagnóstico = conversar com o cliente: só de perto dele (~3 m). Sem NPC, vale a distância do carro.
     local nearCustomer = CustomerNpcService.IsNear(player, job.Id, Config.TalkDistance)
     if nearCustomer == false then
         return false, "Chegue perto do cliente para conversar."
@@ -669,27 +691,15 @@ function WorkshopService.DiagnoseJob(player: Player, jobId: string, choice: any?
         return true, Catalog.Defects[job.DefectId].DisplayName
     end
 
-    if not job.DiagnoseOptions then
-        job.DiagnoseOptions = DiagnosisRules.BuildOptions(Catalog.Defects, job.DefectId, job.ComplaintDefectId, math.random)
-        job.DiagnoseWrong = {}
-        job.DiagnoseAttempts = 0
-    end
-    local function sendOptions()
-        if eventSender then
-            local options = {}
-            for _, id in ipairs(job.DiagnoseOptions) do
-                table.insert(options, { Id = id, Name = Catalog.Defects[id].DisplayName, Wrong = job.DiagnoseWrong[id] == true })
-            end
-            eventSender(player, "DiagnoseStart", {
-                JobId = job.Id, Vehicle = job.VehicleName, Customer = job.CustomerName, Complaint = job.Complaint,
-                Options = options, Attempts = job.DiagnoseAttempts,
-            })
-        end
+    ensureDiagnosisOptions(job)
+    if choice == nil then
+        sendDiagnosisOptions(player, job)
+        return true, ""
     end
 
-    if choice == nil then
-        sendOptions()
-        return true, ""
+    -- Para os três casos-piloto, o cliente não pode resolver apenas escolhendo por sorte.
+    if DiagnosisEvidence.RequiresExam(job.DefectId) and not DiagnosisEvidence.HasAnyExam(job.DiagnoseExams) then
+        return false, "Faça pelo menos uma inspeção no carro antes de confirmar o diagnóstico."
     end
     local verdict = DiagnosisRules.Judge(job.DiagnoseOptions, job.DiagnoseWrong, job.DefectId, choice)
     if verdict == "invalid" then
@@ -698,20 +708,45 @@ function WorkshopService.DiagnoseJob(player: Player, jobId: string, choice: any?
     job.DiagnoseAttempts += 1
     if verdict == "wrong" then
         job.DiagnoseWrong[choice] = true
-        sendOptions()
+        sendDiagnosisOptions(player, job)
         return false, "Não era isso: " .. Catalog.Defects[choice].DisplayName .. ". Cada palpite errado reduz a qualidade do reparo."
     end
 
     job.Diagnosed = true
     funnel(player, "Diagnosed")
     VehicleService.SetStage(job.Id, "Repair")
-    VehicleService.SetSymptom(job.Id, defectSymptom(job.DefectId)) -- agora o carro mostra o defeito real
+    VehicleService.SetSymptom(job.Id, defectSymptom(job.DefectId))
     VehicleService.Flash(job.Id, Color3.fromRGB(80, 150, 255))
     if eventSender then
         eventSender(player, "DiagnoseDone", { JobId = job.Id, Attempts = job.DiagnoseAttempts })
     end
     local defect = Catalog.Defects[job.DefectId]
     return true, "Diagnóstico correto: " .. defect.DisplayName .. ". Serviço: " .. Catalog.Services[job.ServiceId].DisplayName .. "."
+end
+
+-- Exame explícito no veículo: não responde com o DefectId, somente com a leitura do instrumento.
+-- Uma ação de exame não cobra peças nem altera dinheiro, XP ou condição de componentes.
+function WorkshopService.ExamineJob(player: Player, jobId: string, examId: any)
+    local job = Jobs[jobId]
+    if not job or job.OwnerUserId ~= player.UserId then
+        return false, "Ordem não encontrada."
+    end
+    if job.Status ~= "InProgress" or job.AssignedWorkerUserId ~= player.UserId or job.Diagnosed then
+        return false, "Esta ordem não está aguardando inspeção."
+    end
+    if not job.DiagnoseOptions then
+        return false, "Converse primeiro com o cliente para conhecer a reclamação."
+    end
+    if not DiagnosisEvidence.IsValidExam(examId) then
+        return false, "Exame inválido."
+    end
+    if not VehicleService.IsNear(player, job.Id, Config.InteractDistance) then
+        return false, "Aproxime-se do carro para realizar a inspeção."
+    end
+    job.DiagnoseExams = job.DiagnoseExams or {}
+    job.DiagnoseExams[examId] = true
+    sendDiagnosisOptions(player, job)
+    return true, ""
 end
 
 -- Confere TUDO que o reparo exige (responsável, diagnóstico, distância, equipamento, nível, peças) SEM consumir nada.

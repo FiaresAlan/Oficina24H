@@ -9,6 +9,7 @@ local TweenService = game:GetService("TweenService")
 
 local Catalog = require(game:GetService("ReplicatedStorage").Shared.Catalog)
 local InspectionPointRules = require(game:GetService("ReplicatedStorage").Shared.InspectionPointRules)
+local RepairPrepRules = require(game:GetService("ReplicatedStorage").Shared.RepairPrepRules)
 local PlotService = require(script.Parent.PlotService)
 local CustomerNpcService = require(script.Parent.CustomerNpcService)
 local CustomerArrivalService = require(script.Parent.CustomerArrivalService)
@@ -146,6 +147,45 @@ local function addPrompts(car: Model, job: any)
 			if interactionHandler then interactionHandler(player, job.Id, prompt.Name) end
 		end)
 	end
+	-- Sockets de preparação do serviço: todos os carros recebem a mesma lista.
+	-- Somente a etapa corrente fica acionável, após o diagnóstico no servidor.
+	local prepFolder = Instance.new("Folder")
+	prepFolder.Name = "RepairPrepPoints"
+	prepFolder.Parent = car
+	local prepOffsets = RepairPrepRules.Offsets(
+		tonumber(car:GetAttribute("Largura")) or 8,
+		tonumber(car:GetAttribute("Comprimento")) or 18,
+		height
+	)
+	for _, stepId in ipairs(RepairPrepRules.Order) do
+		local step = RepairPrepRules.Steps[stepId]
+		local point = Instance.new("Part")
+		point.Name = "Prep_" .. stepId
+		point.Size = Vector3.new(0.5, 0.5, 0.5)
+		point.Massless, point.Anchored = true, false
+		point.Transparency = 1
+		point.CanCollide, point.CanQuery, point.CanTouch = false, false, false
+		point.CFrame = root.CFrame * CFrame.new(prepOffsets[stepId])
+		point:SetAttribute("StepId", stepId)
+		point.Parent = prepFolder
+		local weld = Instance.new("WeldConstraint")
+		weld.Part0, weld.Part1 = root, point
+		weld.Parent = point
+		local prompt = Instance.new("ProximityPrompt")
+		prompt.Name = "Prep_" .. stepId
+		prompt.ActionText = step.Action
+		prompt.ObjectText = step.Name
+		prompt.KeyboardKeyCode = Enum.KeyCode.E
+		prompt.HoldDuration = step.Hold
+		prompt.MaxActivationDistance = 7
+		prompt.RequiresLineOfSight = false
+		prompt.Style = Enum.ProximityPromptStyle.Custom
+		prompt.Enabled = false
+		prompt.Parent = point
+		prompt.Triggered:Connect(function(player: Player)
+			if interactionHandler then interactionHandler(player, job.Id, prompt.Name) end
+		end)
+	end
 end
 
 local function applyStage(car: Model)
@@ -162,6 +202,15 @@ local function applyStage(car: Model)
 	end
 	if repair and repair:IsA("ProximityPrompt") then
 		repair.Enabled = parked and stage == "Repair"
+			and (car:GetAttribute("PrepRequired") ~= true or car:GetAttribute("PrepComplete") == true)
+	end
+	local prepFolder = car:FindFirstChild("RepairPrepPoints")
+	if prepFolder then
+		local active = parked and stage == "Repair" and tostring(car:GetAttribute("PrepStepId") or "") or ""
+		for _, point in ipairs(prepFolder:GetChildren()) do
+			local prompt = point:FindFirstChildWhichIsA("ProximityPrompt")
+			if prompt then prompt.Enabled = point:GetAttribute("StepId") == active end
+		end
 	end
 	local inspectionFolder = car:FindFirstChild("InspectionPoints")
 	if inspectionFolder then
@@ -200,6 +249,45 @@ function VehicleService.MarkInspected(jobId: string, examId: string)
 	if point and point:IsA("BasePart") then
 		point:SetAttribute("Inspected", true)
 	end
+end
+
+-- Preparação server-side com progresso replicado aos prompts e marcadores locais.
+function VehicleService.SetRepairPrepProgress(jobId: string, defectId: string, stepIndex: number)
+	local car = byJob[jobId]
+	if not car then return end
+	local required = RepairPrepRules.Requires(defectId)
+	local stepId = RepairPrepRules.Current(defectId, stepIndex)
+	car:SetAttribute("PrepRequired", required)
+	car:SetAttribute("PrepStepId", stepId or "")
+	car:SetAttribute("PrepComplete", RepairPrepRules.Ready(defectId, stepIndex))
+	-- A abertura do capô é um gesto persistente de preparação, não uma recompensa em dinheiro.
+	if required and stepIndex > 1 and (defectId == "WeakBattery" or defectId == "Overheating") then
+		car:SetAttribute("PrepHoodOpen", true)
+	end
+	local folder = car:FindFirstChild("RepairPrepPoints")
+	if folder then
+		for _, point in ipairs(folder:GetChildren()) do
+			local id = point:GetAttribute("StepId")
+			point:SetAttribute("Completed", id == "HoodRelease" and stepIndex > 1
+				or id == "WheelBolts" and defectId == "FlatTire" and stepIndex > 1
+				or id == "JackSupport" and defectId == "FlatTire" and stepIndex > 2
+				or id == "BatteryBracket" and defectId == "WeakBattery" and stepIndex > 2
+				or id == "DrainPan" and defectId == "Overheating" and stepIndex > 2)
+		end
+	end
+	applyStage(car)
+end
+
+function VehicleService.IsNearRepairPrepPoint(player: Player, jobId: string, stepId: string): boolean
+	if not RepairPrepRules.FromPrompt("Prep_" .. stepId) then return false end
+	local car = byJob[jobId]
+	if not car or car:GetAttribute("Estacionado") ~= true then return false end
+	local folder = car:FindFirstChild("RepairPrepPoints")
+	local point = folder and folder:FindFirstChild("Prep_" .. stepId)
+	local character = player.Character
+	local root = character and character:FindFirstChild("HumanoidRootPart")
+	return point ~= nil and point:IsA("BasePart") and root ~= nil and root:IsA("BasePart")
+		and RepairPrepRules.IsNear(point.Position, root.Position, RepairPrepRules.MaxDistance) or false
 end
 
 -- Distância de um exame até sua peça lógica, validada em servidor inclusive para o RemoteEvent.
@@ -524,6 +612,7 @@ function VehicleService.Despawn(jobId: string, instant: boolean?)
 	end
 	task.delay(30, release) -- segurança: nunca prende a vaga
 	car:SetAttribute("Reparando", false)
+	car:SetAttribute("PrepHoodOpen", false)
 	car:SetAttribute("Sintoma", "")
 	task.spawn(function()
 		if StationService.IsBusy(theBay) then

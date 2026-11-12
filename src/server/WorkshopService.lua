@@ -758,6 +758,7 @@ function WorkshopService.ExamineJob(player: Player, jobId: string, examId: any)
     end
     job.DiagnoseExams = job.DiagnoseExams or {}
     job.DiagnoseExams[examId] = true
+    VehicleService.MarkInspected(job.Id, examId)
     sendDiagnosisOptions(player, job)
     return true, ""
 end

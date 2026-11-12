@@ -33,7 +33,7 @@ jobs:
             echo "Compilando $source"
             /tmp/luau/luau-compile "$source" > /dev/null
             count=$((count + 1))
-          done < <(find src tools -type f \\( -name '*.lua' -o -name '*.luau' \\) -print0)
+          done < <(find src tools -type f \( -name '*.lua' -o -name '*.luau' \) -print0)
           echo "$count arquivos Luau compilados com sucesso."
       - name: Escopo da validação
         run: |

@@ -10,6 +10,7 @@ local TweenService = game:GetService("TweenService")
 local Catalog = require(game:GetService("ReplicatedStorage").Shared.Catalog)
 local InspectionPointRules = require(game:GetService("ReplicatedStorage").Shared.InspectionPointRules)
 local RepairPrepRules = require(game:GetService("ReplicatedStorage").Shared.RepairPrepRules)
+local RepairSocketRules = require(game:GetService("ReplicatedStorage").Shared.RepairSocketRules)
 local PlotService = require(script.Parent.PlotService)
 local CustomerNpcService = require(script.Parent.CustomerNpcService)
 local CustomerArrivalService = require(script.Parent.CustomerArrivalService)
@@ -165,7 +166,10 @@ local function addPrompts(car: Model, job: any)
 		point.Massless, point.Anchored = true, false
 		point.Transparency = 1
 		point.CanCollide, point.CanQuery, point.CanTouch = false, false, false
-		point.CFrame = root.CFrame * CFrame.new(prepOffsets[stepId])
+		local socketFrame, source, nativeVisual = RepairSocketRules.Resolve(car, root, stepId, prepOffsets[stepId])
+		point.CFrame = socketFrame
+		point:SetAttribute("SocketSource", source)
+		point:SetAttribute("UseNativeVisual", nativeVisual)
 		point:SetAttribute("StepId", stepId)
 		point.Parent = prepFolder
 		local weld = Instance.new("WeldConstraint")

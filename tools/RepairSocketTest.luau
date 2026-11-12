@@ -41,8 +41,12 @@ local attachment = Instance.new("Attachment")
 attachment.Name = "OficinaSocket_WheelBolts"
 attachment.CFrame = CFrame.new(0.2, 0.3, 0.4) * CFrame.Angles(0, 0, math.rad(20))
 attachment.Parent = mount
-local resolved, resolvedSource = Rules.Resolve(car, root, "WheelBolts", fallback)
+local resolved, resolvedSource, nativeVisual = Rules.Resolve(car, root, "WheelBolts", fallback)
 check("attachment do carro tem prioridade", resolvedSource == "ModelAttachment")
+check("proxy generico por padrao, mesmo com socket nativo", nativeVisual == false)
+attachment:SetAttribute("OficinaUseNativeVisual", true)
+local _, selected, skipProxy = Rules.Resolve(car, root, "WheelBolts", fallback)
+check("modelo permite visual nativo sem proxy duplicado", selected == "ModelAttachment" and skipProxy == true)
 check("posicao exata do attachment preservada", (resolved.Position - attachment.WorldPosition).Magnitude < 0.001)
 check("rotacao do attachment preservada", resolved.LookVector:Dot(attachment.WorldCFrame.LookVector) > 0.999)
 local other, otherSource = Rules.Resolve(car, root, "JackSupport", Prep.Offsets(8, 18, 5).JackSupport)

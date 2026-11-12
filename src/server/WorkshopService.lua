@@ -1629,6 +1629,9 @@ local function employeeWork(owner: Player, job: any, npc: Model)
         NpcKit.ServerOwned(npc)
     end
     job.Diagnosed = true
+    -- Se o NPC não puder terminar, os sockets de preparo precisam existir para o jogador retomar.
+    job.PreparationStep = job.PreparationStep or 1
+    VehicleService.SetRepairPrepProgress(job.Id, job.DefectId, job.PreparationStep)
     VehicleService.SetStage(job.Id, "None")
     VehicleService.SetSymptom(job.Id, defectSymptom(job.DefectId))
     VehicleService.SetRepairing(job.Id, true)
@@ -1702,7 +1705,8 @@ local function staffTick()
             local waiting = 0
             for jobId, job in pairs(Jobs) do
                 if job.OwnerUserId == userId and job.Status == "InProgress" and not entry.Busy[jobId] and not job.CollaboratorUserId
-                    and VehicleService.IsParked(jobId) and not (Repairs[userId] and Repairs[userId].JobId == jobId) then
+                    and VehicleService.IsParked(jobId) and not (Repairs[userId] and Repairs[userId].JobId == jobId)
+                    and not (RepairPrepRules.Requires(job.DefectId) and (job.PreparationStep or 1) > 1) then
                     waiting += 1
                 end
             end
@@ -1714,6 +1718,7 @@ local function staffTick()
                     if job.OwnerUserId == userId and job.Status == "InProgress" and not entry.Busy[jobId]
                         and not job.CollaboratorUserId and VehicleService.IsParked(jobId)
                         and not (Repairs[userId] and Repairs[userId].JobId == jobId)
+                        and not (RepairPrepRules.Requires(job.DefectId) and (job.PreparationStep or 1) > 1)
                         and os.time() >= (job.EmployeeRetryAt or 0) then
                         local free: Model? = nil
                         for _, npc in ipairs(entry.Npcs) do

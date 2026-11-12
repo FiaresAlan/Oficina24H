@@ -17,10 +17,9 @@ local function makeMarker(point: BasePart, examId: string): BillboardGui
 	gui.Adornee = point
 	gui.Size = UDim2.fromOffset(142, 42)
 	gui.StudsOffsetWorldSpace = Vector3.new(0, 0.85, 0)
-	gui.AlwaysOnTop = false
+	gui.AlwaysOnTop = true
 	gui.LightInfluence = 0
 	gui.MaxDistance = 36
-	gui.ResetOnSpawn = false
 
 	local frame = Instance.new("Frame")
 	frame.Name = "Plate"

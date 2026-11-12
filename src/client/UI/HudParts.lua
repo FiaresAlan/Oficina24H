@@ -274,18 +274,27 @@ function HudParts.navButton(spec: NavSpec, onClick: () -> ()): NavButton
 		TextXAlignment = side and Enum.TextXAlignment.Left or Enum.TextXAlignment.Center,
 		TextYAlignment = Enum.TextYAlignment.Center, TextTruncate = Enum.TextTruncate.AtEnd,
 	})
+	local shortNames: { [string]: string } = {
+		B_Ordens = "OS", B_Habilidades = "Hab.", B_Loja = "Loja",
+		B_Estoque = "Peças", B_Ranking = "Rank", B_Perfil = "Perfil",
+	}
 	local function placeContent(compact: boolean)
-		label.Visible = not compact
+		-- No celular, ícone sem legenda gera ambiguidade: mantém rótulo curto no dock.
+		label.Visible = not compact or not side
 		if side then
+			icon.Size = UDim2.fromOffset(iconSize, iconSize)
 			icon.AnchorPoint = Vector2.new(compact and 0.5 or 0, 0.5)
 			icon.Position = compact and UDim2.fromScale(0.5, 0.5) or UDim2.new(0, 22, 0.5, 0)
 			label.Position = UDim2.new(0, 22 + iconSize + 18, 0, 0)
 			label.Size = UDim2.new(1, -(22 + iconSize + 24), 1, 0)
 		else
-			icon.AnchorPoint = Vector2.new(0.5, compact and 0.5 or 0)
-			icon.Position = compact and UDim2.fromScale(0.5, 0.5) or UDim2.new(0.5, 0, 0, 10)
-			label.Position = UDim2.new(0, 0, 1, -34)
-			label.Size = UDim2.new(1, 0, 0, 30)
+			icon.Size = UDim2.fromOffset(compact and 34 or iconSize, compact and 34 or iconSize)
+			icon.AnchorPoint = Vector2.new(0.5, 0)
+			icon.Position = UDim2.new(0.5, 0, 0, compact and 4 or 10)
+			label.Text = compact and (shortNames[spec.Name] or spec.Label) or spec.Label
+			label.TextSize = compact and 16 or 26
+			label.Position = UDim2.new(0, 0, 1, compact and -24 or -34)
+			label.Size = UDim2.new(1, 0, 0, compact and 20 or 30)
 		end
 	end
 	placeContent(false)

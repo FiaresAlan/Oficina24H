@@ -34,11 +34,11 @@ end
 -- Não revelar campos de correção do servidor no payload.
 function RepairOperations.PublicPlan(plan: any): any
 	if plan.Mode == "Tire" then
-		return { Kind = plan.Kind, Mode = plan.Mode, Hint = plan.Hint, PressureTarget = plan.TargetPressure }
+		return { Kind = plan.Kind, Mode = plan.Mode, Hint = plan.Hint, PressureTarget = plan.TargetPressure, MinSeconds = MIN_DURATION.Tire }
 	elseif plan.Mode == "Battery" then
-		return { Kind = plan.Kind, Mode = plan.Mode, Hint = "Desconecte negativo, depois positivo; conecte positivo, depois negativo." }
+		return { Kind = plan.Kind, Mode = plan.Mode, Hint = "Desconecte negativo, depois positivo; conecte positivo, depois negativo.", MinSeconds = MIN_DURATION.Battery }
 	end
-	return { Kind = plan.Kind, Mode = plan.Mode, Hint = "Complete 2 litros, faça 2 ciclos de sangria e verifique a ventoinha." }
+	return { Kind = plan.Kind, Mode = plan.Mode, Hint = "Complete 2 litros, faça 2 ciclos de sangria e verifique a ventoinha.", MinSeconds = MIN_DURATION.Cooling }
 end
 
 local function invalid(reason: string): any

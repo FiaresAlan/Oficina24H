@@ -221,6 +221,10 @@ function Orders.new(parent: Instance)
 		info.Name = "Info"
 		HudParts.text(info, t("or_customer", (job.Vip and "★ VIP " or (job.Regular and "♥ " or (job.Fleet and "📋 " or ""))) .. (job.CustomerName or "?")), 30, { Font = Theme.FontTitle, LayoutOrder = 1 })
 		HudParts.text(info, job.VehicleName, 26, { Font = Theme.FontSemi, LayoutOrder = 2 })
+		HudParts.text(info, tostring(job.PersonaLabel or "Cliente comum") .. " · " .. tostring(job.PersonaHint or ""), 19, {
+			Font = Theme.FontSemi, TextColor3 = Theme.Muted, TextWrapped = true,
+			AutomaticSize = Enum.AutomaticSize.Y, Size = UDim2.new(1, 0, 0, 0), LayoutOrder = 2,
+		})
 		local status = stack(info, 8, true, 3)
 		HudParts.sprite(status, "pn_o_clock", Vector2.new(28, 28))
 		HudParts.text(status, t("or_waiting"), 24, { Font = Theme.FontSemi, LayoutOrder = 2 })
@@ -269,6 +273,10 @@ function Orders.new(parent: Instance)
 		info.AutomaticSize = Enum.AutomaticSize.XY
 		HudParts.text(info, t("or_customer", (job.Vip and "★ VIP " or (job.Regular and "♥ " or (job.Fleet and "📋 " or ""))) .. (job.CustomerName or "?")), 30, { Font = Theme.FontTitle, LayoutOrder = 1 })
 		HudParts.text(info, job.VehicleName, 26, { Font = Theme.FontSemi, LayoutOrder = 2 })
+		HudParts.text(info, tostring(job.PersonaLabel or "Cliente comum") .. " · " .. tostring(job.PersonaHint or ""), 19, {
+			Font = Theme.FontSemi, TextColor3 = Theme.Muted, TextWrapped = true,
+			AutomaticSize = Enum.AutomaticSize.Y, Size = UDim2.new(1, 0, 0, 0), LayoutOrder = 2,
+		})
 		local statusRow = stack(info, 8, true, 3)
 		HudParts.sprite(statusRow, "pn_o_wrench", Vector2.new(28, 28))
 		local goal = ServiceFocusRules.ForActive(job, snapshot.Profile)

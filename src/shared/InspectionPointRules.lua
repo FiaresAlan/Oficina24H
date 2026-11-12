@@ -8,7 +8,7 @@ InspectionPointRules.Exams = {
 	{ Id = "BatteryVoltage", Name = "Bateria", Action = "Testar tensão" },
 	{ Id = "CoolingTemperature", Name = "Arrefecimento", Action = "Medir temperatura" },
 }
-InspectionPointRules.MaxDistance = 11
+InspectionPointRules.MaxDistance = 7.5
 
 local function finite(n: any): boolean
 	return type(n) == "number" and n == n and n ~= math.huge and n ~= -math.huge

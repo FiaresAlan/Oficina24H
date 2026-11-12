@@ -1,7 +1,7 @@
 --!strict
--- Operações piloto por especialidade: pneu (local + pressão), bateria (sequência de terminais)
--- e arrefecimento (volume + sangria + ventoinha). Todos os valores são validados no servidor.
--- Não substitui RepairGame.lua: outros defeitos continuam usando o minijogo de timing.
+-- Quinze serviços com interações distintas por especialidade: três pilotos e doze receitas.
+-- O servidor avalia todos os valores, fases e consequências; esta UI apenas coleta decisões.
+-- O minijogo legado permanece como fallback para defeitos desconhecidos.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Store = require(script.Parent.Store)
 local HudParts = require(script.Parent.HudParts)
@@ -83,6 +83,10 @@ function OperationRepairGame.new(gui: ScreenGui)
 	local startedAt = 0
 	local pressure, spot, sequence = 28, nil :: string?, {} :: { string }
 	local fluid, bleed, fan = 1.5, 0, false
+	local measures: { [string]: number } = {}
+	local zoneLevels: { [string]: number } = {}
+	local sourceId: string? = nil
+	local actionId: string? = nil
 	local close: (boolean) -> ()
 
 	local function clear()
@@ -118,6 +122,8 @@ function OperationRepairGame.new(gui: ScreenGui)
 		startedAt = os.clock()
 		pressure, spot, sequence = 28, nil, {}
 		fluid, bleed, fan = 1.5, 0, false
+		measures, zoneLevels = {}, {}
+		sourceId, actionId = nil, nil
 		title.Text = tostring(payload.Service or "Reparo") .. " · procedimento"
 		local status = label(content, "", 72, 36, 20)
 
@@ -126,8 +132,24 @@ function OperationRepairGame.new(gui: ScreenGui)
 				status.Text = string.format("Remendo: %s  ·  Pressão: %d psi", spot or "não selecionado", pressure)
 			elseif currentPlan.Mode == "Battery" then
 				status.Text = string.format("Terminais: %d/4 · %s", #sequence, table.concat(sequence, " → "))
-			else
+			elseif currentPlan.Mode == "Cooling" then
 				status.Text = string.format("Fluido: %.2f L · Sangria: %d ciclos · Ventoinha: %s", fluid, bleed, fan and "testada" or "pendente")
+			elseif currentPlan.Mode == "Sequence" then
+				status.Text = string.format("Etapas executadas: %d/%d", #sequence, #(currentPlan.Options or {}))
+			elseif currentPlan.Mode == "Calibration" then
+				local words = {}
+				for _, field in ipairs(currentPlan.Fields or {}) do
+					table.insert(words, tostring(field.Name) .. " " .. tostring(measures[field.Id]) .. tostring(field.Unit))
+				end
+				status.Text = table.concat(words, " · ")
+			elseif currentPlan.Mode == "Circuit" then
+				status.Text = "Circuito: " .. tostring(sourceId or "?") .. " · Ação: " .. tostring(actionId or "?")
+			elseif currentPlan.Mode == "Surface" then
+				local words = {}
+				for _, zone in ipairs(currentPlan.Zones or {}) do
+					table.insert(words, tostring(zone.Name) .. " " .. tostring(zoneLevels[zone.Id] or 0))
+				end
+				status.Text = "Intensidade 0–3: " .. table.concat(words, " · ")
 			end
 		end
 

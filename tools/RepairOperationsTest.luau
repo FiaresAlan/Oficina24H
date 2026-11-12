@@ -32,5 +32,8 @@ check("arrefecimento: subpreenchimento pior", poorCool.Valid and poorCool.Qualit
 check("arrefecimento: ciclos nao inteiros invalido", not Rules.Evaluate(cool, { Fluid = 2, BleedCycles = 1.5, FanChecked = true }, 4, mods).Valid)
 check("arrefecimento: campo malicioso invalido", not Rules.Evaluate(cool, { Fluid = "2", BleedCycles = 2, FanChecked = true }, 4, mods).Valid)
 check("qualquer operacao: tempo irreal invalido", not Rules.Evaluate(cool, { Fluid = 2, BleedCycles = 2, FanChecked = true }, 0, mods).Valid)
+check("pneu: conclusao instantanea bloqueada", not Rules.Evaluate(tire, { Spot = tire.LeakSpot, Pressure = 32 }, 0.5, mods).Valid)
+check("bateria: exige tempo minimo de operacao", not Rules.Evaluate(battery, { Steps = sequence }, 2, mods).Valid)
+check("arrefecimento: exige tempo minimo de operacao", not Rules.Evaluate(cool, { Fluid = 2, BleedCycles = 2, FanChecked = true }, 2, mods).Valid)
 check("resultado: fatores da qualidade presentes", type(perfectCool.Breakdown) == "table" and type(perfectCool.Breakdown.Execution) == "number")
 return table.concat(result, "\n")

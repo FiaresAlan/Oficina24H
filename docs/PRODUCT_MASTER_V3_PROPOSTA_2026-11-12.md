@@ -300,3 +300,510 @@ Não simular química real; projetar decisões legíveis. Peça recuperada pode 
 
 ---
 
+
+## 7. COOPERAÇÃO SOCIAL: PRÓXIMO DIFERENCIAL, SEM PREJUDICAR SOLO
+
+### 7.1. Produto mínimo vs produto avançado
+
+**P0 oficial da v2:** 2 jogadores no mesmo servidor, oficinas/dados isolados, carros/OS corretamente associados; coexistência e segurança validadas. Convites avançados não são bloqueadores. **[PROP]** Se os testes de núcleo indicarem que um protótipo cooperativo simples aumenta diversão sem grande risco, o Product Owner poderá aprovar uma **exceção P0 limitada**; não tratar como automática.
+
+**P1:** assistência por tarefa ou transferência especializada com minijogo real e pagamentos justos.
+
+**P2:** duas pessoas operando em paralelo a mesma OS, bancada compartilhada e guincho de motor interno.
+
+### 7.2. Como a cooperação deve funcionar
+
+Exemplo de OS “revisão de arrefecimento”:
+1. Proprietário conversa e diagnostica.
+2. A prepara carro e remove proteção; B consulta estoque e reserva radiador.
+3. A retira radiador; B prepara ferramenta/estação.
+4. B instala componente ou opera máquina autorizada; A verifica encaixe.
+5. A faz teste final, o sistema registra contribuições de ambos.
+6. Cliente recebe o carro, a oficina recebe avaliação, dinheiro é repartido conforme combinado.
+
+**Contribuição real** = tarefa validada do servidor, não apenas presença ou clique simultâneo.
+
+### 7.3. Permissões e contratos
+
+Dono mantém propriedade do lote, estoque, equipamento, precificação e OS. Convidado recebe autorização **temporária, limitada à OS e às tarefas selecionadas**. Servidor guarda conjunto de UserIds autorizados; não usar atributo textual AllowedCrew como única fonte de autoridade.
+
+Consentimento antes da execução: papel, pagamento, condição de desistência e quem fornece peças. Permitir reatribuição de tarefa quando colaborador sair. **Não pagar duas vezes.** Não dar ao colaborador poder de mover itens da oficina para seu inventário pessoal sem transação expressamente permitida.
+
+**Crítica ao Gemini:** reduzir WalkSpeed à metade para transportar motor e liberar +15% financeiro fixo na cooperação podem criar burocracia e inflação. Melhor usar equipamento (guincho) e paralelismo para ganho de tempo e capacidade; se houver bônus financeiro, que seja justificado por qualidade/contrato, limitado e submetido a simulação econômica.
+
+### 7.4. Operação do guincho de motor (P2)
+
+**Peça grande:** motor. **Papéis:** operador regula altura/alinhamento; mecânico libera suportes e fixações; opcionalmente assistente NPC prepara equipamento.
+
+**Estados controlados pelo servidor:** Mounted -> ConnectionsReleased -> HoistAttached -> Suspended -> Bench -> Reinstalled -> Verified.
+
+**Visual:** motor pesado pode usar tween/constraints com sockets, Attachments e geometria/GLB real quando existir. Não depender de network ownership para validar dinheiro, condição ou posição econômica de componente. Fallback solo: tarefas sequenciais com operação assistida.
+
+### 7.5. Outros encontros sociais de alto valor
+
+- Quadro na praça: “Oficina Alfa precisa de mecânico de elétrica” e vaga temporária.
+- Visita a oficinas sem direito de alterá-las.
+- Clientes observando movimentação, elevadores e funcionários em outras oficinas.
+- Mural de avaliações e especialidades na fachada.
+- Evento de frota com membros contribuindo em diferentes etapas.
+- Categoria de ranking de qualidade separada de faturamento, para não esmagar jogador solo.
+
+---
+
+## 8. GESTÃO, MERCADO, CLIENTES E RETENÇÃO
+
+### 8.1. Entender por que o cliente escolheu uma oficina
+
+Hoje há fórmula agregada por preço, reputação, especialidade, distância, fila e nota. Para evolução, adicionar **arquétipos de NPC**, mantendo o mesmo motor econômico:
+
+| Cliente | Dá mais peso a | Oportunidade |
+|---|---|---|
+| Econômico | Orçamento | Oficina barata, mas não necessariamente mais lucrativa |
+| Urgente | Prazo e capacidade | Oficina eficiente, estoque pronto, atendimento rápido |
+| Exigente | Nota, especialidade e garantia | Mecânico bem treinado, peça confiável |
+| Fiel | Histórico e confiança | Retorno para quem prestou bom serviço |
+| Frota | Regularidade, capacidade e custo total | Contrato, equipe e logística |
+
+**Não mudar pesos sem simulação.** Medir receita, margem, taxa de recusa, serviço impossível e concentração de clientes por estratégia. Estatísticas do quadro devem ser honestas com a natureza probabilística das escolhas.
+
+### 8.2. Economia que permita escolhas
+
+Receita não é igual a lucro. O painel de cada serviço deve indicar:
+- Pagamento previsto (antes da aceitação).
+- Custo de peças/insumos.
+- Custo da contratação, quando aplicável.
+- Qualidade e prazo, após execução.
+- Margem informativa, sem contabilidade pesada P0.
+
+**P0 não requer aluguel, energia, impostos, dívidas ou perda passiva offline**, conforme v2. Custos novos só com evidência de inflação real.
+
+**Escolha estratégica:** peça nova mais cara vs reparo adequado mais barato; serviço premium vs volume; atender agora vs negociar prazo. Sem decisões falsas: alternativa barata não deve ser sempre a melhor, nem qualidade premium garantir lucro sem limite.
+
+### 8.3. Reputação e clientes memoráveis
+
+O sistema já guarda fregueses. Evolução:
+- Veículo retorna com identificação coerente e histórico limitado.
+- Cliente lembra do último serviço, comenta melhora ou problema.
+- Qualidade e preço afetam indicação/fidelidade.
+- Em caso de falha coerente, oferecer revisão com regras claras e chance de recuperar confiança.
+- Reputação por especialidade **P1/P2**, preservando reputação geral e ratings legados.
+
+**Novo recurso de baixa complexidade e alto impacto:** bilhete de entrega com frase simples do cliente + diagnóstico feito + peça instalada + resultado do teste. Isso transforma resultado financeiro abstrato em história de atendimento.
+
+### 8.4. NPC rivais são negócios do bairro, não “pontuação falsa”
+
+Rivais devem:
+- Receber cliente somente quando têm capacidade/baia.
+- Reservar vaga, mostrar atendimento e registrar conclusão/falha real.
+- Ter preço, reputação e habilidade comparáveis sob regras explícitas.
+- Liberar lotes para jogadores e não comprometer capacidade real do servidor.
+- Nunca ganhar rating ou moeda antes do sucesso de serviço.
+- Ser sinalizados como oficinas NPC, não jogadores humanos fictícios.
+
+**Nova melhoria:** o bairro pode comunicar “a oficina vizinha ganhou demanda de suspensão” como tendência agregada, sem fingir interações que não aconteceram.
+
+### 8.5. Progressão: evitar empilhamento de recompensas
+
+A base já traz: clientes fiéis, Rush, bônus de amigo, combo, missão diária, liga e conquistas. Isso pode ficar como suporte, não como núcleo da diversão.
+
+**Recomendação de balanceamento:**
+- Bônus por trabalho bem feito e qualidade acima de presença.
+- Nenhuma penalização arbitrária por desconectar ou perder sequência diária.
+- Reduzir efeitos cumulativos que façam serviço normal parecer inútil.
+- Progressão desbloqueia **decisões e trabalhos**, não só multiplicadores.
+- Dinheiro pode ser usado em capacidade, equipamento, peças e estética; não criar custos recorrentes antes de medir necessidade.
+
+---
+
+## 9. HUD / UI / UX COMO SISTEMA DE ESTADOS
+
+Referência detalhada [GEM] descreve:
+- A pé: notificações alto direito; dinheiro baixo esquerdo; hotbar inferior; checklist lateral.
+- Dirigindo: painel automotivo baixo direito; minimapa GPS baixo esquerdo.
+- Terminais: cartões de trabalho; catálogo com categorias/carrinho; ECU com curvas e sliders.
+
+**Essas posições não foram verificadas diretamente por esta auditoria em frames do YouTube.** Servem como referência de design, não contrato de pixel.
+
+### 9.1. Layout por contexto
+
+| Contexto | Mostrar | Ocultar |
+|---|---|---|
+| Exploração/Oficina | saldo, cliente ativo, ferramentas, notificações discretas | painel de carro dirigível |
+| Atendimento | retrato, queixa, paciência, opções de conversa | diagnóstico confirmado |
+| Diagnóstico | exame, evidência, hipóteses, feedback | minigames não relacionados |
+| Reparo | peça alvo, bloqueio, ferramenta, estado/qualidade | lojas sobrepostas |
+| Máquina | controle da estação, slots, progresso | menu geral cobrindo máquina |
+| Co-op | funções, tarefas paralelas, equipe, acordo | controles de outras OS |
+| Gestão | fila, estoque, funcionários, preço e reputação | instrumentação de direção |
+| Condução futura | velocidade, estado do veículo, rota | checklist mecânico extenso |
+
+**Regra inegociável do proprietário:** loja, inventário e painéis não podem escurecer o gameplay nem impedir visão contínua da oficina. Painéis contextuais preferencialmente laterais, responsivos e fecháveis. Não criar botão decorativo sem operação.
+
+### 9.2. Cuidado com o acionamento de direção
+
+**Crítica ao Gemini:** Humanoid.Seated sozinho não prova que o jogador dirige. Pode estar sentado em qualquer Seat. Detectar VehicleSeat/ocupante/veículo autorizado e estado de direção, com transições de assento, morte, desconexão e respawn. Não render velocímetro fora dessa condição.
+
+**Raio-X:** iniciar só com ferramenta/estado corretos; guardar restauração de visibilidade e impedir oclusão de partes interativas. Highlight de bloqueio deve durar pouco e ter feedback textual; vermelho sozinho não é acessível a todos.
+
+**Minimapa/GPS:** só se houver dirigibilidade/rotas úteis. Beam não “projeta automaticamente” um trilho no asfalto; precisa de pontos/Attachments e tratamento de elevação/curvas. Para P0, sinalização de loja e marcador do objetivo são suficientes.
+
+### 9.3. Glossário PT-BR para UI
+
+- Ordem de Serviço (OS), Sintoma, Diagnóstico, Inspeção, Orçamento, Peça, Ferramenta, Equipamento, Bancada, Elevador automotivo, Guincho de motor, Balanceadora, Desmontadora, Scanner automotivo, Suspensão, Cambagem, Freios, Motor, Radiador, Polimento, Revisão, Garantia, Reputação.
+- “Guincho de motor” ≠ “guincho/reboque”.
+- “Ultrassom/limpeza ultrassônica” não equivale a reconstruir metal danificado.
+- Usar termos profissionais compreensíveis, com tooltip opcional. Evitar literalismos traduzidos e mensagens genéricas.
+
+---
+
+## 10. O BAIRRO, OS ESTABELECIMENTOS E A ARTE
+
+### 10.1. Conflito de escala no relatório Gemini
+
+O relatório descreve ao mesmo tempo “cidade costeira modular compacta” e um mapa grande/vazio com poucos encontros. Isso pode significar baixa densidade de atividades ou exagero da dimensão, mas **não autoriza concluir tamanho real do mapa sem observar vídeos e medir**.
+
+A conclusão útil é outra: **área só merece existir se gera ação, encontro ou motivo de retorno**.
+
+### 10.2. Zoneamento por necessidade
+
+**P0 — bairro atual:** seis lotes, via principal, oficinas, loja de autopeças, Construtora, praça/quadro e circulação de NPCs. Melhorar legibilidade, travessia, visibilidade de outras oficinas e caminhos curtos antes de criar orla.
+
+**P1 — primeiro distrito útil:** serviço externo simples ou fornecedor de componentes usados, se dados de retenção demandarem. Não criar estacionamento infinito.
+
+**P2 — oficinas especializadas:** loja de rodas, pintura, bancada de motores, preparação e ferro-velho quando houver sistemas correspondentes e capacidade de arte.
+
+**P3 — orla, pista, concessionária premium e grande malha rodoviária:** só se restauração, condução e tuning criarem jogo real nessas áreas.
+
+### 10.3. Como os POIs devem se conectar
+
+| Local | Ação exclusiva | Relação com oficina |
+|---|---|---|
+| Loja de autopeças | comprar peça compatível e comparar qualidade | estoque, custo, OS |
+| Construtora | expandir área, vagas, capacidade | lucro, reputação, equipe |
+| Praça/TV de ofertas | ver oportunidades e mercado | competição, co-op |
+| Ferro-velho futuro | inspecionar usado/sucata | restauração, estoque |
+| Loja de rodas futura | comparar roda/configuração | especialização, teste |
+| Cabine de pintura futura | acabamento visual verificado | funilaria, restauração |
+| Dinamômetro futuro | medir resultado real/simulado | tuning, laudo |
+| Pista futura | testar carro | preparação e direção |
+
+**Crítica à proposta de NPC Street Racers:** corridas espontâneas como atividade principal desviam o jogo da profissão, multiplicam trabalho de direção/IA/segurança e podem quebrar foco. Se tuning existir, começar com pista técnica e provas controladas, não rachas generalizados.
+
+### 10.4. Arte e assets
+
+O Product Master v2 orienta preferir assistente 3D do Studio via MCP, com inspeção e integração reais. **O Claude GitHub-only não tem essa capacidade inicialmente**. Na fase de código, ele deve:
+- Enumerar assets no GitHub e seus IDs documentados, sem fingir inspeção de modelos locais.
+- Criar interfaces para sockets, pivôs, attachments e fallbacks.
+- Fazer manifest de importação e validação Studio.
+- Reservar criação visual de carros, oficina, máquinas e rua à fase com Studio/MCP ou importação manual.
+- Checar licenças de cada item; texturas, sprites de referência e ícones sem autorização escrita continuam bloqueados para publicação.
+- Evitar marcas de carros, logotipos reais, QR codes e texturas problemáticas.
+- Priorizar silhueta/escala/coerência visual acima de polígonos em um objeto isolado.
+- Medir performance em celular. Modelos do Workspace podem ser influenciados por StreamingEnabled; modelos mantidos em ReplicatedStorage não ganham streaming espacial equivalente.
+
+**Risco especial:** muitos ViewportFrames, luzes e modelos em ReplicatedStorage podem consumir memória mesmo fora do campo de visão. Preferir miniaturas prontas quando comprovadamente mais eficientes.
+
+---
+
+## 11. CORREÇÕES E AJUSTES NAS RECOMENDAÇÕES DO GEMINI
+
+| Proposta GEM | Veredito | Razão e adaptação |
+|---|---|---|
+| Modo raio-X por LocalTransparencyModifier | **Aprovar com condicionantes** | É apresentação local; complementar raycast, câmera, sockets e feedback; não resolveria tudo sozinho |
+| Árvore de dependências e Highlight | **Aprovar** | Começar com poucas peças e feedback de bloqueio; servidor valida |
+| Limpeza + polimento levam tudo a 100% | **Rejeitar no formato descrito** | Sujeira/ferrugem ≠ dano/desgaste; permitir recuperação limitada |
+| Colaboração simultânea | **Aprovar como direção** | É diferenciação, mas não bloqueia P0 sem exceção; começar pequeno |
+| Motor pesado reduz WalkSpeed 50% | **Rejeitar como regra geral** | Punição de deslocamento; usar guincho/auxílio e tarefas relevantes |
+| Co-op paga +15% fixo | **Não aprovar automaticamente** | Inflação e exploração; qualidade/eficiência/contrato podem justificar benefício controlado |
+| Carrinho 4–6 slots | **Aprovar depois de precisar** | Só quando carga de peças existir; não adicionar logística física P0 |
+| Assistência externa e guincho | **Backlog P1/P2 conforme v2** | Exige condução, controles, mapa e NPC; não bloqueia lançamento |
+| Scanner revela todas peças num clique | **Reprojetar** | Scanner fornece evidências, não resposta universal |
+| Direção ativada por Humanoid.Seated | **Corrigir** | Checar carro dirigível/autorização, não assento genérico |
+| GPS com Beam no asfalto | **Protótipo posterior** | Não há projeção automática; path e attachments exigem integração |
+| NPCs desafiando para rachas | **Adiar/P3** | Desvia da fantasia mecânica e depende de direção útil |
+| Cidade costeira com muitos POIs | **Adiar** | Cada prédio precisa de atividade real e fluxo de visitas |
+| “Milhares online = servidor falso” | **Não comprovado** | Jogadores globais e por instância são métricas diferentes |
+| Tuning ECU/cambagem | **Aprovar como expansão** | Só com laudo, trade-offs e teste que muda de fato |
+| Cabine de pintura e concessionária | **Backlog P2** | Reusar restauração e avaliação; não expandir mundo sem loop |
+| Contratos com quatro cards, catálogo com carrinho | **Adotar padrões funcionais** | Se melhorar leitura/compra, sem copiar identidade visual |
+
+---
+
+## 12. CRITÉRIO DE LANÇAMENTO P0 — O QUE É E O QUE NÃO É
+
+### 12.1. P0 obrigatório (conforme v2 + correções de qualidade mínima)
+
+- [ ] Jogador novo entra numa oficina nível 0 e completa atendimento sem explicação verbal.
+- [ ] NPC e veículo chegam corretamente, aguardam, reagem, partem sem duplicação.
+- [ ] Sintoma, conversa e diagnóstico separados; defeito não aparece prematuramente.
+- [ ] Serviços representativos das cinco especialidades são atendíveis.
+- [ ] Mínimo de diferenciação mecânica demonstrável, sem exigir árvore profunda de peças.
+- [ ] Reparo responde a ferramenta/equipamento/peça/execução; qualidade validada no servidor.
+- [ ] Loja, estoque e peças persistem, compatibilidade e consumo único corretos.
+- [ ] Compra, avaliação, reputação, saldo, XP e desbloqueio claros.
+- [ ] Recusa, abandono, expiração e saída de NPC liberam baia e estado corretamente.
+- [ ] Oficina e dados isolados por jogador; dois jogadores simultâneos sem interferência.
+- [ ] DataStore real testado em place publicado de homologação.
+- [ ] Controle touch em celular real; PC também validado.
+- [ ] Remotes, pagamentos, inventário e propriedade revisados contra abuso.
+- [ ] Desempenho medido em cenário representativo.
+- [ ] Assets/ícones/sons possuem origem e licença aplicável verificada.
+- [ ] Bugs bloqueadores corrigidos; documentação e release candidate congelados.
+
+O checklist é de aceitação **real**, não de arquivos existentes. Como esta revisão não operou o Studio, **nenhum item de runtime foi marcado validado**.
+
+### 12.2. P0 “polimento de prazer”, limitado por escopo
+
+Uma microfatia por serviço pode agregar alta diversão sem bloquear cronograma: diagnóstico com 1 exame, operação diferente e feedback do carro. **Proposta:** construir 3 pilotos, avaliar com 5–10 usuários, então decidir se expandem as cinco áreas antes do lançamento. A v2 exige cinco áreas representadas, não cinco simuladores separados.
+
+### 12.3. O que já existe mas não deve expandir agora
+
+Contratos de frota, ligas, bônus de amigo, Rush, ranking, staff NPC e visuais avançados já têm código. A prioridade é **validar/corrigir** seu impacto, não criar seis novas versões. Funcionalidades opcionais podem ser simplificadas ou escondidas por feature flag no beta sem apagar dados.
+
+---
+
+## 13. ROADMAP DE EXECUÇÃO — DUAS TRILHAS COM PORTÕES
+
+### TRILHA A — FECHAR E TESTAR P0
+
+**A0 — Auditoria/reprodutibilidade (CODE-ONLY):** confirmar branch/commit, remotes, dados, assets, testes, responsabilidades e divergências de documentação. Atualizar README e docs/PROGRESSO com apenas fatos.
+
+**A1 — Reparar correções de integridade (CODE-ONLY):**
+- RivalService só credita serviço após conclusão com baia/carro; testes de falha.
+- Fallback da loja/construtora em produção deve negar operações se faltar prédio.
+- Revisão de dupla conclusão, compras, abandono, expiração e reconexão.
+- Garantir compatibilidade do SchemaVersion atual.
+
+**A2 — Variedade mecânica mínima (CODE-ONLY + NEEDS_STUDIO):**
+- 3 interações piloto: pneu, bateria, arrefecimento.
+- Diagnóstico com exame útil e explicação.
+- Preservar interface do minijogo antigo para demais serviços por feature flag.
+- Fallback sem modelos externos.
+- Checagem de acessibilidade e controles touch.
+
+**A3 — Onboarding e HUD (CODE-ONLY + NEEDS_STUDIO):**
+- Guia de primeiro cliente, avanço inicial, feedback de peça/qualidade.
+- Corrigir sobreposições; manter loja e inventário sem overlay escuro.
+- Melhorar feedback de não atender por falta de ferramenta/peça/nível.
+- Reduzir ruído de notificações.
+
+**A4 — Qualidade e estabilidade técnica (CODE-ONLY + NEEDS_STUDIO):**
+- Testes de dados, remotes, clientes, mercado, OS, moedas, estoque, incompatibilidade.
+- Medição de custos de snapshots, ViewportFrames e FX.
+- Preparar homologação.
+
+**A5 — HOMOLOGAÇÃO OBRIGATÓRIA (NÃO DISPONÍVEL VIA GITHUB-ONLY):**
+- Abrir Roblox Studio, integrar place e assets, executar testes 2 players.
+- Testar DataStore em experiência publicada de homologação.
+- Testar celular real, PC e desempenho, corrigir bugs e revisar licenças.
+
+**A6 — BETA FECHADO:** recomendação v2: ~15–20 participantes. Observar primeiro serviço, repetição, erro, economia, UI, multiplayer e decisão espontânea de fazer outro atendimento.
+
+**A7 — PUBLICAÇÃO:** apenas se critérios P0 forem demonstrados; congelar escopo e gerar notas de versão.
+
+### TRILHA B — EXPANSÕES APÓS VALIDAÇÃO OU EXCEÇÃO DO PRODUCT OWNER
+
+**B1 — Cooperação mínima útil e despacho por especialidade:** convidar profissional, dividir tarefas legítimas de OS e remuneração idempotente.
+
+**B2 — Carro piloto modular e máquinas realmente operáveis:** peças, estado, scanner, elevador, roda, bancada, integração de câmeras e sockets.
+
+**B3 — Guincho de motor interno e coop simultânea:** roles, locks, helper solo, economia e testes 2–4 players.
+
+**B4 — Mercado por perfil, garantia, histórico de veículo e oportunidades públicas:** evolução de CustomerRules, RivalService e ContractService.
+
+**B5 — Recondicionamento, carrinho e logística:** apenas se repetição de transporte e falta de decisão forem observadas.
+
+**B6 — Assistência externa presencial com NPC e despacho:** primeiro pontos próximos, depois veículo dirigível/caminhonete/reboque.
+
+**B7 — Restauração, ferro-velho, venda e showroom:** reutilizar engine de peças/qualidade; não garantir lucro fixo.
+
+**B8 — ECU, dinamômetro, cambagem e pista de teste:** somente com desempenho verificável do carro e controle adequado.
+
+**B9 — Novas regiões/veículos pesados:** P3, caso a base sustente e haja dados positivos.
+
+**Crítica de execução:** o prompt anterior de 14 fases é bom como **backlog técnico**, mas inadequado como um único cronograma de pré-lançamento. Ajustar o agente para priorizar A0–A7 e só antecipar Bx com exceção explícita.
+
+---
+
+## 14. INTEGRAÇÃO EM ARQUIVOS E ARQUITETURA
+
+### 14.1. Reaproveitar primeiro
+
+| Sistema | Arquivo principal | Ação planejada |
+|---|---|---|
+| OS, clientes, pagamentos e colaboração | src/server/WorkshopService.lua | Isolar estados e conectar novas regras sem reescrever |
+| Reparo e qualidade | src/shared/RepairRules.lua; UI/RepairGame.lua | Manter legado e criar receitas data-driven adicionais |
+| Diagnóstico | src/shared/DiagnosisRules.lua; UI/DiagnosisGame.lua | Introduzir exames/evidências antes das hipóteses |
+| Carros e efeitos | src/server/VehicleService.lua; src/client/VehicleFx.client.lua | Adicionar slots/adapter e feedback contextual |
+| Equipamentos | src/server/EquipmentService.lua; StationService.lua | Atividade própria e fail-safe |
+| Clientes e concorrência | src/shared/CustomerRules.lua; src/server/RivalService.lua | Corrigir integridade e simular mercados |
+| Contratos | src/server/ContractService.lua | Validar legado, depois coop multi-oficina |
+| DataStore | src/server/DataService.lua | Migração compatível; nenhuma reescrita arriscada |
+| UI e snapshots | src/client/UI/HUD.lua; UI/Store.lua | Estado contextual sem obscurecer jogo |
+| Catálogos | src/shared/Catalog.lua; Config.lua | Uma fonte de verdade para os serviços |
+
+### 14.2. Novos contratos, somente quando necessários
+
+**Diagnóstico:** ExamId, TargetComponentId, EvidenceId, DefectHypothesisId, JobId e resultado server-side.
+
+**Receita:** RecipeId, StepId, Kind, DependsOn, RequiredTool, RequiredStation, TargetPartId, Status, Revision, ActorUserId.
+
+**Peça:** VehicleInstanceId, PartInstanceId, SlotId, Condition, Contamination, Wear, StructuralDamage, Compatibility, Ownership.
+
+**Coop:** JobId, OwnerUserId, Participants, Permissions, TaskClaims, PaymentAgreement, Revision.
+
+**Estação:** StationId, BusyByJobId, OperatorId, ItemSlots, State, EndsAt, Revision.
+
+Não persistir Instances brutas; guardar IDs e dados compactos, com limites e migração. Evitar combinar cliente e servidor na mesma fonte de autoridade. Fazer idempotência com tokens/estado e validar distância/posse/ação no servidor.
+
+### 14.3. Testes de regra sem Studio
+
+O agente GitHub-only pode escrever testes Luau de:
+- DAG de receita e dependências.
+- Qualidade e evidências.
+- Escolhas de clientes e distribuição de mercado.
+- Reservas/consumo de peças.
+- Idempotência de compra, pagamento e OS.
+- Tentativa de alteração por visitante.
+- Desconexão e estado expirado.
+- Rivais sem baia/spawn.
+- Dados antigos com schema novo.
+- Reclamação não revelar defeito.
+
+**Não pode afirmar que executou**, salvo ferramenta explícita disponível. Testes Roblox remotos/multiplayer/mobile e percepção visual continuam NEEDS_STUDIO.
+
+---
+
+## 15. MÉTRICAS, EXPERIMENTOS E CRITÉRIOS DE DIVERTIMENTO
+
+### 15.1. Instrumentação
+
+Rastrear:
+1. Entrou no jogo.
+2. Identificou o primeiro cliente.
+3. Falou com NPC.
+4. Realizou primeiro exame.
+5. Concluiu diagnóstico.
+6. Iniciou reparo.
+7. Concluiu e recebeu avaliação.
+8. Iniciou segundo atendimento.
+9. Comprou primeira melhoria.
+10. Voltou em outro dia (com amostra suficiente).
+
+Complementares: duração por tipo de OS, abandono/cancelamento, razão de ferramenta insuficiente, nota, margem, tipo de dispositivo, quedas/erros, interferência com outro jogador, co-op real, qualidade do teste final.
+
+Eventos de funil do Roblox permitem medir onde jogadores abandonam as etapas. Os valores de referência devem ser definidos após beta, não inventados.
+
+### 15.2. Cinco perguntas de teste com pessoas
+
+- “Você entendeu por que aquele carro estava com problema?”
+- “Qual foi a ação mais divertida do reparo?”
+- “O que você faria diferente na próxima OS?”
+- “Você gostaria de trabalhar ou visitar a oficina de outra pessoa? Por quê?”
+- “Você faria outro serviço sem prêmio diário extra?”
+
+Uma pessoa aceitar um teste não comprova retenção. Observar ações espontâneas, abandonos, fluxo de toque e reclamações.
+
+### 15.3. Não usar pontuação fictícia como evidência
+
+As durações sugeridas para onboarding/serviços, o ganho de velocidade em coop e a distribuição de demanda são hipóteses. **Não publicar “retenção aumentou”, “FPS 60” ou “usuários gostam” sem medições.**
+
+---
+
+## 16. REGISTRO DE RISCOS E CORREÇÕES PRIORITÁRIAS
+
+| Risco | Gravidade | Ação |
+|---|---|---|
+| Reparo uniforme fica repetitivo | Alta, produto | 3 receitas piloto + teste com pessoas |
+| Diagnóstico por adivinhação | Alta, produto | Exame informativo e evidência |
+| Rivais ganham estatística sem serviço | Alta, integridade | Corrigir ordem de crédito |
+| Local físico ausente libera compra | Média/Alta, condicional | Falhar seguro fora de Studio |
+| Falha de DataStore real | Crítica, lançamento | Homologação publicada |
+| 2 players afetam mesma OS/dados | Crítica, lançamento | Testar coexistência, ownership e rejoin |
+| Arte sem licença documentada | Alta, publicação | Confirmar origem e substituir |
+| Mobile não testado | Crítica, lançamento | Teste em aparelho real |
+| Equipamentos são só gating | Alta, produto | Interações de máquina em protótipo |
+| Co-op sem trabalho compartilhado | Média/Alta, diferencial | P1 e feature flag |
+| Empilhamento de bônus / inflação | Média | Simular e medir |
+| Crescimento ilimitado do mapa | Alta, prazo | POIs só com loops |
+| Game design maior que capacidade de execução | Alta, gestão | Freeze P0 e branches por PR |
+| Teste escrito ≠ teste executado | Alta, governança | Status explícito |
+
+---
+
+## 17. COMO CLAUDE / FABLE 5.2 DEVE USAR ESTE DOCUMENTO
+
+**Sem Computer Use**:
+1. Ler a v2.0 oficial (precisa ser fornecida ou anexada no ambiente do agente; ela está na biblioteca do proprietário, não necessariamente no GitHub).
+2. Ler este documento e o código atual; respeitar governança v2.
+3. Classificar cada gap por P0/P1/P2/P3 e CODE_COMPLETE/NEEDS_STUDIO/NEEDS_ASSET.
+4. Abrir branch/PR pequena, com um defeito ou vertical slice por vez.
+5. Começar por integridade e experiência mecânica mínima (A1/A2).
+6. Preservar DataStore, remotes, serviços e catálogos. Nada de criação paralela.
+7. Adicionar testes e relatórios de execução honesta. Nunca dizer que testou Studio/Blender sem realmente operar.
+8. Atualizar docs/PROGRESSO.md e histórico de implementações somente com evidências verificáveis.
+9. Não pedir ao proprietário para escolher cada detalhe trivial.
+10. Não transformar as expansões B1–B9 em requisitos obrigatórios sem exceção aprovada.
+
+**Formato de entrega por PR:**
+
+~~~text
+Problema de jogador:
+Prioridade P0/P1/P2/P3:
+Arquivos modificados:
+Mudança real no gameplay:
+Integração com sistemas existentes:
+Testes escritos e executados separadamente:
+Riscos de segurança, performance e persistência:
+Compatibilidade e rollback:
+O que depende de Studio/arte:
+Link do PR e commit real:
+Próxima fatia:
+~~~
+
+**Sinal de mau desenvolvimento:** mais 10 módulos criados, nenhum cliente/veículo/OS alterado de ponta a ponta.
+
+**Sinal de bom desenvolvimento:** um defeito foi diagnosticado com evidência, tratado com operação distinta, pago com integridade, visto no carro e refletido na satisfação do NPC, sem quebrar legados.
+
+---
+
+## 18. DECISÕES QUE PRECISAM SER APROVADAS PELO PRODUCT OWNER
+
+A versão anterior continua autoridade; as seguintes decisões são **propostas**:
+
+1. **Aprovar a v3 como nova referência de visão, preservando P0 da v2?** Recomendação: sim, desde que cada expansão continue fora do gate de lançamento.
+2. **Antecipar um piloto de três receitas (pneu, bateria, radiador) para P0?** Recomendação: sim como polimento mínimo; interromper expansão se colocar estabilidade em risco.
+3. **Co-op simultânea avançada é bloqueadora de lançamento?** Recomendação: **não**; fazer P1/P2, podendo demonstrar prova pequena separada antes.
+4. **Manter primeira publicação no bairro presencial?** Recomendação: sim; assistência externa pós-lançamento.
+5. **Corrigir rivais e permissões de lojas antes da beta?** Recomendação: sim, integridade supera expansão.
+6. **Manter direção realista mas performance mobile?** Recomendação: sim, modelos 3D industriais coerentes com otimização e licença verificada.
+7. **Monetização de progressão/competição?** Recomendação: não; cosméticos e valor opcional transparente, sem pay-to-win.
+8. **Documentos operacionais anteriores de 14 fases devem ser reorganizados por prioridade?** Recomendação: sim; o backlog não é compromisso de implementação pré-lançamento.
+
+O Product Owner pode aprovar exceções específicas depois de avaliar trade-offs; nenhum agente deve assumir que “mais ideias” equivale a “lance só depois de tudo”.
+
+---
+
+## 19. FONTES E TRAÇABILIDADE
+
+**Fonte oficial [V2]:** Oficina24H_Product_Master_Document_v2.0.docx (06/11/2026), 13 páginas, 24 seções, encontrado na biblioteca do proprietário. Continua autoridade até decisão explícita.
+
+**Código [COD]:**
+- https://github.com/FiaresAlan/Oficina24H/blob/main/README.md
+- https://github.com/FiaresAlan/Oficina24H/blob/main/src/shared/RepairRules.lua
+- https://github.com/FiaresAlan/Oficina24H/blob/main/src/shared/DiagnosisRules.lua
+- https://github.com/FiaresAlan/Oficina24H/blob/main/src/shared/CustomerRules.lua
+- https://github.com/FiaresAlan/Oficina24H/blob/main/src/server/WorkshopService.lua
+- https://github.com/FiaresAlan/Oficina24H/blob/main/src/server/RivalService.lua
+- https://github.com/FiaresAlan/Oficina24H/blob/main/src/server/ContractService.lua
+- https://github.com/FiaresAlan/Oficina24H/blob/main/src/server/VehicleService.lua
+- https://github.com/FiaresAlan/Oficina24H/blob/main/src/server/DataService.lua
+- https://github.com/FiaresAlan/Oficina24H/blob/main/docs/ORIGEM_ASSETS.md
+
+**Relatório [GEM]:** análise do Mechanic Legends compartilhada pelo proprietário nesta conversa; suas afirmações sobre cenas e HUD não foram confirmadas quadro a quadro por esta revisão.
+
+**Diretrizes técnicas Roblox:** Creator Hub, best practices DataStore (UpdateAsync, retries, jitter, chave por jogador), Instance Streaming (Workspace vs ReplicatedStorage, modos Atomic/Persistent) e Analytics Funnel Events. Essas fontes apoiam as diretrizes de arquitetura e métricas; não comprovam estado de execução do jogo.
+
+**Nota final:** documento mestre não substitui playtest. O Oficina 24H só terá vantagem real sobre a referência se o jogador vivenciar **diagnóstico com sentido, reparo com consequência, clientes memoráveis e interação social legítima**. Complexidade em código, por si só, não é diversão.
+
+**FIM — V3.0 PROPOSTA PARA REVISÃO DO PRODUCT OWNER.**

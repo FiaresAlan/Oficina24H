@@ -136,7 +136,7 @@ local function addPrompts(car: Model, job: any)
 		prompt.ActionText = exam.Action
 		prompt.ObjectText = exam.Name .. " · " .. job.VehicleName
 		prompt.HoldDuration = 0.35
-		prompt.MaxActivationDistance = 10
+		prompt.MaxActivationDistance = 7
 		prompt.RequiresLineOfSight = false
 		prompt.KeyboardKeyCode = Enum.KeyCode.E
 		prompt.Style = Enum.ProximityPromptStyle.Custom

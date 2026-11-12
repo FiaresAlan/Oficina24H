@@ -8,6 +8,7 @@ local ServerStorage = game:GetService("ServerStorage")
 local TweenService = game:GetService("TweenService")
 
 local Catalog = require(game:GetService("ReplicatedStorage").Shared.Catalog)
+local InspectionPointRules = require(game:GetService("ReplicatedStorage").Shared.InspectionPointRules)
 local PlotService = require(script.Parent.PlotService)
 local CustomerNpcService = require(script.Parent.CustomerNpcService)
 local CustomerArrivalService = require(script.Parent.CustomerArrivalService)
@@ -103,7 +104,48 @@ local function addPrompts(car: Model, job: any)
 			end
 		end)
 	end
-	make("Repair", "Reparar", 0.5) -- o diagnóstico é conversando com o cliente (prompt "Conversar", de perto)
+	make("Repair", "Reparar", 0.5) -- o diagnóstico é conversando com o cliente
+
+	-- Pontos palpáveis do carro: usam a mesma PrimaryPart dos veículos já existentes.
+	-- Todos os três existem em qualquer carro, portanto sua presença não revela o defeito secreto.
+	local inspectionFolder = Instance.new("Folder")
+	inspectionFolder.Name = "InspectionPoints"
+	inspectionFolder.Parent = car
+	local offsets = InspectionPointRules.Offsets(
+		tonumber(car:GetAttribute("Largura")) or 8,
+		tonumber(car:GetAttribute("Comprimento")) or 18,
+		height
+	)
+	for _, exam in ipairs(InspectionPointRules.Exams) do
+		local point = Instance.new("Part")
+		point.Name = "Inspect_" .. exam.Id
+		point.Size = Vector3.new(0.5, 0.5, 0.5)
+		point.Anchored = false
+		point.Massless = true
+		point.CanCollide, point.CanQuery, point.CanTouch = false, false, false
+		point.Transparency = 1
+		point.CFrame = root.CFrame * CFrame.new(offsets[exam.Id])
+		point:SetAttribute("ExamId", exam.Id)
+		point.Parent = inspectionFolder
+		local pointWeld = Instance.new("WeldConstraint")
+		pointWeld.Part0 = root
+		pointWeld.Part1 = point
+		pointWeld.Parent = point
+		local prompt = Instance.new("ProximityPrompt")
+		prompt.Name = "Inspect_" .. exam.Id
+		prompt.ActionText = exam.Action
+		prompt.ObjectText = exam.Name .. " · " .. job.VehicleName
+		prompt.HoldDuration = 0.35
+		prompt.MaxActivationDistance = 10
+		prompt.RequiresLineOfSight = false
+		prompt.KeyboardKeyCode = Enum.KeyCode.E
+		prompt.Style = Enum.ProximityPromptStyle.Custom
+		prompt.Enabled = false
+		prompt.Parent = point
+		prompt.Triggered:Connect(function(player: Player)
+			if interactionHandler then interactionHandler(player, job.Id, prompt.Name) end
+		end)
+	end
 end
 
 local function applyStage(car: Model)
@@ -121,6 +163,14 @@ local function applyStage(car: Model)
 	if repair and repair:IsA("ProximityPrompt") then
 		repair.Enabled = parked and stage == "Repair"
 	end
+	local inspectionFolder = car:FindFirstChild("InspectionPoints")
+	if inspectionFolder then
+		local enabled = parked and stage == "Diagnose" and car:GetAttribute("InspectionReady") == true
+		for _, point in ipairs(inspectionFolder:GetChildren()) do
+			local prompt = point:FindFirstChildWhichIsA("ProximityPrompt")
+			if prompt then prompt.Enabled = enabled end
+		end
+	end
 end
 
 -- stage: "Diagnose" | "Repair" | "None". Os prompts só ligam depois que o carro estaciona.
@@ -132,6 +182,28 @@ function VehicleService.SetStage(jobId: string, stage: string)
 	car:SetAttribute("Etapa", stage)
 	applyStage(car)
 	CustomerNpcService.SetDiagnosed(jobId, stage ~= "Diagnose")
+end
+
+-- A conversa com o cliente libera pontos de inspeção físicos no carro, sem revelar a falha verdadeira.
+function VehicleService.EnableInspection(jobId: string)
+	local car = byJob[jobId]
+	if not car then return end
+	car:SetAttribute("InspectionReady", true)
+	applyStage(car)
+end
+
+-- Distância de um exame até sua peça lógica, validada em servidor inclusive para o RemoteEvent.
+function VehicleService.IsNearInspectionPoint(player: Player, jobId: string, examId: string): boolean
+	if not InspectionPointRules.ExamFromKind("Inspect_" .. examId) then return false end
+	local car = byJob[jobId]
+	if not car or car:GetAttribute("Estacionado") ~= true then return false end
+	local folder = car:FindFirstChild("InspectionPoints")
+	local point = folder and folder:FindFirstChild("Inspect_" .. examId)
+	local character = player.Character
+	local hrp = character and character:FindFirstChild("HumanoidRootPart")
+	return point ~= nil and point:IsA("BasePart")
+		and hrp ~= nil and hrp:IsA("BasePart")
+		and InspectionPointRules.IsNear(point.Position, hrp.Position, InspectionPointRules.MaxDistance) or false
 end
 
 -- Efeito do defeito mostrado no carro (VehicleFx no cliente): "Tires" | "Engine" | "Electrical" | "Suspension" |

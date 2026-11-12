@@ -654,6 +654,7 @@ function WorkshopService.AcceptJob(player: Player, jobId: string)
     funnel(player, "Accepted")
     VehicleService.SetSymptom(job.Id, defectSymptom(job.Diagnosed and job.DefectId or job.ComplaintDefectId))
     job.AssignedWorkerUserId = player.UserId
+    VehicleService.SetRepairActor(job.Id, player.UserId)
     return true, "Ordem aceita. " .. placeMessage
 end
 
@@ -1212,6 +1213,7 @@ function WorkshopService.RespondInvite(worker: Player, inviteId: string, accepte
     job.CollaboratorUserId = worker.UserId
     job.CollaborationSplitPercent = invite.SplitPercent
     job.CollabAt = os.time()
+    VehicleService.SetRepairActor(job.Id, worker.UserId)
     worker:SetAttribute("CollaborationOwnerUserId", invite.OwnerUserId)
     worker:SetAttribute("CollaborationJobId", job.Id)
     return true, "Convite aceito. Vá até o carro ou a máquina da oficina contratante para reparar."
@@ -1331,6 +1333,7 @@ function WorkshopService.PlayerLeft(userId: number)
             job.CollaboratorUserId = nil
             job.CollaborationSplitPercent = nil
             job.AssignedWorkerUserId = job.OwnerUserId
+            VehicleService.SetRepairActor(job.Id, job.OwnerUserId)
         end
     end
     for inviteId, invite in pairs(Invites) do
@@ -1894,6 +1897,7 @@ function WorkshopService.Start()
                     job.CollaborationSplitPercent = nil
                     job.CollabAt = nil
                     job.AssignedWorkerUserId = job.OwnerUserId
+                    VehicleService.SetRepairActor(job.Id, job.OwnerUserId)
                     if owner and eventSender then
                         eventSender(owner, "Notice", { Message = "O colaborador demorou demais: a ordem voltou para você.", Success = false })
                     end

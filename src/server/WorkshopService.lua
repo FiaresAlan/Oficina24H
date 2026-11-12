@@ -682,9 +682,15 @@ function WorkshopService.DiagnoseJob(player: Player, jobId: string, choice: any?
         return false, "Você não está responsável por esta ordem."
     end
     local nearCustomer = CustomerNpcService.IsNear(player, job.Id, Config.TalkDistance)
-    if nearCustomer == false then
+    local nearVehicle = VehicleService.IsNear(player, job.Id, Config.InteractDistance)
+    if choice ~= nil and job.DiagnoseOptions then
+        -- Após a conversa, o mecânico pode analisar hipóteses perto do carro.
+        if nearCustomer ~= true and not nearVehicle then
+            return false, "Aproxime-se do carro ou do cliente para concluir o diagnóstico."
+        end
+    elseif nearCustomer == false then
         return false, "Chegue perto do cliente para conversar."
-    elseif nearCustomer == nil and not VehicleService.IsNear(player, job.Id, Config.InteractDistance) then
+    elseif nearCustomer == nil and not nearVehicle then
         return false, "Aproxime-se do veículo para diagnosticar."
     end
     if job.Diagnosed then

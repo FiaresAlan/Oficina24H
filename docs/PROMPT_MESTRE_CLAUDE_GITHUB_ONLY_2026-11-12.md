@@ -443,3 +443,445 @@ O repositório documenta modelos e IDs em docs/ORIGEM_ASSETS.md, pipeline/asset_
 - Registrar dependências humanas **específicas**: “importar modelo X em ServerStorage.Assets...”, “criar Attachment Y”, “ligar Pivot”, “testar escala”. Nunca escrever “falta ajustar tudo manualmente”.
 
 ---
+
+## 10. ROADMAP DE CÓDIGO POR FASES E FATIAS VERTICAIS
+
+**Este roadmap é ordem de dependência, não ordem para gerar tudo no mesmo PR.** Uma fase pode ter vários PRs. A cada PR, a implementação deve atravessar shared/server/client/teste/doc quando aplicável. Só avance em integrações dependentes quando houver revisão suficiente; se faltar Studio, documente e trabalhe em blocos independentes sem fingir validação.
+
+### FASE 0 — Auditabilidade e baseline
+
+**Objetivo:** confirmar versão exata e definir contratos.
+
+**Arquivos:** documentação citada na Seção 2; novos ROADMAP_MASTER_2026.md, IMPLEMENTATION_LOG.md, QA_MANUAL.md e ASSET_INTEGRATION_MANIFEST.md.
+
+**Fazer:** inventário de módulos e remotes, mapa da UI, entidades, responsabilidades, estado de persistência, testes e assets; identificar acoplamentos arriscados e produzir prioridades. Feature flags se já houver ponto seguro para inclusão.
+
+**Não fazer:** refatorar toda a aplicação, reescrever docs antigos ou marcar testes como executados.
+
+**Aceite:** cada lacuna importante mapeada ao código real; plano de PRs e testes; linha de base com SHA do repositório.
+
+### FASE 1 — Engine de receitas de reparo, sem quebrar legado
+
+**Objetivo:** um serviço deixa de ser uma única ação genérica.
+
+**Implementar:**
+- Definição de RepairRecipe e Steps em shared, com dependências e validação de DAG.
+- Estado por OS, locks de etapas e transições em servidor.
+- API/snapshot mínima de progresso e “próxima ação”.
+- Integração incremental com WorkshopService e Catalog, mantendo reparo antigo para receitas não migradas.
+- Primeira receita piloto, sem depender de asset novo.
+
+**Testes:** grafo cíclico, etapa bloqueada, passo fora de ordem, replay, cancelamento, versão de receita, fallback de serviço antigo, validação de sessão, regressão de pagamento.
+
+**Aceite:** há receita data-driven conectada ao job sem duplo pagamento; velho minijogo continua disponível.
+
+### FASE 2 — Diagnóstico por exames e evidências
+
+**Objetivo:** substituir palpite puro por investigação.
+
+**Implementar:**
+- Sintomas, testes, evidências e hipóteses coerentes.
+- Módulo de regra pura com resultado determinístico quando a semente/caso é conhecido.
+- Servidor controla exames liberados/consumidos.
+- UI de diagnóstico contextual e revisão de onboarding.
+- Pilotos: pneu furado, bateria com defeito, arrefecimento.
+
+**Testes:** evidência obrigatória, resposta não revelada antes, diagnóstico inválido, servidor não aceita exame impossível, reentrada, erro e correção, acessibilidade.
+
+**Aceite:** o usuário tem motivos para investigar e recebe explicação do defeito.
+
+### FASE 3 — Carro modular e estado de peças
+
+**Objetivo:** peças com função e ciclo visível.
+
+**Implementar:**
+- PartState/VehicleAssemblyRules, sockets e grafo pequeno de acesso.
+- AssetAdapter para modelos existentes e fallback procedural.
+- Ações de remover, posicionar, instalar, inspecionar.
+- UI de highlight, bloqueio e ferramenta contextual.
+- Estado no servidor; efeitos no cliente.
+
+**Testes:** peça incompatível, remove sem precondição, falta de ferramenta, dois comandos simultâneos, perda/ausência de asset, ownership.
+
+**Aceite:** pelo menos um veículo piloto com 6–10 pontos de interação de código, com manipulação de peça autoritativa. Validação visual segue NEEDS_STUDIO.
+
+### FASE 4 — Máquinas operáveis
+
+**Objetivo:** equipamento muda o que o jogador faz.
+
+**Implementar:**
+- Elevador controlável com estados e guarda de segurança.
+- Scanner ligado a testes/evidências.
+- Banco elétrico, desmontadora/balanceadora, limpador/polidor com processos próprios.
+- Reservas de estação, requisitos e ocupação.
+- Integração de preço/qualidade/XP com execução real.
+
+**Testes:** uso sem comprar, distância, máquina ocupada, peça errada, fim do timer, repetição, interrupção e saída do jogador.
+
+**Aceite:** três máquinas distintas têm comandos/resultados próprios, não só “abrir minijogo”.
+
+### FASE 5 — Cooperação real e guincho de motor
+
+**Objetivo:** dois jogadores podem agir simultaneamente sobre a mesma OS.
+
+**Implementar:**
+- Permissões temporárias por jogador/OS/peça/estação.
+- Claims com timeout e recuperação.
+- Funções de mecânico, operador e apoio (não classes permanentes).
+- Divisão consensual de dinheiro e XP pela contribuição.
+- Guincho com estado no servidor e animação substituível por asset final.
+- Solo com operação assistida.
+- Adapter para colaboração legada.
+
+**Testes:** dois jogadores completam etapas diferentes, conflito na mesma peça, colaborador sai, dono sai, convite expirado, fraude de porcentagem, XP sem contribuição, pagamento duplo.
+
+**Aceite:** trabalho cooperativo possui ações distintas de dois jogadores na mesma ordem; validar em Studio com 2 players depois.
+
+### FASE 6 — Logística física de peças e estoque reservado
+
+**Objetivo:** integrar compra, recebimento, armazenamento, transporte e OS.
+
+**Implementar:**
+- Pedido/entrega com estado.
+- Reserva de peças por OS, devolução, confirmação de consumo.
+- Carrinho multi-slot; processamento em lote das máquinas.
+- UI de estoque e lista de compras compatíveis com o veículo.
+- Mercado de peças usadas somente quando regras de valor estiverem auditadas.
+
+**Testes:** compra concorrente, dois jobs reservando mesmo item, cancelamento, estoque sem saldo, reembolso, limite de mochila/carrinho.
+
+**Aceite:** peças não duplicam; o fluxo físico reduz caminhadas repetitivas.
+
+### FASE 7 — Profissões, contratação e progressão funcional
+
+**Objetivo:** crescimento muda a operação da oficina.
+
+**Implementar:**
+- Novos benefícios concretos de equipamentos e melhorias.
+- Trabalho avulso humano por especialidade, contraproposta e permissões.
+- Assistente NPC limitado; tarefas de rotina.
+- Progressão com especialização sem bloquear solo.
+- Reuso dos níveis da oficina e sistema de funcionários atuais.
+
+**Testes:** capacidade por nível, custos, funcionário não rouba XP, limites de contratação, duas negociações simultâneas.
+
+**Aceite:** desbloquear uma melhoria altera opções de trabalho e não apenas multiplicador de renda.
+
+### FASE 8 — Economia competitiva, cliente fiel e garantia
+
+**Objetivo:** estratégia da oficina modifica mercado.
+
+**Implementar:**
+- Perfis de demanda e preferências de clientes.
+- Diagnóstico/orçamento transparente.
+- Reputação por especialidade conservando nota geral.
+- Histórico compacto de cliente/veículo e garantia limitada.
+- Auditoria e correção justificada dos rivais NPC, CustomerRules e rankings.
+
+**Testes:** extremos de preço e fila, satisfação, qualidade, bônus de fidelidade, margem econômica, cliente desiste, rival cresce somente conforme regra.
+
+**Aceite:** duas oficinas com estratégias diferentes conseguem ser competitivas; mercado consegue explicar tendências sem fabricar justificativas.
+
+### FASE 9 — Eventos com consequência para o bairro
+
+**Objetivo:** contratos existentes originam atividades sociais.
+
+**Implementar:**
+- Mutirão de frota e contrato de equipe/consórcio.
+- Prazos, divisão de atividades e prêmio idempotente.
+- Integração com demandas de clientes e rivais.
+- NPC fallback para servidor vazio.
+- HUD não intrusiva de evento.
+
+**Testes:** evento expira, participante sai, solo, multijogador, uma OS pertence a contrato correto, prêmios não duplicam.
+
+**Aceite:** evento usa a mesma engine de reparo, peças, qualidade e reputação.
+
+### FASE 10 — Projetos próprios e restauração
+
+**Objetivo:** segundo loop de longo prazo ligado à mecânica.
+
+**Implementar:**
+- Projeto de carro usado/sucata com estado persistente.
+- Restauro via receitas existentes.
+- Avaliação transparente por condição, qualidade, custos e demanda.
+- Exibição/venda a NPC, sem arbitragem infinita.
+- Coleção pequena com limite de capacidade.
+
+**Testes:** projeto reabre após reconexão, orçamento, perda de peça, venda duplicada, preços extremos, perfil antigo.
+
+**Aceite:** decisão de restaurar ou vender tem consequências e não substitui todo atendimento.
+
+### FASE 11 — Preparação e teste automotivo
+
+**Objetivo:** tuning tem propósito e consequência.
+
+**Pré-requisitos:** peças e restauro estáveis; condução/teste funcional ou simulador de resultado honesto. Não criar mundo de corrida sem infra.
+
+**Implementar:** setup de suspensão simplificado, ECU com gráfico calculado, trade-offs, relatório de dinamômetro e desempenho antes/depois.
+
+**Testes:** entradas inválidas, limites, sem ganho fabricado client-side, custos e persistência, trade-offs.
+
+**Aceite:** mudar configuração muda teste verificável, não apenas gráfico decorativo.
+
+### FASE 12 — HUD contextual, localização e acessibilidade
+
+**Objetivo:** todos os sistemas parecerem um único jogo.
+
+**Implementar:** máquina/peça, jogador/colaborador, cliente, gestão e eventos com estados visuais. Não esconder gameplay com overlays, não cobrir peça com painel, melhorar câmera, fontes e formatos mobile.
+
+**Testes:** estados vazios, transições, erros de tradução/termos, lógica responsiva; screenshots somente na etapa humana.
+
+**Aceite:** sempre fica claro “qual é o próximo passo” e “qual consequência”.
+
+### FASE 13 — Segurança, performance e QA
+
+**Objetivo:** reduzir regressão antes de abrir beta.
+
+**Implementar:** auditoria de remotes, limite de snapshots, limpeza de conexões/Instances, cache, scripts de QA no Studio protegidos, telemetria de abandono e conclusão, testes de persistência e regressões.
+
+**Testes:** rejoin, sessão duplicada, transação dupla, spam, 2/6 jogadores em harness, lote cheio, assets ausentes, cliente sem rede, DataStore migrado.
+
+**Aceite:** checklists e instrumentos para executar testes reais, sem alegar desempenho medido antes de medi-lo.
+
+### FASE 14 — Handoff de assets e build de integração
+
+**Objetivo:** entregar uma versão de código que possa ser montada e validada no Studio.
+
+**Implementar:** manifest final de modelos e licenças, scripts de montagem de placeholders, contratos de sockets, inventário de IDs, roteiro de importação, checklist de publicação e lista de bloqueios.
+
+**Aceite:** toda dependência externa tem ação concreta e proprietário sabe exatamente o que precisa importar/testar. Não declarar lançamento pronto sem Roblox Studio, celular, multiplayer e revisão de licença.
+
+---
+
+## 11. FATIAMENTO DOS PRIMEIROS PRs
+
+O trabalho começa pela fundação e **uma fatia jogável**, não por uma pilha de 25 módulos não conectados.
+
+| PR proposto | Conteúdo |
+|---|---|
+| 00 | Auditoria, ADR mínima, roadmap e pontos seguros de feature flag |
+| 01 | RecipeRules e validação de grafo + testes puros |
+| 02 | RecipeService conectado a WorkshopService + um serviço piloto + compatibilidade legada |
+| 03 | Evidências e diagnóstico de três defeitos + UI correspondente |
+| 04 | Peças com estado e slots + carro piloto + AssetAdapter |
+| 05 | Máquinas com workflow + testes |
+| 06 | Coop roles, permissões, claims, pagamentos |
+| 07 | Guincho de motor cooperativo + solo assistido |
+| 08 | Reservas/estoque/carrinho/entrega |
+| 09 | Perfis de cliente e equilíbrio de concorrência |
+| 10 | Contrato de frota compartilhado |
+| 11+ | Restauração, tuning, direção e polimento quando os pré-requisitos forem verdadeiros |
+
+PRs podem ser divididos ainda mais. Evite dezenas de arquivos substancialmente alterados em um único PR. Cada PR precisa informar claramente o que pode ser revertido e quais contratos foram alterados.
+
+**Regra de progressão:** se um PR depende de resultado do Studio indisponível, conclua-o como NEEDS_STUDIO, documente teste exato e avance apenas nas tarefas que podem ser corretamente implementadas sem assumir que a anterior funcionou.
+
+---
+
+## 12. MELHORIAS ORIGINAIS ADICIONAIS — BACKLOG CRÍTICO E COESO
+
+Estas são ideias candidatas. **Não construa todas automaticamente**; selecione apenas quando fortalecerem o ciclo principal e houver pré-requisitos.
+
+**A. Quadro de despacho de OS:** agenda visual mostra vagas, urgência, especialidade, custo estimado, peças faltantes e responsável. Reúne equipe, cliente, estoque e rentabilidade.
+
+**B. Laudo técnico compartilhado:** evidências do diagnóstico ficam registradas na OS; cliente fiel pode voltar e mencionar serviço anterior. Vincula diagnóstico, NPC, confiança e garantia.
+
+**C. Garantia e retrabalho coerente:** reparo de qualidade ruim pode retornar, mas de modo limitado, previsível e com chance de correção; evita “avaliação é só número”.
+
+**D. Orçamento antes de comprar peça:** cliente escolhe aceitar reparo novo/recuperado mais barato ou de melhor durabilidade; melhora negociação e cria tensão econômica legítima.
+
+**E. Mutirão de bairro:** evento de vários carros que pode ser dividido entre oficinas; o resultado aparece no quadro e reputação da região.
+
+**F. Mercado de profissionais:** um mecânico especialista procura trabalhos em oficinas alheias; adquire XP e pode começar negócio próprio. Gera coop sem forçar sociedade permanente.
+
+**G. Histórias de clientes recorrentes:** mesmo NPC e veículo retornam com quilometragem, reparo e preferência; faz NPC parecer personagem e não moeda com pernas.
+
+**H. Ferramentas que mudam procedimento:** pneumática acelera fixação; carrinho move lotes; scanner reduz testes; alinhador dá precisão. Equipamento precisa ter trade-off de custo/capacidade.
+
+**I. Biblioteca de diagnósticos dentro do jogo:** a cada defeito resolvido, o jogador registra conhecimento e recebe dicas mais específicas para casos similares; progressão horizontal sem aumentar números artificialmente.
+
+**J. Especialização da loja de peças:** motor exposto fisicamente pode filtrar catálogo pelo tipo; evitar nomes técnicos difíceis e compras incompatíveis.
+
+**K. Peças usadas e economia circular:** recuperar e revender componentes; controle de condição impede geração ilimitada de dinheiro.
+
+**L. Eventos de clima com efeito no mercado, não só no visual:** dias quentes elevam chamados de arrefecimento; chuva altera demandas; informar a tendência.
+
+**M. Inspeção pré-entrega:** ligar motor, verificar temperatura, tensão, pressão e alinhamento conforme receita. Gera payoff concreto.
+
+**N. Prestígio visual verificável:** placa, uniformes, fachada e mural de boas avaliações mostram conquistas reais. Sem pay-to-win.
+
+**O. Contador de produtividade e qualidade:** rankings separados e justos, para que equipe grande e solo possam competir em categorias diferentes.
+
+**P. Aprendiz NPC e assistente de guincho:** o jogador solo consegue executar serviço complexo pagando tempo/custo em vez de ficar travado por falta de parceiro.
+
+**Q. Feedback de sucesso contextual:** cliente volta a ligar carro após reparo, comenta melhoria, entra e vai embora; mecanismo alimenta reputação em vez de pop-up puramente abstrato.
+
+**R. Serviços de frota recorrentes:** contratos da mesma empresa têm memória e requisitos próprios; a qualidade anterior afeta chance de novo contrato.
+
+**S. Obras e trânsito que geram chamados:** em fase posterior, eventos roteirizados e guincho podem nascer naturalmente na cidade; NÃO construir simulação de tráfego complexa prematuramente.
+
+**T. Carros de projeto com antes/depois:** showroom e ficha técnica demonstram trabalho real; gera metas sociais e colecionismo sem renda passiva dominante.
+
+**U. Dificuldade adaptada por domínio:** um iniciante pode executar serviço básico com ajuda; veterano encontra causas combinadas e diagnósticos mais sofisticados. Dificuldade tem que ser compreensível, não aumentar velocidade da barrinha.
+
+**V. Relatório do turno:** mostrar clientes perdidos, ganho, margem, satisfação, serviços por especialidade e investimento seguinte; conecta competição ao aprendizado do jogador.
+
+**W. Densidade social sem mapa maior:** baias e fachadas abertas, janela para oficina vizinha, quadro de oportunidades e personagens caminhando. Preferível a quilômetros de estrada vazia.
+
+**X. Laudo de dinamômetro com histórico:** compara configuração anterior e atual; oficina pode ganhar reputação por desempenho comprovado. Só quando condução/teste permitir.
+
+**Y. Máquina de bancada com processamento batch:** reduz grind dos vídeos de referência sem retirar o prazer de ver peça restaurada.
+
+**Z. Opção de recusar ou terceirizar serviço:** contratos podem ser inviáveis por falta de especialização; dono decide contratar ajuda, pedir peça ou não aceitar, com efeitos claros de reputação/prazo.
+
+Para cada ideia, classificar: impacto no loop, interação física nova, integração com sistemas existentes, custo de código, necessidade de asset, risco de exploit/economia, dependência e teste de valor. Rejeite ideias isoladas ou de baixa relação custo/benefício.
+
+---
+
+## 13. REGRAS DE ECONOMIA E RETENÇÃO
+
+1. Margem = receita − peças − custo proporcional de funcionários/equipamento/logística. Faturamento alto não é necessariamente lucro alto.
+2. Não criar inflação com restauração de lucro fixo, venda duplicável ou bônus sem custo.
+3. Clientela precisa ter preferências variadas; preço mínimo não deve dominar todas as estratégias.
+4. XP por atividade legítima; colaborador não ganha XP completo sem ação.
+5. Não retirar patrimônio por sair da sessão ou não entrar todo dia.
+6. Recompensas diárias e Hora do Rush já existem; não empilhar multiplicadores a ponto de invalidar economia.
+7. Contratos e eventos geram metas compreensíveis, com fallback solo e tempo de descanso.
+8. Monetização preferencialmente estética, transparente e não necessária para desempenho; não vender máquinas essenciais por Robux.
+9. Usar métricas de retenção para verificar hipóteses: funil do primeiro serviço, tempo até segundo reparo, coop ativado, tarefas abandonadas, motivo de perda de OS, frequência de retorno.
+10. Não chamar recompensas de “vício” nem projetar punições para pressionar abandono. Preferir motivação de domínio, comunidade e metas alcançáveis.
+
+---
+
+## 14. QA, SEGURANÇA E CRITÉRIOS DE ACEITE POR FASE
+
+### Testes de regras a adicionar (mesmo sem executar)
+
+- Receita válida não tem ciclo e respeita dependências.
+- Tarefa bloqueada não pode ser concluída via remote.
+- Dois pedidos simultâneos não instalam/consomem a mesma peça.
+- Cancelamento de OS devolve recursos reservados.
+- Concluir reparo duas vezes não paga duas vezes.
+- NPC funcionário não concede XP indevido ao dono.
+- Colaborador não acessa outra oficina ou outra ordem.
+- Convite e percentual não podem ser adulterados depois do aceite.
+- Desconexão libera tarefa/maquinário sem perda de recurso.
+- Falta de asset produz fallback seguro, não erro e pagamento grátis.
+- Um perfil antigo carrega novos campos sem ser zerado.
+- Versão futura de dados não é sobrescrita.
+- Mercado reage coerentemente a preço/nota/fila/especialização.
+- Rivais não recebem renda indevida.
+- Variações de receita são suficientemente diferentes no fluxo.
+- Loja não vende item incompatível sem feedback.
+- Eventos não pagam duas vezes por mesma OS.
+- Restauração não permite revenda com arbitragem infinita.
+
+### Testes de Studio a DOCUMENTAR para execução futura
+
+1. Jogador novo completa onboarding.
+2. Serviço simples reparado pelo dono.
+3. Diagnóstico errado/certo e evidências.
+4. Peça removida e reinstalada visualmente.
+5. Elevação do carro segura e câmera adequada.
+6. Estação ocupada / utilização simultânea.
+7. Dupla executa ações diferentes na mesma OS.
+8. Jogador desconecta na metade da cooperação.
+9. Duas oficinas competem por clientes no mesmo servidor.
+10. Modo solo sem parceiro continua funcional.
+11. Mobile: textos, botões, câmera, prompts e render.
+12. Sem asset específico: placeholder não trava.
+13. DataStore em ambiente de teste, reentrada e migração.
+14. Validação de FPS/memória/rede com concorrência real.
+15. Licenças, assets, sons, créditos, conteúdo sem marcas.
+
+**Nunca diga “testes passaram” se só escreveu testes.** Anotar “escrito, aguardando execução”.
+
+---
+
+## 15. PADRÃO DE ENTREGA E COMUNICAÇÃO ENTRE RODADAS
+
+Antes de cada PR/fatia, registre:
+
+- Objetivo de gameplay: o que o jogador faz e por que isso é divertido.
+- Conexão entre sistemas existentes.
+- Arquivos a alterar e contratos públicos impactados.
+- Hipóteses, riscos e rollback.
+- Testes previstos e dependência de assets/Studio.
+
+Depois da implementação, entregue:
+
+~~~text
+FATIA / PR:
+BRANCH / COMMIT / LINK (somente se realmente criado):
+STATUS: CODE_COMPLETE | PARTIAL
+REVISÃO: STATIC_REVIEWED | NOT_REVIEWED
+TESTES ESCRITOS: ...
+TESTES EXECUTADOS: nenhum (salvo ferramenta real)
+STUDIO: NEEDS_STUDIO
+ASSETS: READY | NEEDS_ASSET
+ARQUIVOS ALTERADOS:
+- ...
+CONTRATOS/REMOTES AFETADOS:
+- ...
+COMPATIBILIDADE:
+- ...
+RISCO RESTANTE:
+- ...
+PASSOS EXATOS DE TESTE HUMANO:
+- ...
+PRÓXIMA FATIA:
+- ...
+~~~
+
+Atualizar docs/IMPLEMENTATION_LOG.md e ROADMAP_MASTER_2026.md. Cada PR deve permitir inspeção e reversão simples. Evitar mais de 8–12 arquivos substancialmente modificados por PR sem justificativa.
+
+Em revisões, procurar: API inexistente, módulo não importado, action não registrada, evento sem subscriber, botão inerte, fallback perigoso, dados não migrados, tarefa sem cleanup, recompensa sem idempotência, comando que supõe Studio aberto.
+
+---
+
+## 16. NÃO FAÇA
+
+- Não reescreva o projeto inteiro.
+- Não destrua o MVP atual.
+- Não implemente todas as sugestões num único passo.
+- Não confunda escrever código com testar gameplay.
+- Não dê ao cliente autoridade sobre dinheiro, peças ou XP.
+- Não invente resultados visuais do place e modelos inexistentes.
+- Não amplie o mapa sem criar atividades.
+- Não transforme o simulador em um jogo principalmente de corridas.
+- Não reproduza o layout exato ou os assets de Mechanic Legends.
+- Não esconda o carro com HUD opaca ou fundo escuro.
+- Não torne coop obrigatória para serviços essenciais.
+- Não permita que convite de co-op faça o reparo físico desaparecer.
+- Não force microtarefas inúteis e espera repetitiva.
+- Não introduza sabotagem, roubo, exploração de jogadores ou perda arbitrária por inatividade.
+- Não publique asset sem direitos verificados.
+- Não declare versão pronta para lançamento antes dos testes reais.
+
+---
+
+## 17. ORDEM EXECUTIVA PARA COMEÇAR AGORA
+
+**A partir deste momento, execute sem pedir nova confirmação para decisões técnicas pequenas:**
+
+1. Acesse o repositório e confirme a árvore/README/último commit.
+2. Faça FASE 0 objetiva e gere arquivos de status e QA.
+3. Escolha branch e faça **PR-01: RecipeRules + testes puros + primeira receita**, preservando fluxo antigo.
+4. Faça revisão estática e atualize log/status.
+5. Avance para integração de servidor e primeiro serviço piloto, em PR separado.
+6. Continue por fatias pequenas de acordo com dependência, sem fingir Studio/asset.
+7. Sempre que faltar teste humano, registre instruções exatas e continue apenas em código independente seguro.
+
+**Metas de produto, nesta ordem:**
+
+- **M1:** três serviços (pneu, bateria, arrefecimento) com diagnósticos e procedimentos *diferentes*, não apenas minijogo de timing.
+- **M2:** um carro com componentes realmente manipuláveis e uma máquina operável.
+- **M3:** dois jogadores realizando tarefas distintas e simultâneas na mesma OS, com solo assistido e pagamentos confiáveis.
+- **M4:** resultado de serviços altera nota, demanda, especialização e concorrência de modo verificável.
+- **M5:** contratos/eventos conectam oficina, NPCs, mercado e co-op.
+- **M6:** restauração/tuning cria objetivos duradouros só depois de o núcleo estar validado.
+
+**Critério principal de qualidade:** ao terminar uma OS, o jogador precisa lembrar **qual problema o veículo tinha, como o diagnosticou, quais peças manipulou, quem ajudou e como isso afetou sua oficina**. Se tudo se resume a clicar, receber moeda e repetir, mesmo com código limpo, o objetivo do projeto não foi atingido.
+
+**INICIE AGORA PELA AUDITORIA E PRIMEIRA FATIA DE CÓDIGO DA FASE 1. PRESERVE O JOGO EXISTENTE. SEJA AUTÔNOMO E CRÍTICO. TRABALHE NO GITHUB COM PRs INCREMENTAIS. NÃO ALEGUE TESTES OU AÇÕES FORA DAS SUAS CAPACIDADES.**

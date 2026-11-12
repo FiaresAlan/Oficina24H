@@ -101,6 +101,8 @@ function CustomerRules.CommentKey(ctx: ServiceContext, stars: number): string
 	local q = ctx.Quality
 	if q and q < 40 then
 		return "rating_comment_sloppy"
+	elseif ctx.PersonaId == "Demanding" and q and q < 70 then
+		return "rating_comment_sloppy"
 	elseif q and q >= 90 and stars >= 4 then
 		return "rating_comment_perfect"
 	elseif f >= 0.6 then

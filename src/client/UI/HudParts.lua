@@ -45,7 +45,7 @@ function HudParts.panel(parent: Instance, name: string): Frame
 	f.BackgroundTransparency = Theme.PanelTransparency
 	f.BorderSizePixel = 0
 	Kit.corner(f, 16)
-	HudParts.gradient(f, { { 0, color(16, 30, 50) }, { 1, color(7, 14, 27) } })
+	HudParts.gradient(f, { { 0, color(28, 40, 46) }, { 1, color(15, 24, 28) } })
 	HudParts.stroke(f, Theme.Stroke, 0.05, 2)
 	f.Parent = parent
 	return f
@@ -58,7 +58,7 @@ function HudParts.header(parent: Instance, height: number): Frame
 	h.Size = UDim2.new(1, 0, 0, height)
 	h.BackgroundColor3 = Color3.new(1, 1, 1)
 	h.BorderSizePixel = 0
-	HudParts.gradient(h, { { 0, color(21, 148, 244) }, { 0.12, color(1, 98, 205) }, { 0.55, color(1, 62, 137) }, { 1, color(4, 45, 106) } })
+	HudParts.gradient(h, { { 0, color(52, 72, 78) }, { 1, color(28, 43, 49) } })
 	Kit.corner(h, 14)
 	h.Parent = parent
 	return h
@@ -220,7 +220,7 @@ function HudParts.navButton(spec: NavSpec, onClick: () -> ()): NavButton
 	normal.BackgroundColor3 = Color3.new(1, 1, 1)
 	normal.BorderSizePixel = 0
 	Kit.corner(normal, radius)
-	HudParts.gradient(normal, { { 0, color(27, 40, 60) }, { 0.55, color(13, 22, 35) }, { 1, color(9, 16, 28) } })
+	HudParts.gradient(normal, { { 0, color(32, 45, 51) }, { 1, color(16, 26, 31) } })
 	local normalStroke = HudParts.stroke(normal, color(58, 88, 130), 0, 2)
 	local lip = Instance.new("Frame")
 	lip.Name = "Lip"
@@ -242,12 +242,9 @@ function HudParts.navButton(spec: NavSpec, onClick: () -> ()): NavButton
 	selected.BorderSizePixel = 0
 	Kit.corner(selected, radius)
 	if side then
-		HudParts.gradient(selected, {
-			{ 0, color(255, 221, 7) }, { 0.1, color(254, 176, 2) }, { 0.3, color(254, 140, 1) }, { 0.55, color(253, 131, 1) },
-			{ 0.85, color(253, 130, 3) }, { 0.94, color(255, 167, 1) }, { 1, color(255, 216, 28) },
-		})
+		HudParts.gradient(selected, { { 0, color(91, 77, 51) }, { 1, color(48, 50, 45) } })
 	else
-		HudParts.gradient(selected, { { 0, color(0, 90, 175) }, { 0.35, color(0, 62, 145) }, { 1, color(0, 30, 90) } })
+		HudParts.gradient(selected, { { 0, color(65, 80, 78) }, { 1, color(31, 48, 54) } })
 	end
 	local selectedStroke = HudParts.stroke(selected, side and Theme.OrangeEdge or color(70, 190, 255), 1, 3)
 	local inner = Instance.new("Frame")
@@ -277,18 +274,27 @@ function HudParts.navButton(spec: NavSpec, onClick: () -> ()): NavButton
 		TextXAlignment = side and Enum.TextXAlignment.Left or Enum.TextXAlignment.Center,
 		TextYAlignment = Enum.TextYAlignment.Center, TextTruncate = Enum.TextTruncate.AtEnd,
 	})
+	local shortNames: { [string]: string } = {
+		B_Ordens = "OS", B_Habilidades = "Hab.", B_Loja = "Loja",
+		B_Estoque = "Peças", B_Ranking = "Rank", B_Perfil = "Perfil",
+	}
 	local function placeContent(compact: boolean)
-		label.Visible = not compact
+		-- No celular, ícone sem legenda gera ambiguidade: mantém rótulo curto no dock.
+		label.Visible = not compact or not side
 		if side then
+			icon.Size = UDim2.fromOffset(iconSize, iconSize)
 			icon.AnchorPoint = Vector2.new(compact and 0.5 or 0, 0.5)
 			icon.Position = compact and UDim2.fromScale(0.5, 0.5) or UDim2.new(0, 22, 0.5, 0)
 			label.Position = UDim2.new(0, 22 + iconSize + 18, 0, 0)
 			label.Size = UDim2.new(1, -(22 + iconSize + 24), 1, 0)
 		else
+			icon.Size = UDim2.fromOffset(compact and 34 or iconSize, compact and 34 or iconSize)
 			icon.AnchorPoint = Vector2.new(0.5, 0)
-			icon.Position = UDim2.new(0.5, 0, 0, compact and 22 or 10)
-			label.Position = UDim2.new(0, 0, 1, -34)
-			label.Size = UDim2.new(1, 0, 0, 30)
+			icon.Position = UDim2.new(0.5, 0, 0, compact and 4 or 10)
+			label.Text = compact and (shortNames[spec.Name] or spec.Label) or spec.Label
+			label.TextSize = compact and 16 or 26
+			label.Position = UDim2.new(0, 0, 1, compact and -24 or -34)
+			label.Size = UDim2.new(1, 0, 0, compact and 20 or 30)
 		end
 	end
 	placeContent(false)

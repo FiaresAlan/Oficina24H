@@ -645,3 +645,13 @@ Detalhes em `docs/AUDITORIA_GERAL.md`. Resumo:
 - `VehicleFx.client.lua` desloca visualmente a roda após concluir o apoio (sem alterar física autoritativa), preservando a abertura de capô da B2a.
 - Testes escritos: `RepairSocketTest.luau` (12) e `RepairPartVisualTest.luau` (13), integrados ao `RunAllTests.luau`. **25 checks adicionados, 159 acumulados desde A1 (escritos, não executados).**
 - **Limitações:** geometria procedimental de apresentação local, não modelos PBR licenciados nem desmontagem real do MeshPart. `docs/TESTE_B2B_VISUAL_PECAS_2026-11-12.md` traz convenção dos sockets e homologação necessária em Studio. Nenhum teste Studio/multiplayer/mobile foi executado nesta rodada.
+
+## 2026-11-12 — B3: HUD/UX v2 baseada no trabalho mecânico (GitHub-only; PR draft)
+
+- **Problema do produto:** a barra superior, cinco ações laterais, cinco ações duplicadas no rodapé e três cartões de informação concorriam pela área do carro/NPC. No mobile, valores fixos da HUD permitiam cortes; o componente legado `Kit.panel` escurecia o mundo.
+- **Implementado:** `HudLayoutRules.Plan` define responsividade; `CompactHUD` mostra saldo/nível e cartão de objetivo contextual baseado em Jobs reais. Em desktop, um único menu lateral recolhido por padrão; em touch/compacto, apenas um dock de seis funções com ícones e legendas curtas (Ordens, Habilidades, Loja, Estoque, Ranking, Perfil).
+- **Layout:** lista direita recolhida por padrão no compacto, acionada pelo botão de detalhes; janelas principais ancoradas lateralmente no desktop ou como folhas inferiores no celular, sem overlay escuro. Cartão da oficina redundante sai do HUD persistente, mas Perfil permanece no menu.
+- **Estilo:** grafite, aço e âmbar, menos brilho/neon; toasts e avaliações limitados pela largura, acima do dock. O objetivo volta após fechar painéis e o onboarding mira apenas a navegação atualmente visível.
+- **Contratos preservados:** `Store`, `Panels.*`, trabalho NPC, inventário, reputação, DataStore e remotes não foram alterados.
+- **Verificações:** 23 invariantes de integração observadas estaticamente via GitHub; fórmulas conferidas para desktop, laptop e cinco formatos de tela. **31 casos Luau escritos** (`HudLayoutTest`: 16, `CompactHudTest`: 15), incluídos no `RunAllTests`. Total acumulado de checks novos escritos nesta sequência: **190**. **Nenhum teste Luau/Roblox Studio/mobile foi executado nesta rodada.**
+- **Portão visual:** `docs/HUD_UX_V2_2026-11-12.md` contém wireframes, princípios e roteiro completo para homologar em Studio, PC, touch, gamepad e 2 players. Nenhuma captura do place foi verificada neste ambiente.

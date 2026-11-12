@@ -158,11 +158,9 @@ export type PanelObject = {
 }
 
 function Kit.panel(parent: Instance, titleText: string): PanelObject
-	local overlay = Instance.new("TextButton") -- TextButton: bloqueia cliques no mundo atrás
-	overlay.AutoButtonColor = false
-	overlay.Text = ""
-	overlay.BackgroundColor3 = Color3.new(0, 0, 0)
-	overlay.BackgroundTransparency = 0.5
+	local overlay = Instance.new("Frame") -- Não escurece nem captura cliques no gameplay.
+	overlay.BackgroundTransparency = 1
+	overlay.Active = false
 	overlay.Size = UDim2.fromScale(1, 1)
 	overlay.Visible = false
 	overlay.ZIndex = 10
@@ -230,7 +228,6 @@ function Kit.panel(parent: Instance, titleText: string): PanelObject
 	closeButton.AnchorPoint = Vector2.new(1, 0.5)
 	closeButton.Position = UDim2.new(1, -12, 0.5, 0)
 	closeButton.ZIndex = 13
-	overlay.MouseButton1Click:Connect(close)
 
 	object = {
 		Overlay = overlay,

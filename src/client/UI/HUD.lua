@@ -12,6 +12,8 @@ local Workspace = game:GetService("Workspace")
 local Catalog = require(ReplicatedStorage.Shared.Catalog)
 local CustomerRules = require(ReplicatedStorage.Shared.CustomerRules)
 local Theme = require(script.Parent.Theme)
+local HudLayoutRules = require(ReplicatedStorage.Shared.HudLayoutRules)
+local CompactHUD = require(script.Parent.CompactHUD)
 local Kit = require(script.Parent.Kit)
 local Motion = require(script.Parent.Motion)
 local Store = require(script.Parent.Store)
@@ -32,8 +34,6 @@ local Stations = require(script.Parent.Stations)
 local t = Kit.t
 local HUD = {}
 
-local WIDE_WIDTH = 1500 -- largura lógica (já com UIScale) abaixo da qual o layout fica compacto
-local TIGHT_WIDTH = 760 -- abaixo disso (celular em pé) até a barra superior encolhe
 local WARNING_FRACTION = 0.25 -- paciência restante abaixo disso mostra o aviso de desistência
 local MAX_NOTIFICATIONS = 40
 
@@ -136,44 +136,44 @@ function HUD.start()
 	local topBar = HudParts.panel(gui, "TopBar")
 	topBar.AutomaticSize = Enum.AutomaticSize.XY
 	topBar.Position = UDim2.fromOffset(22, 14)
-	pad(topBar, 10, 30, 10, 22)
-	local topLayout = list(topBar, 22, true)
+	pad(topBar, 9, 20, 9, 18)
+	local topLayout = list(topBar, 14, true)
 	topLayout.VerticalAlignment = Enum.VerticalAlignment.Center
 
 	local logo = row(topBar, 10, 1, "Logo")
-	HudParts.sprite(logo, "logo", Vector2.new(78, 78))
+	HudParts.sprite(logo, "logo", Vector2.new(52, 52))
 	local logoText = column(logo, -6)
-	HudParts.text(logoText, "OFICINA", 33, { Font = Theme.FontTitle })
-	HudParts.text(logoText, "24H", 52, { Font = Theme.FontTitle, TextColor3 = rgb(255, 176, 32) })
+	HudParts.text(logoText, "OFICINA", 24, { Font = Theme.FontTitle })
+	HudParts.text(logoText, "24H", 37, { Font = Theme.FontTitle, TextColor3 = rgb(255, 176, 32) })
 	local logoDivider = divider(topBar, 2)
 
 	local levelBlock = row(topBar, 12, 3, "Level")
-	HudParts.sprite(levelBlock, "star_level", Vector2.new(60, 60))
+	HudParts.sprite(levelBlock, "star_level", Vector2.new(42, 42))
 	local levelColumn = column(levelBlock, 0)
-	local levelCaption = HudParts.text(levelColumn, t("hud_level_pro"), 22, { Font = Theme.FontTitle })
+	local levelCaption = HudParts.text(levelColumn, t("hud_level_pro"), 18, { Font = Theme.FontTitle })
 	local levelRow = row(levelColumn, 10)
-	local levelValue = HudParts.text(levelRow, "01", 50, { Font = Theme.FontTitle })
+	local levelValue = HudParts.text(levelRow, "01", 36, { Font = Theme.FontTitle })
 	local xpColumn = column(levelRow, 4)
-	local xpValue = HudParts.text(xpColumn, "0 / 0 XP", 20, { Font = Theme.FontTitle })
-	local xpTrack, setXp = HudParts.progress(xpColumn, 12, { { 0, rgb(120, 220, 255) }, { 0.5, rgb(0, 170, 245) }, { 1, rgb(0, 120, 215) } })
-	xpTrack.Size = UDim2.fromOffset(150, 12)
+	local xpValue = HudParts.text(xpColumn, "0 / 0 XP", 16, { Font = Theme.FontTitle })
+	local xpTrack, setXp = HudParts.progress(xpColumn, 9, { { 0, rgb(120, 220, 255) }, { 0.5, rgb(0, 170, 245) }, { 1, rgb(0, 120, 215) } })
+	xpTrack.Size = UDim2.fromOffset(125, 9)
 	divider(topBar, 4)
 
 	local balanceBlock = row(topBar, 12, 5, "Balance")
-	HudParts.sprite(balanceBlock, "dollar", Vector2.new(58, 62))
+	HudParts.sprite(balanceBlock, "dollar", Vector2.new(42, 44))
 	local balanceColumn = column(balanceBlock, 0)
-	local balanceCaption = HudParts.text(balanceColumn, t("hud_balance"), 22, { Font = Theme.FontTitle })
-	local coinsValue = HudParts.text(balanceColumn, "0", 48, { Font = Theme.FontTitle })
+	local balanceCaption = HudParts.text(balanceColumn, t("hud_balance"), 18, { Font = Theme.FontTitle })
+	local coinsValue = HudParts.text(balanceColumn, "0", 36, { Font = Theme.FontTitle })
 	divider(topBar, 6)
 
 	local repBlock = row(topBar, 12, 7, "Reputation")
-	HudParts.sprite(repBlock, "trophy_top", Vector2.new(62, 62))
+	HudParts.sprite(repBlock, "trophy_top", Vector2.new(42, 42))
 	local repColumn = column(repBlock, 0)
-	local repCaption = HudParts.text(repColumn, t("hud_rep_title"), 22, { Font = Theme.FontTitle })
+	local repCaption = HudParts.text(repColumn, t("hud_rep_title"), 18, { Font = Theme.FontTitle })
 	local repRow = row(repColumn, 8)
-	local repValue = HudParts.text(repRow, "0", 48, { Font = Theme.FontTitle })
-	local repStar = HudParts.sprite(repRow, "star_gold", Vector2.new(34, 34))
-	local ratingValue = HudParts.text(repRow, "", 24, { Font = Theme.FontTitle, TextColor3 = rgb(255, 200, 40) })
+	local repValue = HudParts.text(repRow, "0", 36, { Font = Theme.FontTitle })
+	local repStar = HudParts.sprite(repRow, "star_gold", Vector2.new(24, 24))
+	local ratingValue = HudParts.text(repRow, "", 20, { Font = Theme.FontTitle, TextColor3 = rgb(255, 200, 40) })
 
 	----------------------------------------------------------------------------------------------------------------
 	-- Controles superiores
@@ -182,11 +182,14 @@ function HUD.start()
 	controls.AnchorPoint = Vector2.new(1, 0)
 	controls.Position = UDim2.new(1, -19, 0, 14)
 	list(controls, 8, true).HorizontalAlignment = Enum.HorizontalAlignment.Right
-	local infoToggle = HudParts.iconButton(controls, "InfoToggle", "chart", 72, nil)
+	local infoToggle = HudParts.iconButton(controls, "InfoToggle", "chart", 56, nil)
 	infoToggle.LayoutOrder = 1
-	local bell, _, setBellBadge = HudParts.iconButton(controls, "BellButton", "bell", 72, nil)
+	local bell, _, setBellBadge = HudParts.iconButton(controls, "BellButton", "bell", 56, nil)
 	bell.LayoutOrder = 2
-	-- Configurações e Sair não existem no jogo: sem botões decorativos (Product Master Document, seção 14).
+	-- Configurações e Sair não existem no jogo: sem botões decorativos.
+	local compactHUD = CompactHUD.new(gui, function()
+		HUD.openPanel("orders")
+	end)
 
 	----------------------------------------------------------------------------------------------------------------
 	-- Menu lateral
@@ -225,7 +228,7 @@ function HUD.start()
 	----------------------------------------------------------------------------------------------------------------
 	-- Coluna direita: clientes aguardando, painel de ordem, perfil da oficina
 	----------------------------------------------------------------------------------------------------------------
-	local rightColumn = Instance.new("ScrollingFrame") -- rola quando a tela é baixa (celular deitado)
+	local rightColumn = Instance.new("ScrollingFrame") -- contextual; recolhido em telas compactas
 	rightColumn.Name = "RightColumn"
 	rightColumn.BackgroundTransparency = 1
 	rightColumn.BorderSizePixel = 0
@@ -311,6 +314,7 @@ function HUD.start()
 
 	-- Perfil da oficina
 	local shopCard = card(3, "ShopCard")
+	shopCard.Visible = false -- perfil e gestão vivem no painel próprio, não ocupam o gameplay
 	list(shopCard, 0, false)
 	local shopHeader = HudParts.header(shopCard, 56)
 	shopHeader.LayoutOrder = 1
@@ -387,9 +391,13 @@ function HUD.start()
 			stroke.Color = success and Theme.Green or Theme.Red
 			stroke.Thickness = 2.5
 		end
-		local label = HudParts.text(box, text, 26, { Font = Theme.FontTitle, TextWrapped = true, AutomaticSize = Enum.AutomaticSize.XY })
+		local narrow = gui:GetAttribute("CompactLayout") == true
+		local label = HudParts.text(box, text, narrow and 20 or 24, {
+			Font = Theme.FontSemi, TextWrapped = true, AutomaticSize = Enum.AutomaticSize.XY,
+		})
 		local limit = Instance.new("UISizeConstraint")
-		limit.MaxSize = Vector2.new(620, math.huge)
+		local width = tonumber(gui:GetAttribute("HudLogicalWidth")) or 1672
+		limit.MaxSize = Vector2.new(math.max(180, math.min(510, width - 72)), math.huge)
 		limit.Parent = label
 		box.BackgroundTransparency = 1
 		Motion.play(box, Motion.Slide, { BackgroundTransparency = Theme.PanelTransparency })
@@ -427,27 +435,38 @@ function HUD.start()
 		box.AnchorPoint = Vector2.new(0, 1)
 		pad(box, 14, 22, 14, 18)
 		list(box, 16, true).VerticalAlignment = Enum.VerticalAlignment.Center
+		local narrow = gui:GetAttribute("CompactLayout") == true
 		local stars = tonumber(info.Stars) or 0
-		local check = HudParts.sprite(box, "check_ok", Vector2.new(64, 64))
+		local check = HudParts.sprite(box, "check_ok", narrow and Vector2.new(42, 42) or Vector2.new(64, 64))
 		check.LayoutOrder = 1
 		if stars < 3 then
 			check.ImageColor3 = rgb(255, 120, 90)
 		end
 		local texts = column(box, 2, 2)
-		HudParts.text(texts, t("rated_title"), 30, { Font = Theme.FontTitle })
+		HudParts.text(texts, t("rated_title"), narrow and 21 or 30, {
+			Font = Theme.FontTitle, TextWrapped = true, AutomaticSize = Enum.AutomaticSize.Y,
+			Size = UDim2.fromOffset(narrow and 224 or 320, 0),
+		})
 		local starRow = row(texts, 4)
 		for i = 1, 5 do
-			local star = HudParts.sprite(starRow, "star_gold", Vector2.new(32, 32))
+			local star = HudParts.sprite(starRow, "star_gold",
+				narrow and Vector2.new(22, 22) or Vector2.new(32, 32))
 			star.ImageTransparency = i <= stars and 0 or 0.75
 		end
-		HudParts.text(texts, "“" .. t(tostring(info.CommentKey or "rating_comment_ok")) .. "”", 24, { Font = Theme.FontTitle })
+		HudParts.text(texts, "“" .. t(tostring(info.CommentKey or "rating_comment_ok")) .. "”", narrow and 17 or 24, {
+			Font = Theme.FontSemi, TextWrapped = true, AutomaticSize = Enum.AutomaticSize.Y,
+			Size = UDim2.fromOffset(narrow and 224 or 320, 0),
+		})
 		local delta = tonumber(info.ReputationDelta) or 0
-		HudParts.text(texts, t("rated_rep", delta), 26, { Font = Theme.FontTitle, TextColor3 = delta >= 0 and rgb(40, 230, 70) or Theme.Red })
+		HudParts.text(texts, t("rated_rep", delta), narrow and 18 or 26, {
+			Font = Theme.FontTitle, TextColor3 = delta >= 0 and Theme.Green or Theme.Red,
+		})
 		local chevron = HudParts.text(box, "›", 54, { Font = Theme.FontTitle, LayoutOrder = 3 })
 		chevron.TextColor3 = Theme.Muted
+		chevron.Visible = not narrow
 		ratedToast = box
 		-- entra deslizando da esquerda
-		local targetY = -40
+		local targetY = narrow and -(tonumber(gui:GetAttribute("HudDockHeight")) or 70) - 34 or -40
 		box.Position = UDim2.new(0, -520, 1, targetY)
 		if Motion.reduced() then
 			box.Position = UDim2.new(0, 22, 1, targetY)
@@ -613,6 +632,7 @@ function HUD.start()
 	local panels: { [string]: any } = {}
 	local navButtons: { [string]: { HudParts.NavButton } } = {}
 	local selectedName: string? = nil
+	local refreshInfoVisibility: (() -> ())? = nil
 	local previousSelection: GuiObject? = nil
 
 	local function updateBell()
@@ -655,6 +675,8 @@ function HUD.start()
 				paintSelection()
 				GuiService.SelectedObject = previousSelection -- devolve o foco do gamepad
 			end
+			-- Ao fechar pela tecla X/Escape, o objetivo compacto volta a aparecer.
+			if refreshInfoVisibility then refreshInfoVisibility() end
 		end
 	end
 
@@ -689,6 +711,7 @@ function HUD.start()
 			end
 		end
 		paintSelection()
+		if refreshInfoVisibility then refreshInfoVisibility() end
 	end
 
 	-- Botão B do gamepad fecha o painel aberto
@@ -703,7 +726,10 @@ function HUD.start()
 	local onboardingRef = Onboarding.new(gui, function(name: string): { GuiObject }
 		local roots = {}
 		for _, b in ipairs(navButtons[name] or {}) do
-			table.insert(roots, b.Root)
+			-- Não guiar o tutorial para botões no trilho invisível.
+			if b.Root.Parent and b.Root.Parent:IsA("GuiObject") and b.Root.Parent.Visible then
+				table.insert(roots, b.Root)
+			end
 		end
 		return roots
 	end)
@@ -780,6 +806,7 @@ function HUD.start()
 		addNav(bottomNav, bottomSpec("B_Loja", t("nav_shop"), "b_cart", 108), "shop", 3),
 		addNav(bottomNav, bottomSpec("B_Estoque", t("nav_stock"), "b_box", 134), "stock", 4),
 		addNav(bottomNav, bottomSpec("B_Ranking", t("nav_ranking"), "b_trophy", 142), "ranking", 5),
+		addNav(bottomNav, bottomSpec("B_Perfil", t("nav_profile"), "person", 126), "profile", 6),
 	}
 	local ordersBottomButton = bottomButtons[1]
 
@@ -795,45 +822,44 @@ function HUD.start()
 	----------------------------------------------------------------------------------------------------------------
 	local compact, tight = false, false
 	local logicalWidth, logicalHeight = 1672, 941
+	local dockSize, dockHeight = 70, 70
 	local menuMinimized: boolean? = nil
 	local infoVisible: boolean? = nil
 
 	local function applyMenu()
+		-- Desktop tem menu lateral discreto; mobile tem apenas o dock inferior.
 		local minimized = menuMinimized
-		if minimized == nil then
-			minimized = compact
+		if minimized == nil then minimized = true end
+		menuToggleLabel.Text = minimized and "›" or ("‹  " .. string.upper(t("hud_menu_toggle")))
+		menuToggle.Size = UDim2.fromOffset(minimized and 76 or 208, 40)
+		sideMenu.Visible = not compact
+		bottomNav.Visible = compact
+		local sideHeight = logicalHeight < 720 and 56 or 68
+		for _, button in ipairs(sideButtons) do
+			button.SetCompact(minimized :: boolean, sideHeight)
 		end
-		menuToggleLabel.Text = minimized and ">" or ("<  " .. string.upper(t("hud_menu_toggle")))
-		menuToggle.Size = UDim2.fromOffset(minimized and 80 or 224, 44)
-		local sideHeight = logicalHeight < 720 and 62 or 80 -- tela baixa: botões menores para o menu caber
-		for _, b in ipairs(sideButtons) do
-			b.SetCompact(minimized :: boolean, sideHeight)
-		end
-		for _, b in ipairs(bottomButtons) do
-			b.SetCompact(compact)
+		for _, button in ipairs(bottomButtons) do
+			button.SetCompact(compact, compact and dockSize or 86)
 		end
 	end
 
 	local function applyInfo()
 		local visible = infoVisible
-		if visible == nil then
-			visible = not compact
-		end
-		rightColumn.Visible = visible :: boolean
-		infoToggle.BackgroundColor3 = visible and rgb(255, 235, 190) or Color3.new(1, 1, 1)
+		if visible == nil then visible = not compact end
+		-- Painel de gestão substitui o quadro de contexto; nada empilha sobre o outro.
+		rightColumn.Visible = visible == true and selectedName == nil
+		infoToggle.BackgroundColor3 = rightColumn.Visible and Theme.Surface2 or Theme.Surface
+		compactHUD.Fit(logicalWidth, compact, rightColumn.Visible or selectedName ~= nil)
 	end
+	refreshInfoVisibility = applyInfo
 
 	local function fitRightColumn()
-		local top = compact and 100 or 112
-		local maxHeight = logicalHeight - top - 12
-		-- se a barra inferior invadiria a coluna (celular), a coluna termina acima dela
-		local bottomNavRight = logicalWidth / 2 + (bottomNav.AbsoluteSize.X / scale.Scale) / 2
-		if bottomNavRight > logicalWidth - 19 - 454 then
-			maxHeight = logicalHeight - 22 - 98 - top - 10
-		end
-		local content = rightLayout.AbsoluteContentSize.Y / scale.Scale
-		rightColumn.Size = UDim2.fromOffset(454, math.max(120, math.min(content, maxHeight)))
-		rightColumn.ScrollBarThickness = content > maxHeight and 6 or 0
+		local top = compact and 166 or 108
+		local maxHeight = math.max(100, logicalHeight - top - (compact and dockHeight + 36 or 18))
+		local contentHeight = rightLayout.AbsoluteContentSize.Y / math.max(scale.Scale, 0.01)
+		rightColumn.Size = UDim2.fromOffset(math.min(454, logicalWidth - 28),
+			math.max(100, math.min(contentHeight, maxHeight)))
+		rightColumn.ScrollBarThickness = contentHeight > maxHeight and 5 or 0
 	end
 	rightLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
 		task.defer(fitRightColumn)
@@ -841,16 +867,17 @@ function HUD.start()
 
 	local function updateLayout()
 		local viewport = Workspace.CurrentCamera and Workspace.CurrentCamera.ViewportSize or Vector2.new(1672, 941)
-		local override = gui:GetAttribute("ViewportOverride") -- usado em testes para simular outras telas
-		if typeof(override) == "Vector2" then
-			viewport = override
-		end
-		local touch = UserInputService.TouchEnabled
-		scale.Scale = math.clamp(math.min(viewport.X / 1672, viewport.Y / 941), touch and 0.78 or 0.7, 1.3)
-		logicalWidth = viewport.X / scale.Scale
-		logicalHeight = viewport.Y / scale.Scale
-		compact = logicalWidth < WIDE_WIDTH
-		tight = logicalWidth < TIGHT_WIDTH
+		local override = gui:GetAttribute("ViewportOverride") -- testes de layout em diferentes resoluções
+		if typeof(override) == "Vector2" then viewport = override end
+		local layout = HudLayoutRules.Plan(viewport, UserInputService.TouchEnabled)
+		scale.Scale = layout.Scale
+		logicalWidth, logicalHeight = layout.Width, layout.Height
+		compact, tight = layout.Compact, layout.Tight
+		gui:SetAttribute("HudLogicalWidth", logicalWidth)
+		gui:SetAttribute("CompactLayout", compact)
+		gui:SetAttribute("HudDockHeight", layout.DockHeight)
+		dockSize, dockHeight = layout.DockSize, layout.DockHeight
+		topBar.Visible = not compact
 		logo.Visible = not compact
 		logoDivider.Visible = not compact
 		levelCaption.Visible = not tight
@@ -858,52 +885,27 @@ function HUD.start()
 		balanceCaption.Visible = not tight
 		repCaption.Visible = not tight
 		ratingValue.Visible = not tight
-		repStar.Visible = not tight
-		xpTrack.Size = UDim2.fromOffset(tight and 70 or 150, 12)
-		topLayout.Padding = UDim.new(0, tight and 10 or 22)
-		-- celular em pé: encolhe ícones e números da barra superior e esconde a barra de XP (cabe ao lado dos controles)
-		local shrink = tight and 0.66 or 1
-		for _, d in ipairs(topBar:GetDescendants()) do
-			if d:IsA("ImageLabel") then
-				local base = d:GetAttribute("BaseSize") or d.Size
-				d:SetAttribute("BaseSize", base)
-				d.Size = UDim2.fromOffset((base :: UDim2).X.Offset * shrink, (base :: UDim2).Y.Offset * shrink)
-			elseif d:IsA("TextLabel") then
-				local base = d:GetAttribute("BaseText") or d.TextSize
-				d:SetAttribute("BaseText", base)
-				d.TextSize = math.floor((base :: number) * shrink + 0.5)
-			end
-		end
-		if xpTrack.Parent then
-			(xpTrack.Parent :: GuiObject).Visible = not tight
-		end
-		for _, child in ipairs(topBar:GetChildren()) do
-			if child.Name == "Divider" and child:IsA("GuiObject") then
-				child.Visible = not tight
-			end
-		end
-		sideMenu.Position = UDim2.fromOffset(22, compact and 112 or 135)
-		rightColumn.Position = UDim2.new(1, -19, 0, compact and 100 or 112)
-		toasts.Position = UDim2.new(0.5, 0, 0, compact and 120 or 130)
+		repStar.Visible = not tight and ratingValue.Text ~= ""
+		xpTrack.Size = UDim2.fromOffset(125, 9)
+		topLayout.Padding = UDim.new(0, 14)
+		-- O menu e a coluna ocupam trilhos; o centro do carro fica desimpedido.
+		sideMenu.Position = UDim2.fromOffset(16, 105)
+		rightColumn.Position = UDim2.new(1, -14, 0, layout.DetailsTop)
+		bottomNav.Position = UDim2.new(0.5, 0, 1, -14)
+		controls.Position = UDim2.new(1, -14, 0, 14)
+		prompt.Position = UDim2.new(0.5, 0, 1, compact and -(dockHeight + 40) or -110)
+		toasts.Position = UDim2.new(0.5, 0, 0, compact and 175 or 108)
+		toasts.Size = UDim2.fromOffset(math.min(600, logicalWidth - 32), 0)
+		shopCard.Visible = false
 		applyMenu()
 		applyInfo()
 		fitRightColumn()
-		if repairGameRef then
-			repairGameRef.Fit(logicalWidth, logicalHeight)
-		end
-		if operationGameRef then
-			operationGameRef.Fit(logicalWidth, logicalHeight)
-		end
-		if diagnosisRefFit then
-			diagnosisRefFit(logicalWidth, logicalHeight)
-		end
-		if onboardingFit then
-			onboardingFit(logicalWidth)
-		end
+		if repairGameRef then repairGameRef.Fit(logicalWidth, logicalHeight) end
+		if operationGameRef then operationGameRef.Fit(logicalWidth, logicalHeight) end
+		if diagnosisRefFit then diagnosisRefFit(logicalWidth, logicalHeight) end
+		if onboardingFit then onboardingFit(logicalWidth) end
 		for _, panel in pairs(panels) do
-			if panel.Fit then
-				panel.Fit(logicalWidth, logicalHeight) -- janelas dos painéis principais se ajustam à tela
-			end
+			if panel.Fit then panel.Fit(logicalWidth, logicalHeight) end
 		end
 	end
 	updateLayout()
@@ -914,9 +916,7 @@ function HUD.start()
 
 	menuToggle.Activated:Connect(function()
 		local minimized = menuMinimized
-		if minimized == nil then
-			minimized = compact
-		end
+		if minimized == nil then minimized = true end
 		menuMinimized = not minimized
 		applyMenu()
 	end)
@@ -1135,6 +1135,8 @@ function HUD.start()
 		xpValue.Text = t("hud_xp", math.floor(total), math.floor(nextLevel))
 		setXp((total - startOfLevel) / math.max(1, nextLevel - startOfLevel), nil)
 		coinsValue.Text = thousands(p.Coins)
+		compactHUD.SetStats(p.Coins, level, p.Reputation)
+		compactHUD.SetObjective(snapshot)
 		repValue.Text = tostring(p.Reputation)
 		local ratings = p.RatingCount or 0
 		if ratings > 0 then

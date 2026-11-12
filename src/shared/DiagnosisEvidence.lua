@@ -44,6 +44,19 @@ function DiagnosisEvidence.HasAnyExam(done: { [string]: boolean }?): boolean
 	return false
 end
 
+-- Um exame de outro sistema não substitui evidência útil sobre o defeito real.
+-- Mantém resposta genérica ao jogador para não denunciar o DefectId ainda oculto.
+local requiredExam = {
+	FlatTire = "TirePressure",
+	WeakBattery = "BatteryVoltage",
+	Overheating = "CoolingTemperature",
+}
+
+function DiagnosisEvidence.HasRelevantExam(defectId: string, done: { [string]: boolean }?): boolean
+	local id = requiredExam[defectId]
+	return id == nil or (done ~= nil and done[id] == true)
+end
+
 function DiagnosisEvidence.Read(defectId: string, examId: any): string?
 	local reading = readings[examId]
 	if not reading then return nil end

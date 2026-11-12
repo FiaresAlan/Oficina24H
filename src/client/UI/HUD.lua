@@ -711,7 +711,11 @@ function HUD.start()
 	local onboardingRef = Onboarding.new(gui, function(name: string): { GuiObject }
 		local roots = {}
 		for _, b in ipairs(navButtons[name] or {}) do
-			table.insert(roots, b.Root)
+			-- Não guiar o tutorial para botões no trilho invisível.
+			if b.Root.Parent == bottomNav and bottomNav.Visible
+				or b.Root.Parent == sideMenu and sideMenu.Visible then
+				table.insert(roots, b.Root)
+			end
 		end
 		return roots
 	end)
@@ -804,45 +808,44 @@ function HUD.start()
 	----------------------------------------------------------------------------------------------------------------
 	local compact, tight = false, false
 	local logicalWidth, logicalHeight = 1672, 941
+	local dockSize, dockHeight = 70, 70
 	local menuMinimized: boolean? = nil
 	local infoVisible: boolean? = nil
 
 	local function applyMenu()
+		-- Desktop tem menu lateral discreto; mobile tem apenas o dock inferior.
 		local minimized = menuMinimized
-		if minimized == nil then
-			minimized = compact
+		if minimized == nil then minimized = true end
+		menuToggleLabel.Text = minimized and "›" or ("‹  " .. string.upper(t("hud_menu_toggle")))
+		menuToggle.Size = UDim2.fromOffset(minimized and 76 or 208, 40)
+		sideMenu.Visible = not compact
+		bottomNav.Visible = compact
+		local sideHeight = logicalHeight < 720 and 56 or 68
+		for _, button in ipairs(sideButtons) do
+			button.SetCompact(minimized :: boolean, sideHeight)
 		end
-		menuToggleLabel.Text = minimized and ">" or ("<  " .. string.upper(t("hud_menu_toggle")))
-		menuToggle.Size = UDim2.fromOffset(minimized and 80 or 224, 44)
-		local sideHeight = logicalHeight < 720 and 62 or 80 -- tela baixa: botões menores para o menu caber
-		for _, b in ipairs(sideButtons) do
-			b.SetCompact(minimized :: boolean, sideHeight)
-		end
-		for _, b in ipairs(bottomButtons) do
-			b.SetCompact(compact)
+		for _, button in ipairs(bottomButtons) do
+			button.SetCompact(compact, compact and dockSize or 86)
 		end
 	end
 
 	local function applyInfo()
 		local visible = infoVisible
-		if visible == nil then
-			visible = not compact
-		end
-		rightColumn.Visible = visible :: boolean
-		infoToggle.BackgroundColor3 = visible and rgb(255, 235, 190) or Color3.new(1, 1, 1)
+		if visible == nil then visible = not compact end
+		-- Painel de gestão substitui o quadro de contexto; nada empilha sobre o outro.
+		rightColumn.Visible = visible == true and selectedName == nil
+		infoToggle.BackgroundColor3 = rightColumn.Visible and Theme.Surface2 or Theme.Surface
+		compactHUD.Fit(logicalWidth, compact, rightColumn.Visible)
 	end
+	refreshInfoVisibility = applyInfo
 
 	local function fitRightColumn()
-		local top = compact and 100 or 112
-		local maxHeight = logicalHeight - top - 12
-		-- se a barra inferior invadiria a coluna (celular), a coluna termina acima dela
-		local bottomNavRight = logicalWidth / 2 + (bottomNav.AbsoluteSize.X / scale.Scale) / 2
-		if bottomNavRight > logicalWidth - 19 - 454 then
-			maxHeight = logicalHeight - 22 - 98 - top - 10
-		end
-		local content = rightLayout.AbsoluteContentSize.Y / scale.Scale
-		rightColumn.Size = UDim2.fromOffset(454, math.max(120, math.min(content, maxHeight)))
-		rightColumn.ScrollBarThickness = content > maxHeight and 6 or 0
+		local top = compact and 166 or 108
+		local maxHeight = math.max(100, logicalHeight - top - (compact and dockHeight + 36 or 18))
+		local contentHeight = rightLayout.AbsoluteContentSize.Y / math.max(scale.Scale, 0.01)
+		rightColumn.Size = UDim2.fromOffset(math.min(454, logicalWidth - 28),
+			math.max(100, math.min(contentHeight, maxHeight)))
+		rightColumn.ScrollBarThickness = contentHeight > maxHeight and 5 or 0
 	end
 	rightLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
 		task.defer(fitRightColumn)
@@ -850,16 +853,14 @@ function HUD.start()
 
 	local function updateLayout()
 		local viewport = Workspace.CurrentCamera and Workspace.CurrentCamera.ViewportSize or Vector2.new(1672, 941)
-		local override = gui:GetAttribute("ViewportOverride") -- usado em testes para simular outras telas
-		if typeof(override) == "Vector2" then
-			viewport = override
-		end
-		local touch = UserInputService.TouchEnabled
-		scale.Scale = math.clamp(math.min(viewport.X / 1672, viewport.Y / 941), touch and 0.78 or 0.7, 1.3)
-		logicalWidth = viewport.X / scale.Scale
-		logicalHeight = viewport.Y / scale.Scale
-		compact = logicalWidth < WIDE_WIDTH
-		tight = logicalWidth < TIGHT_WIDTH
+		local override = gui:GetAttribute("ViewportOverride") -- testes de layout em diferentes resoluções
+		if typeof(override) == "Vector2" then viewport = override end
+		local layout = HudLayoutRules.Plan(viewport, UserInputService.TouchEnabled)
+		scale.Scale = layout.Scale
+		logicalWidth, logicalHeight = layout.Width, layout.Height
+		compact, tight = layout.Compact, layout.Tight
+		dockSize, dockHeight = layout.DockSize, layout.DockHeight
+		topBar.Visible = not compact
 		logo.Visible = not compact
 		logoDivider.Visible = not compact
 		levelCaption.Visible = not tight
@@ -867,52 +868,27 @@ function HUD.start()
 		balanceCaption.Visible = not tight
 		repCaption.Visible = not tight
 		ratingValue.Visible = not tight
-		repStar.Visible = not tight
-		xpTrack.Size = UDim2.fromOffset(tight and 70 or 150, 12)
-		topLayout.Padding = UDim.new(0, tight and 10 or 22)
-		-- celular em pé: encolhe ícones e números da barra superior e esconde a barra de XP (cabe ao lado dos controles)
-		local shrink = tight and 0.66 or 1
-		for _, d in ipairs(topBar:GetDescendants()) do
-			if d:IsA("ImageLabel") then
-				local base = d:GetAttribute("BaseSize") or d.Size
-				d:SetAttribute("BaseSize", base)
-				d.Size = UDim2.fromOffset((base :: UDim2).X.Offset * shrink, (base :: UDim2).Y.Offset * shrink)
-			elseif d:IsA("TextLabel") then
-				local base = d:GetAttribute("BaseText") or d.TextSize
-				d:SetAttribute("BaseText", base)
-				d.TextSize = math.floor((base :: number) * shrink + 0.5)
-			end
-		end
-		if xpTrack.Parent then
-			(xpTrack.Parent :: GuiObject).Visible = not tight
-		end
-		for _, child in ipairs(topBar:GetChildren()) do
-			if child.Name == "Divider" and child:IsA("GuiObject") then
-				child.Visible = not tight
-			end
-		end
-		sideMenu.Position = UDim2.fromOffset(22, compact and 112 or 135)
-		rightColumn.Position = UDim2.new(1, -19, 0, compact and 100 or 112)
-		toasts.Position = UDim2.new(0.5, 0, 0, compact and 120 or 130)
+		repStar.Visible = not tight and ratingValue.Text ~= ""
+		xpTrack.Size = UDim2.fromOffset(125, 9)
+		topLayout.Padding = UDim.new(0, 14)
+		-- O menu e a coluna ocupam trilhos; o centro do carro fica desimpedido.
+		sideMenu.Position = UDim2.fromOffset(16, 105)
+		rightColumn.Position = UDim2.new(1, -14, 0, layout.DetailsTop)
+		bottomNav.Position = UDim2.new(0.5, 0, 1, -14)
+		controls.Position = UDim2.new(1, -14, 0, 14)
+		prompt.Position = UDim2.new(0.5, 0, 1, compact and -(dockHeight + 40) or -110)
+		toasts.Position = UDim2.new(0.5, 0, 0, compact and 175 or 108)
+		toasts.Size = UDim2.fromOffset(math.min(600, logicalWidth - 32), 0)
+		shopCard.Visible = false
 		applyMenu()
 		applyInfo()
 		fitRightColumn()
-		if repairGameRef then
-			repairGameRef.Fit(logicalWidth, logicalHeight)
-		end
-		if operationGameRef then
-			operationGameRef.Fit(logicalWidth, logicalHeight)
-		end
-		if diagnosisRefFit then
-			diagnosisRefFit(logicalWidth, logicalHeight)
-		end
-		if onboardingFit then
-			onboardingFit(logicalWidth)
-		end
+		if repairGameRef then repairGameRef.Fit(logicalWidth, logicalHeight) end
+		if operationGameRef then operationGameRef.Fit(logicalWidth, logicalHeight) end
+		if diagnosisRefFit then diagnosisRefFit(logicalWidth, logicalHeight) end
+		if onboardingFit then onboardingFit(logicalWidth) end
 		for _, panel in pairs(panels) do
-			if panel.Fit then
-				panel.Fit(logicalWidth, logicalHeight) -- janelas dos painéis principais se ajustam à tela
-			end
+			if panel.Fit then panel.Fit(logicalWidth, logicalHeight) end
 		end
 	end
 	updateLayout()
@@ -923,9 +899,7 @@ function HUD.start()
 
 	menuToggle.Activated:Connect(function()
 		local minimized = menuMinimized
-		if minimized == nil then
-			minimized = compact
-		end
+		if minimized == nil then minimized = true end
 		menuMinimized = not minimized
 		applyMenu()
 	end)
@@ -1144,6 +1118,8 @@ function HUD.start()
 		xpValue.Text = t("hud_xp", math.floor(total), math.floor(nextLevel))
 		setXp((total - startOfLevel) / math.max(1, nextLevel - startOfLevel), nil)
 		coinsValue.Text = thousands(p.Coins)
+		compactHUD.SetStats(p.Coins, level, p.Reputation)
+		compactHUD.SetObjective(snapshot)
 		repValue.Text = tostring(p.Reputation)
 		local ratings = p.RatingCount or 0
 		if ratings > 0 then

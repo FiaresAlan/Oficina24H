@@ -1670,18 +1670,30 @@ local function staffTick()
 end
 
 -- "Usar <equipamento>" na sala dos fundos: começa o reparo da ordem do jogador que precisa desta máquina.
-function WorkshopService.UseEquipment(player: Player, equipmentId: string)
+-- "Usar <equipamento>": trabalhador convidado só pode usar a máquina localizada
+-- no MESMO lote do dono da ordem atribuída a ele.
+function WorkshopService.UseEquipment(player: Player, equipmentId: string, sourcePlot: Instance?)
+    local equipment = Catalog.Equipment[equipmentId]
+    if not equipment or equipmentId == "BasicToolset" then
+        return false, "Equipamento inválido."
+    end
+    if not sourcePlot then
+        return false, "Use uma máquina instalada no local da oficina."
+    end
     local chosen: any = nil
     for _, job in pairs(Jobs) do
-        if job.OwnerUserId == player.UserId and job.Status == "InProgress" and job.AssignedWorkerUserId == player.UserId
+        if CollaborationRules.IsAuthorized(job, player.UserId) and job.Diagnosed
             and Catalog.Defects[job.DefectId].RequiredEquipment == equipmentId then
-            if job.Diagnosed and (not chosen or (job.AcceptedAt or 0) < (chosen.AcceptedAt or 0)) then
-                chosen = job
+            local owner = Players:GetPlayerByUserId(job.OwnerUserId)
+            if owner and PlotService.GetPlot(owner) == sourcePlot then
+                if not chosen or (job.AcceptedAt or 0) < (chosen.AcceptedAt or 0) then
+                    chosen = job
+                end
             end
         end
     end
     if not chosen then
-        return false, "Nenhum carro diagnosticado precisa de " .. Catalog.Equipment[equipmentId].DisplayName .. " agora."
+        return false, "Nenhuma ordem atribuída a você usa esta máquina nesta oficina."
     end
     return WorkshopService.StartRepair(player, chosen.Id, false)
 end

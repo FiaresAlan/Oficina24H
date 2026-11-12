@@ -7,6 +7,7 @@ local Catalog = require(ReplicatedStorage.Shared.Catalog)
 local JobRules = require(ReplicatedStorage.Shared.JobRules)
 local CustomerRules = require(ReplicatedStorage.Shared.CustomerRules)
 local RepairRules = require(ReplicatedStorage.Shared.RepairRules)
+local RepairOperations = require(ReplicatedStorage.Shared.RepairOperations)
 local DiagnosisRules = require(ReplicatedStorage.Shared.DiagnosisRules)
 local DiagnosisEvidence = require(ReplicatedStorage.Shared.DiagnosisEvidence)
 local WorkshopLevels = require(ReplicatedStorage.Shared.WorkshopLevels)
@@ -816,7 +817,8 @@ function WorkshopService.StartRepair(player: Player, jobId: string, assist: bool
         return false, message
     end
     local margin = math.max(0, DataService.GetSkillLevel(player, defect.Specialization) - defect.RequiredLevel)
-    local plan = RepairRules.BuildPlan(math.random(1, 2147483646), defect.RequiredLevel, margin, assist == true or RepairAssist[player.UserId] == true, Catalog.EquipmentEfficiency[defect.RequiredEquipment])
+    local operation = RepairOperations.BuildPlan(job.DefectId, math.random(1, 2147483646))
+    local plan = operation or RepairRules.BuildPlan(math.random(1, 2147483646), defect.RequiredLevel, margin, assist == true or RepairAssist[player.UserId] == true, Catalog.EquipmentEfficiency[defect.RequiredEquipment])
     Repairs[player.UserId] = { JobId = job.Id, Plan = plan, StartedAt = os.clock() }
     VehicleService.SetRepairing(job.Id, true) -- carro sobe no elevador / capô abre / pneu sai (efeitos no cliente)
     if eventSender then
@@ -824,7 +826,7 @@ function WorkshopService.StartRepair(player: Player, jobId: string, assist: bool
             JobId = job.Id,
             Vehicle = job.VehicleName,
             Service = Catalog.Services[job.ServiceId].DisplayName,
-            Plan = plan,
+            Plan = operation and RepairOperations.PublicPlan(operation) or plan,
         })
     end
     return true, ""
@@ -860,7 +862,12 @@ function WorkshopService.FinishRepair(player: Player, jobId: string, presses: an
         PartReliability = Catalog.AveragePartReliability(defect.Parts),
         DiagnosisAttempts = job.DiagnoseAttempts or 1,
     }
-    local result = RepairRules.Evaluate(session.Plan, presses, elapsed, mods)
+    local result
+    if session.Plan.Kind == "Operations" then
+        result = RepairOperations.Evaluate(session.Plan, presses, elapsed, mods)
+    else
+        result = RepairRules.Evaluate(session.Plan, presses, elapsed, mods)
+    end
     VehicleService.SetRepairing(jobId, false)
     if not result.Valid then
         return false, "Reparo inválido (" .. tostring(result.Reason) .. ")."

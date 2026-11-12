@@ -617,3 +617,13 @@ Detalhes em `docs/AUDITORIA_GERAL.md`. Resumo:
 - Ajuste dos reparos: tempo mínimo por procedimento (2/3,5/3 s), informado na UI para evitar conclusão automática e frustração.
 - 14 testes escritos para os pontos, mais 5 testes de relevância e 4 de duração mínima/cópia pública; suíte global atualizada.
 - **Validação:** leitura estática do GitHub; sem Play, Studio, Rojo ou teste mobile nesta rodada. Marcadores ainda usam posições relativas, não sockets nos modelos reais. Ver `docs/TESTE_A3_INSPECAO_FISICA_2026-11-12.md`.
+
+## 2026-11-12 — B1: contratado precisa executar reparo real (GitHub-only; PR draft)
+
+- **Removido pagamento sem procedimento** de `CompleteCollaborativeJob`: agora abre `StartRepair` e exige `FinishRepair` válido.
+- `shared/CollaborationRules.lua`: autoridade de executor e divisão financeira que preserva soma.
+- O contratado usa máquinas do lote do contratante com verificação de origem pelo servidor; os prompts na UI aparecem só para o veículo autorizado e equipamentos do dono.
+- `WorkshopService.checkRepairable` valida nível do executor e estoque/equipamentos da oficina proprietária. No acerto, divide serviço+gorjeta, credita XP ao executor e reputação/avaliação/contrato ao dono. Não aplica bônus de combo/amigo do contratado.
+- Contratos limitados a uma OS ativa por contratado; saída do dono, saída do contratado e expiração limpam permissões/estado (sessões ativas não expiram prematuramente).
+- `tools/CollaborationRulesTest.luau`: 13 verificações escritas e incluídas em `RunAllTests`.
+- **Ainda não há dupla operação simultânea** no mesmo carro. **Nenhuma execução de testes no Studio, multiplayer real, celular ou DataStore foi realizada nesta sessão.** `docs/TESTE_B1_COLAB_REPARO_2026-11-12.md` descreve os portões.

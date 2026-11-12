@@ -156,8 +156,12 @@ function CustomerRules.Score(c: Candidate): number
 	end
 	local price = math.max(c.Price, 0.01)
 	-- Elasticidade 2: contra um rival igual, o preço de tabela (1.0) maximiza a receita esperada; subir ou baixar demais perde.
-	local sensitivity = type(c.PriceSensitivity) == "number" and math.clamp(c.PriceSensitivity, 0.5, 3.5) or 2
-	local priceFactor = (1 / price) ^ sensitivity
+	local sensitivity = c.PriceSensitivity
+	if type(sensitivity) ~= "number" or sensitivity ~= sensitivity
+		or sensitivity == math.huge or sensitivity == -math.huge then
+		sensitivity = 2
+	end
+	local priceFactor = (1 / price) ^ math.clamp(sensitivity, 0.5, 3.5)
 	local repFactor = 1 + math.log(1 + math.max(c.Reputation, 0)) * 0.6
 	local specFactor = 1 + (math.max(c.SpecLevel, 1) - 1) * 0.25
 	local distFactor = 1 / (1 + math.max(c.Distance, 0) / 250)

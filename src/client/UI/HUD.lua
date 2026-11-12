@@ -13,6 +13,7 @@ local Catalog = require(ReplicatedStorage.Shared.Catalog)
 local CustomerRules = require(ReplicatedStorage.Shared.CustomerRules)
 local Theme = require(script.Parent.Theme)
 local HudLayoutRules = require(ReplicatedStorage.Shared.HudLayoutRules)
+local ServiceFocusRules = require(ReplicatedStorage.Shared.ServiceFocusRules)
 local CompactHUD = require(script.Parent.CompactHUD)
 local Kit = require(script.Parent.Kit)
 local Motion = require(script.Parent.Motion)
@@ -188,7 +189,32 @@ function HUD.start()
 	bell.LayoutOrder = 2
 	-- Configurações e Sair não existem no jogo: sem botões decorativos.
 	local compactHUD = CompactHUD.new(gui, function()
-		HUD.openPanel("orders")
+		local next = ServiceFocusRules.Select(Store.Snapshot)
+		if next.Target == "shop" then
+			local target = Stations.Target("shop")
+			if target then
+				Stations.GuideTo(target, 16, function() return Stations.IsNear("shop") end)
+			else
+				HUD.openPanel("orders")
+			end
+		elseif next.Target == "vehicle" and next.JobId then
+			local target = Stations.Vehicle(next.JobId)
+			if target then
+				Stations.GuideTo(target, 16)
+			else
+				HUD.openPanel("orders")
+			end
+		elseif next.Target == "equipment" and next.EquipmentId then
+			local target = Stations.TargetEquipment(next.EquipmentId)
+			if target then
+				Stations.GuideTo(target, 16)
+			else
+				HUD.openPanel("orders")
+				Store.Message:Fire("Procure a máquina indicada na sala da oficina.", false, "")
+			end
+		else
+			HUD.openPanel("orders")
+		end
 	end)
 
 	----------------------------------------------------------------------------------------------------------------

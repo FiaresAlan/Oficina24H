@@ -192,6 +192,16 @@ function VehicleService.EnableInspection(jobId: string)
 	applyStage(car)
 end
 
+-- Informação de progresso replicada para o HUD local: a evidência continua no servidor.
+function VehicleService.MarkInspected(jobId: string, examId: string)
+	local car = byJob[jobId]
+	local folder = car and car:FindFirstChild("InspectionPoints")
+	local point = folder and folder:FindFirstChild("Inspect_" .. examId)
+	if point and point:IsA("BasePart") then
+		point:SetAttribute("Inspected", true)
+	end
+end
+
 -- Distância de um exame até sua peça lógica, validada em servidor inclusive para o RemoteEvent.
 function VehicleService.IsNearInspectionPoint(player: Player, jobId: string, examId: string): boolean
 	if not InspectionPointRules.ExamFromKind("Inspect_" .. examId) then return false end

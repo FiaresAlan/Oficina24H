@@ -50,6 +50,16 @@ function RepairPrepRules.Advance(defectId: any, stepIndex: any, suppliedStep: an
 	return stepIndex + 1
 end
 
+-- Somente etapas pertencentes à receita aparecem como concluídas.
+function RepairPrepRules.IsDone(defectId: any, stepIndex: any, stepId: any): boolean
+	local steps = recipes[defectId]
+	if not steps or not finite(stepIndex) or type(stepId) ~= "string" then return false end
+	for index, id in ipairs(steps) do
+		if id == stepId then return stepIndex > index end
+	end
+	return false
+end
+
 function RepairPrepRules.FromPrompt(kind: any): string?
 	if type(kind) ~= "string" or string.sub(kind, 1, 5) ~= "Prep_" then
 		return nil

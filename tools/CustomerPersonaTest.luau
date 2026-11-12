@@ -25,4 +25,17 @@ check("sem qualidade não penaliza exigente invisivelmente", R.RatingAdjustment(
 	{ PriceMultiplier = 1, WaitSeconds = 10, PatienceSeconds = 300 }) == 0)
 check("padrão não muda avaliação existente", R.RatingAdjustment("Standard", ctx) == 0)
 check("ctx inválido volta neutro", R.RatingAdjustment("Urgent", nil) == 0)
+local Market = require(game.ReplicatedStorage.Shared.CustomerRules)
+local candidate = { Price = 1.4, Reputation = 10, SpecLevel = 1,
+	ServiceableCount = 2, OpenJobs = 0, Capacity = 3, Distance = 100 }
+candidate.PriceSensitivity = R.PriceSensitivity("Budget")
+local economicalScore = Market.Score(candidate)
+candidate.PriceSensitivity = R.PriceSensitivity("Urgent")
+local hurryScore = Market.Score(candidate)
+check("cliente econômico evita preço alto", economicalScore < hurryScore)
+candidate.PriceSensitivity = 0 / 0
+check("sensibilidade de preço adulterada não vira NaN", Market.Score(candidate) == Market.Score(candidate))
+check("cliente exigente comenta reparo abaixo de 70", Market.CommentKey(
+	{ PriceMultiplier = 1, WaitSeconds = 100, PatienceSeconds = 300,
+	LevelMargin = 0, ByNpc = false, Quality = 65, PersonaId = "Demanding" }, 3) == "rating_comment_sloppy")
 return table.concat(out, "\n")

@@ -1,6 +1,7 @@
 --!strict
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
 
 local Config = require(ReplicatedStorage.Shared.Config)
 local Catalog = require(ReplicatedStorage.Shared.Catalog)
@@ -9,6 +10,7 @@ local CustomerRules = require(ReplicatedStorage.Shared.CustomerRules)
 local RepairRules = require(ReplicatedStorage.Shared.RepairRules)
 local DiagnosisRules = require(ReplicatedStorage.Shared.DiagnosisRules)
 local WorkshopLevels = require(ReplicatedStorage.Shared.WorkshopLevels)
+local LocationRules = require(ReplicatedStorage.Shared.LocationRules)
 
 local WorkshopService = {}
 
@@ -32,16 +34,13 @@ local function nearShop(player: Player): boolean
     local character = player.Character
     local hrp = character and character:FindFirstChild("HumanoidRootPart")
     if not shop or not shop:IsA("BasePart") then
-        return true -- sem o prédio (ex.: testes no Edit) não bloqueia
+        -- Publicado: ausência da loja nunca autoriza comprar de qualquer lugar.
+        return LocationRules.MissingBlockAllowed(RunService:IsStudio())
     end
     if not hrp or not hrp:IsA("BasePart") then
         return false -- sem personagem (morto/respawn) não compra
     end
-    local rel = shop.CFrame:PointToObjectSpace(hrp.Position)
-    local half = shop.Size / 2
-    local dx = math.max(math.abs(rel.X) - half.X, 0)
-    local dz = math.max(math.abs(rel.Z) - half.Z, 0)
-    return math.sqrt(dx * dx + dz * dz) <= Config.ShopDistance
+    return LocationRules.IsNearBlock(shop.CFrame, shop.Size, hrp.Position, Config.ShopDistance)
 end
 local SHOP_FAR = "Vá até a Loja de Autopeças do bairro para comprar."
 

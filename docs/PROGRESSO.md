@@ -579,3 +579,11 @@ Detalhes em `docs/AUDITORIA_GERAL.md`. Resumo:
   são cortadas onde encostariam em lote, asfalto, loja, Construtora, estacionamentos ou praça. 115 pinheiros (bordas +
   grupos de 3 a 5 nos gramados, nunca em calçada). Play: carros e rivais andando normalmente, sem erros.
 - **Pendente**: conferir no celular.
+
+## 2026-11-12 — A1 (GitHub-only): integridade dos rivais e estabelecimentos — PR de revisão
+
+- **RivalService.Serve:** removido faturamento/reputação/estrelas antes da reserva da vaga; a contabilização passa a ocorrer depois do período de serviço e descida do elevador, apenas com rival existente, carro presente e vaga ainda reservada. Evicção e falha de spawn não devem conceder resultado. A capacidade de disputa agora respeita o número real de baias, limitado pelo máximo configurado.
+- **Loja/Construtora:** ausência do bloco do estabelecimento não libera compra/ampliação em servidor publicado. Exceção para testes permanece apenas quando `RunService:IsStudio()` é verdadeiro. Geometria de proximidade extraída para `shared/LocationRules.lua`.
+- **Testes escritos:** `tools/LocationTest.luau` (11 casos) e `tools/RivalRulesTest.luau` (10 casos) integrados ao `tools/RunAllTests.luau`.
+- **Ambiente realmente utilizado:** leitura/escrita pela API do GitHub; **nenhum teste Luau/Studio/multiplayer foi executado nesta rodada**. Status: `CODE_COMPLETE / NEEDS_STUDIO` até validação. Não declarar publicação.
+- **Próximo:** revisar idempotência de pagamento/OS e, depois, implementar receita piloto e exames de diagnóstico. Preservar DataStore schema v4.

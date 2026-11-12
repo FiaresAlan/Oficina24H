@@ -11,6 +11,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Config = require(ReplicatedStorage.Shared.Config)
 local Catalog = require(ReplicatedStorage.Shared.Catalog)
 local CustomerRules = require(ReplicatedStorage.Shared.CustomerRules)
+local RivalRules = require(ReplicatedStorage.Shared.RivalRules)
 local WorkshopLevels = require(ReplicatedStorage.Shared.WorkshopLevels)
 local StationService = require(script.Parent.StationService)
 local CustomerArrivalService = require(script.Parent.CustomerArrivalService)
@@ -208,12 +209,6 @@ function RivalService.Serve(rivalId: number)
 		return
 	end
 	local rival = r :: Rival
-	-- estatísticas: cada cliente atendido rende e avalia
-	local price = math.random(9, 40) * 10
-	rival.TotalEarned += math.floor(price * rival.Price)
-	rival.Reputation += math.random(1, 4)
-	rival.RatingCount += 1
-	rival.RatingSum += math.random(3, 5)
 	local root = StationService.FrameOf(rival.Plot)
 	local bay: BasePart? = nil
 	for i = 1, 6 do
@@ -247,6 +242,7 @@ function RivalService.Serve(rivalId: number)
 		return
 	end
 	local theCar = car :: Model
+	local settled = false
 	theCar:SetAttribute("RivalId", rival.Id)
 	task.spawn(function()
 		LotPath.Drive(theCar.PrimaryPart :: BasePart, path, LotPath.YardSpeed)
@@ -278,6 +274,24 @@ function RivalService.Serve(rivalId: number)
 		end
 		theCar:SetAttribute("Reparando", false)
 		StationService.Lift(theBay, carRoot, false)
+		-- Concluir fisicamente, com carro e vaga ainda válidos, ANTES de pagar e ranquear.
+		-- A evacuação de rivais pode destruir o carro enquanto a corrotina aguarda.
+		if not RivalRules.CanSettle({
+			Active = table.find(rivals, rival) ~= nil and rival.Plot:GetAttribute("RivalId") == rival.Id,
+			BayReserved = rival.Busy[theBay.Name] == true,
+			VehiclePresent = theCar.Parent ~= nil,
+			Completed = true,
+			Credited = settled,
+		}) then
+			rival.Busy[theBay.Name] = nil
+			return
+		end
+		settled = true
+		local price = math.random(9, 40) * 10
+		rival.TotalEarned += math.floor(price * rival.Price)
+		rival.Reputation += math.random(1, 4)
+		rival.RatingCount += 1
+		rival.RatingSum += math.random(3, 5)
 		theCar:SetAttribute("Sintoma", "")
 		if mech and mech.Parent then
 			local feet = LotPath.Ground(frame, 10, 2)
@@ -308,6 +322,13 @@ function RivalService.Candidates(): { any }
 		for _ in pairs(r.Busy) do
 			open += 1
 		end
+		local bays = 0
+		for i = 1, 6 do
+			local bay = r.Plot:FindFirstChild("Bay" .. i)
+			if bay and bay:IsA("BasePart") then
+				bays += 1
+			end
+		end
 		table.insert(list, {
 			RivalId = r.Id,
 			Price = r.Price,
@@ -316,7 +337,7 @@ function RivalService.Candidates(): { any }
 			ServiceableCount = 3,
 			Rating = rating(r),
 			OpenJobs = open,
-			Capacity = Config.MaxOpenJobsPerWorkshop,
+			Capacity = RivalRules.BayCapacity(bays, Config.MaxOpenJobsPerWorkshop),
 			Distance = 150,
 		})
 	end

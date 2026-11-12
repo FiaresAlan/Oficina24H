@@ -1270,6 +1270,12 @@ function WorkshopService.PlayerLeft(userId: number)
                     if session and session.JobId == jobId then
                         Repairs[worker.UserId] = nil
                         VehicleService.SetRepairing(jobId, false)
+                        if eventSender then
+                            -- Fecha o minijogo do contratado; não credita nada.
+                            eventSender(worker, "Result", {
+                                Action = "FinishRepair", Success = false, Message = "O dono da oficina desconectou.",
+                            })
+                        end
                     end
                     if eventSender then
                         eventSender(worker, "Notice", { Message = "O proprietário saiu: a ordem colaborativa foi cancelada.", Success = false })

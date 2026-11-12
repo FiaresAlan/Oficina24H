@@ -636,3 +636,12 @@ Detalhes em `docs/AUDITORIA_GERAL.md`. Resumo:
 - `employeeWork` recebe fallback para retomada de OS se NPC falha; NPC deixa de sequestrar ordem cujo preparo manual já progrediu.
 - 35 novos checks em `tools/RepairPrepTest.luau` registrados em `RunAllTests` (total acumulado nesta sequência: 134 checks novos escritos).
 - **Limitação explícita:** sockets posicionados relativamente às dimensões declaradas, ainda sem mesh/pivô real validado. Nenhum teste Luau/Studio, multiplayer, celular ou DataStore foi executado nesta rodada. Ver `docs/TESTE_B2_PREPARO_FISICO_2026-11-12.md`.
+
+## 2026-11-12 — B2b: sockets por veículo e feedback das peças (GitHub-only; PR draft)
+
+- `RepairSocketRules.Resolve` usa `Attachment` opcional `OficinaSocket_<StepId>` no modelo de cada carro ou o mesmo fallback geométrico da B2a; `VehicleService` registra `SocketSource` para diagnóstico.
+- `RepairPartVisualRules` limita visualização a carros próximos, ativos e com etapas válidas; não concede recompensas.
+- `RepairPartVisuals.client.lua` desenha props metálicos de porcas, apoio do elevador, trava, presilha e bandeja, além de chave animada ao manter o prompt pressionado; remove os efeitos quando o carro muda de estado ou sai de perto.
+- `VehicleFx.client.lua` desloca visualmente a roda após concluir o apoio (sem alterar física autoritativa), preservando a abertura de capô da B2a.
+- Testes escritos: `RepairSocketTest.luau` (10) e `RepairPartVisualTest.luau` (13), integrados ao `RunAllTests.luau`. **23 checks adicionados, 157 acumulados desde A1 (escritos, não executados).**
+- **Limitações:** geometria procedimental de apresentação local, não modelos PBR licenciados nem desmontagem real do MeshPart. `docs/TESTE_B2B_VISUAL_PECAS_2026-11-12.md` traz convenção dos sockets e homologação necessária em Studio. Nenhum teste Studio/multiplayer/mobile foi executado nesta rodada.

@@ -2,7 +2,13 @@
 
 Simulador social de oficina mecânica para Roblox: o jogador atende clientes, diagnostica o defeito, prepara peças e equipamentos, repara com um minijogo e evolui a oficina. Servidor autoritativo, persistência em DataStore e interface em português.
 
-**Status:** MVP (P0) completo no código e testado no Studio, **ainda não pronto para lançar**. Faltam testes com jogadores reais e celular, medição de desempenho e confirmação de licenças. Veja `docs/AUDITORIA_P0.md` (seção 8) e `docs/PROGRESSO.md`.
+## Acompanhamento do projeto
+
+**[CHECKLIST MESTRE — 14 fases, status e PRs (Issue #15)](https://github.com/FiaresAlan/Oficina24H/issues/15)**
+
+A Issue #15 é o painel único de check-ins. Lá estão as caixas `[x]` para código e documentação registrados e `[ ]` para execução de testes, validação no Studio e merge. O arquivo `docs/PROGRESSO.md` permanece como histórico detalhado.
+
+**Status das mudanças recentes (A1–B4):** código versionado em branches e PRs abertos, **ainda não homologado no Roblox Studio nem integrado à `main`**. O registro de testes do MVP original não valida estas mudanças. O projeto ainda não está pronto para publicação.
 
 ## Ciclo do MVP
 
@@ -25,7 +31,7 @@ A qualidade do reparo soma 6 fatores: precisão, erros, habilidade, equipamento,
 1. Instale as ferramentas: `rokit install` (Rojo 7.7.1).
 2. `rojo serve default.project.json` e conecte pelo plugin do Rojo no Roblox Studio.
 3. Os modelos 3D (carros, clientes) ficam em `ServerStorage/Assets` dentro do place e **não** estão neste repositório (veja `docs/ORIGEM_ASSETS.md`).
-4. Testes: rode `tools/RunAllTests.luau` no modo Edit (639 verificações).
+4. Testes: rode `tools/RunAllTests.luau` no modo Edit. A branch de trabalho possui **225 verificações novas escritas**, ainda sem execução confirmada no Studio nesta sequência; confira a Issue #15.
 
 ## O que não está aqui
 

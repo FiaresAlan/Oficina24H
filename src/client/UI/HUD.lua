@@ -34,8 +34,6 @@ local Stations = require(script.Parent.Stations)
 local t = Kit.t
 local HUD = {}
 
-local WIDE_WIDTH = 1500 -- largura lógica (já com UIScale) abaixo da qual o layout fica compacto
-local TIGHT_WIDTH = 760 -- abaixo disso (celular em pé) até a barra superior encolhe
 local WARNING_FRACTION = 0.25 -- paciência restante abaixo disso mostra o aviso de desistência
 local MAX_NOTIFICATIONS = 40
 
@@ -393,9 +391,13 @@ function HUD.start()
 			stroke.Color = success and Theme.Green or Theme.Red
 			stroke.Thickness = 2.5
 		end
-		local label = HudParts.text(box, text, 26, { Font = Theme.FontTitle, TextWrapped = true, AutomaticSize = Enum.AutomaticSize.XY })
+		local narrow = gui:GetAttribute("CompactLayout") == true
+		local label = HudParts.text(box, text, narrow and 20 or 24, {
+			Font = Theme.FontSemi, TextWrapped = true, AutomaticSize = Enum.AutomaticSize.XY,
+		})
 		local limit = Instance.new("UISizeConstraint")
-		limit.MaxSize = Vector2.new(620, math.huge)
+		local width = tonumber(gui:GetAttribute("HudLogicalWidth")) or 1672
+		limit.MaxSize = Vector2.new(math.max(180, math.min(510, width - 72)), math.huge)
 		limit.Parent = label
 		box.BackgroundTransparency = 1
 		Motion.play(box, Motion.Slide, { BackgroundTransparency = Theme.PanelTransparency })
@@ -433,27 +435,38 @@ function HUD.start()
 		box.AnchorPoint = Vector2.new(0, 1)
 		pad(box, 14, 22, 14, 18)
 		list(box, 16, true).VerticalAlignment = Enum.VerticalAlignment.Center
+		local narrow = gui:GetAttribute("CompactLayout") == true
 		local stars = tonumber(info.Stars) or 0
-		local check = HudParts.sprite(box, "check_ok", Vector2.new(64, 64))
+		local check = HudParts.sprite(box, "check_ok", narrow and Vector2.new(42, 42) or Vector2.new(64, 64))
 		check.LayoutOrder = 1
 		if stars < 3 then
 			check.ImageColor3 = rgb(255, 120, 90)
 		end
 		local texts = column(box, 2, 2)
-		HudParts.text(texts, t("rated_title"), 30, { Font = Theme.FontTitle })
+		HudParts.text(texts, t("rated_title"), narrow and 21 or 30, {
+			Font = Theme.FontTitle, TextWrapped = true, AutomaticSize = Enum.AutomaticSize.Y,
+			Size = UDim2.fromOffset(narrow and 224 or 320, 0),
+		})
 		local starRow = row(texts, 4)
 		for i = 1, 5 do
-			local star = HudParts.sprite(starRow, "star_gold", Vector2.new(32, 32))
+			local star = HudParts.sprite(starRow, "star_gold",
+				narrow and Vector2.new(22, 22) or Vector2.new(32, 32))
 			star.ImageTransparency = i <= stars and 0 or 0.75
 		end
-		HudParts.text(texts, "“" .. t(tostring(info.CommentKey or "rating_comment_ok")) .. "”", 24, { Font = Theme.FontTitle })
+		HudParts.text(texts, "“" .. t(tostring(info.CommentKey or "rating_comment_ok")) .. "”", narrow and 17 or 24, {
+			Font = Theme.FontSemi, TextWrapped = true, AutomaticSize = Enum.AutomaticSize.Y,
+			Size = UDim2.fromOffset(narrow and 224 or 320, 0),
+		})
 		local delta = tonumber(info.ReputationDelta) or 0
-		HudParts.text(texts, t("rated_rep", delta), 26, { Font = Theme.FontTitle, TextColor3 = delta >= 0 and rgb(40, 230, 70) or Theme.Red })
+		HudParts.text(texts, t("rated_rep", delta), narrow and 18 or 26, {
+			Font = Theme.FontTitle, TextColor3 = delta >= 0 and Theme.Green or Theme.Red,
+		})
 		local chevron = HudParts.text(box, "›", 54, { Font = Theme.FontTitle, LayoutOrder = 3 })
 		chevron.TextColor3 = Theme.Muted
+		chevron.Visible = not narrow
 		ratedToast = box
 		-- entra deslizando da esquerda
-		local targetY = -40
+		local targetY = narrow and -(tonumber(gui:GetAttribute("HudDockHeight")) or 70) - 34 or -40
 		box.Position = UDim2.new(0, -520, 1, targetY)
 		if Motion.reduced() then
 			box.Position = UDim2.new(0, 22, 1, targetY)
@@ -858,6 +871,9 @@ function HUD.start()
 		scale.Scale = layout.Scale
 		logicalWidth, logicalHeight = layout.Width, layout.Height
 		compact, tight = layout.Compact, layout.Tight
+		gui:SetAttribute("HudLogicalWidth", logicalWidth)
+		gui:SetAttribute("CompactLayout", compact)
+		gui:SetAttribute("HudDockHeight", layout.DockHeight)
 		dockSize, dockHeight = layout.DockSize, layout.DockHeight
 		topBar.Visible = not compact
 		logo.Visible = not compact

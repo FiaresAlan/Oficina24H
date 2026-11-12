@@ -80,7 +80,7 @@ function ServiceFocusRules.Select(snapshot: any): Focus
 	local active, waiting
 	for _, job in ipairs(type(snapshot.Jobs) == "table" and snapshot.Jobs or {}) do
 		if type(job) == "table" and type(job.Id) == "string" then
-			if job.Status == "InProgress" and not active then
+			if job.Status == "InProgress" and (not active or job.Id < active.Id) then
 				active = job
 			elseif job.Status == "Available" then
 				local urgency = ServiceFocusRules.Urgency(job)
@@ -93,11 +93,16 @@ function ServiceFocusRules.Select(snapshot: any): Focus
 	end
 	if active then return ServiceFocusRules.ForActive(active, snapshot.Profile) end
 
+	local collab
 	for _, job in ipairs(type(snapshot.CollabJobs) == "table" and snapshot.CollabJobs or {}) do
-		if type(job) == "table" and type(job.Id) == "string" then
-			return focus("Collaboration", "TRABALHO CONTRATADO",
-				tostring(job.VehicleName or "Veículo") .. " · vá até a oficina parceira", "vehicle", job.Id)
+		if type(job) == "table" and type(job.Id) == "string"
+			and (not collab or job.Id < collab.Id) then
+			collab = job
 		end
+	end
+	if collab then
+		return focus("Collaboration", "TRABALHO CONTRATADO",
+			tostring(collab.VehicleName or "Veículo") .. " · vá até a oficina parceira", "vehicle", collab.Id)
 	end
 	if waiting then
 		local urgent = ServiceFocusRules.Urgency(waiting) >= 0.75

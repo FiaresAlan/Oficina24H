@@ -6,6 +6,7 @@ local RunService = game:GetService("RunService")
 local Config = require(ReplicatedStorage.Shared.Config)
 local Catalog = require(ReplicatedStorage.Shared.Catalog)
 local JobRules = require(ReplicatedStorage.Shared.JobRules)
+local JobLifecycleRules = require(ReplicatedStorage.Shared.JobLifecycleRules)
 local CustomerRules = require(ReplicatedStorage.Shared.CustomerRules)
 local RepairRules = require(ReplicatedStorage.Shared.RepairRules)
 local RepairSessionRules = require(ReplicatedStorage.Shared.RepairSessionRules)
@@ -294,8 +295,7 @@ local function createJob(ownerUserId: number, specialization: string?)
     local vip = not rookie and not fleet and math.random() < Catalog.VipChance
     local referral = false
     if not rookie and not fleet and profile and profile.PendingVipReferral then
-        vip, referral = true, true -- indicação de um freguês: VIP garantido
-        profile.PendingVipReferral = false
+        vip, referral = true, true -- indicação VIP pendente; consumir apenas depois de criar a OS
     end
     local regular: any = nil
     if not rookie and not vip and not fleet and profile and #profile.Regulars > 0 and math.random() < Config.RegularChance then
@@ -316,6 +316,14 @@ local function createJob(ownerUserId: number, specialization: string?)
         gender, customerName = regular.Gender, regular.Name
     end
     local vehicles = vip and Catalog.VipVehicleNames or Catalog.VehicleNames
+    -- Não abrir OS de veículo impossível: modelos do Studio não ficam neste repositório.
+    local vehicleName = JobLifecycleRules.SelectVehicle(vehicles, regular and regular.Vehicle, function(name: string): boolean
+        return CustomerArrivalService.Template(name) ~= nil
+    end, math.random)
+    if not vehicleName then
+        warn("[Oficina24H] Sem modelo de carro carregável para criar ordem em", ownerUserId)
+        return nil
+    end
 
     -- Nem toda reclamação corresponde ao defeito real: em ~35% dos casos o cliente descreve o sintoma de outro
     -- problema (de outra especialização). O jogador precisa diagnosticar para saber o que realmente está errado.
@@ -340,7 +348,7 @@ local function createJob(ownerUserId: number, specialization: string?)
     Jobs[id] = {
         Id = id,
         OwnerUserId = ownerUserId,
-        VehicleName = regular and regular.Vehicle or vehicles[math.random(1, #vehicles)],
+        VehicleName = vehicleName,
         CustomerName = customerName,
         CustomerGender = gender,
         Vip = vip,
@@ -361,6 +369,10 @@ local function createJob(ownerUserId: number, specialization: string?)
         CreatedAt = os.time(),
     }
     local job = Jobs[id]
+    if referral and profile then
+        profile.PendingVipReferral = false
+        DataService.MarkDirty(owner :: Player)
+    end
     local eta = math.ceil(CustomerArrivalService.Arrive(job))
     job.ArrivesAt = os.time() + eta
     job.CreatedAt = job.ArrivesAt
@@ -569,9 +581,12 @@ function WorkshopService.GenerateCustomer(player: Player)
     if not profile or profile.Coins < Config.AdvertisingCost then
         return false, string.format("Panfletos custam %d moedas.", Config.AdvertisingCost)
     end
+    local job = createJob(player.UserId)
+    if not job then
+        return false, "Nenhum modelo de carro está disponível no mapa. Verifique ServerStorage/Assets/Veiculos."
+    end
     workshop.LastManualCustomerAt = now
     DataService.AddCoins(player, -Config.AdvertisingCost, "Publicidade: panfletos")
-    local job = createJob(player.UserId)
     return true, "Panfletos distribuídos! Um cliente está chegando com " .. job.VehicleName .. "."
 end
 
@@ -1412,8 +1427,11 @@ function WorkshopService.DispatchCustomers(arrivals: number?, rand: (() -> numbe
         end
         local choice = CustomerRules.Choose(candidates, rand)
         if choice and choice <= #entries then
-            createJob(entries[choice].Owner.UserId, specialization)
-            created += 1
+            if createJob(entries[choice].Owner.UserId, specialization) then
+                created += 1
+            else
+                lost += 1
+            end
         elseif choice then
             RivalService.Serve(candidates[choice].RivalId) -- o cliente preferiu a oficina rival
             lost += 1

@@ -11,6 +11,8 @@ local HINTS = {
 	Outer = "Bolhas no ombro EXTERNO do pneu.",
 }
 local BATTERY_SEQUENCE = { "OffNegative", "OffPositive", "OnPositive", "OnNegative" }
+-- Duração mínima para uma operação humana plausível; não prova cada clique, mas impede conclusão instantânea.
+local MIN_DURATION = { Tire = 2, Battery = 3.5, Cooling = 3 }
 
 local function finite(x: any): boolean
 	return type(x) == "number" and x == x and x ~= math.huge and x ~= -math.huge
@@ -53,7 +55,8 @@ function RepairOperations.Evaluate(plan: any, input: any, elapsed: number, mods:
 	if type(plan) ~= "table" or plan.Kind ~= "Operations" or type(input) ~= "table" then
 		return invalid("procedimento inválido")
 	end
-	if not finite(elapsed) or elapsed < 0.25 or elapsed > RepairRules.MaxSessionSeconds then
+	local minDuration = MIN_DURATION[plan.Mode]
+	if not minDuration or not finite(elapsed) or elapsed < minDuration or elapsed > RepairRules.MaxSessionSeconds then
 		return invalid("duração do procedimento inválida")
 	end
 	local execution, successes, errors = 0, 0, 0

@@ -13,6 +13,7 @@ local Store = require(script.Parent.Parent.Store)
 local HudParts = require(script.Parent.Parent.HudParts)
 local PanelKit = require(script.Parent.Parent.PanelKit)
 local Stations = require(script.Parent.Parent.Stations)
+local ServiceFocusRules = require(ReplicatedStorage.Shared.ServiceFocusRules)
 
 local t = Kit.t
 local Orders = {}
@@ -253,7 +254,7 @@ function Orders.new(parent: Instance)
 	end
 
 	local function progressCard(scroll: ScrollingFrame, snapshot: any, job: any, order: number, compact: boolean)
-		local _, content = card(scroll, order, rgb(70, 170, 255), "Order_" .. job.Id)
+		local _, content = card(scroll, order, Theme.Blue, "Order_" .. job.Id)
 		local layout = Instance.new("UIListLayout")
 		layout.Padding = UDim.new(0, 14)
 		layout.SortOrder = Enum.SortOrder.LayoutOrder
@@ -270,22 +271,43 @@ function Orders.new(parent: Instance)
 		HudParts.text(info, job.VehicleName, 26, { Font = Theme.FontSemi, LayoutOrder = 2 })
 		local statusRow = stack(info, 8, true, 3)
 		HudParts.sprite(statusRow, "pn_o_wrench", Vector2.new(28, 28))
-		HudParts.text(statusRow, job.Diagnosed and t("or_ready_repair") or t("or_need_diagnose"), 24, {
-			Font = Theme.FontTitle, TextColor3 = job.Diagnosed and rgb(80, 230, 110) or rgb(255, 200, 70), LayoutOrder = 2,
+		local goal = ServiceFocusRules.ForActive(job, snapshot.Profile)
+		HudParts.text(statusRow, goal.Title, 24, {
+			Font = Theme.FontTitle,
+			TextColor3 = goal.Kind == "Stock" and Theme.Red or (goal.Kind == "Delegated" and Theme.Muted or Theme.Accent),
+			LayoutOrder = 2,
 		})
 		requirement(info, job, snapshot, 4)
 		local actions = stack(content, 8, false, 3)
 		actions.Name = "Actions"
-		if not job.Diagnosed then
-			local diagnose = PanelKit.button(actions, t("orders_diagnose"), "blue", Vector2.new(210, 48), function()
-				Store.Act("DiagnoseJob", { JobId = job.Id })
-			end, "pn_o_wrench")
-			diagnose.LayoutOrder = 1
+		if goal.Kind == "Delegated" then
+			HudParts.text(actions, "O profissional convidado está responsável por esta OS.", 20, {
+				Font = Theme.FontSemi, TextColor3 = Theme.Muted, TextWrapped = true,
+				AutomaticSize = Enum.AutomaticSize.Y, Size = UDim2.fromOffset(210, 0),
+			})
 		else
-			local complete = PanelKit.button(actions, t("orders_complete"), "green", Vector2.new(210, 48), function()
-				Store.Act("CompleteJob", { JobId = job.Id })
-			end, "pn_o_check")
-			complete.LayoutOrder = 1
+			local buttonText = goal.Target == "shop" and "IR À LOJA"
+				or goal.Target == "equipment" and "LOCALIZAR MÁQUINA"
+				or "IR AO VEÍCULO"
+			local go = PanelKit.button(actions, buttonText, "blue", Vector2.new(210, 48), function()
+				local target: BasePart? = nil
+				if goal.Target == "shop" then
+					target = Stations.Target("shop")
+				elseif goal.Target == "equipment" and goal.EquipmentId then
+					target = Stations.TargetEquipment(goal.EquipmentId)
+				elseif goal.Target == "vehicle" then
+					target = Stations.Vehicle(job.Id)
+				end
+				if target then
+					window.Close()
+					Stations.GuideTo(target, 18)
+				else
+					Store.Message:Fire("O local do serviço não está disponível. Confira o veículo ou o equipamento na oficina.", false, "")
+				end
+			end, "pn_o_wrench")
+			go.LayoutOrder = 1
+		end
+		if job.Diagnosed and not job.CollaboratorUserId then
 			local npc = PanelKit.button(actions, t("orders_hire_npc"), "dark", Vector2.new(210, 42), function()
 				Store.Act("HireNpc", { JobId = job.Id })
 			end)
@@ -329,7 +351,9 @@ function Orders.new(parent: Instance)
 	local function signature(snapshot: any): string
 		local parts = { tabs.Current(), tostring(inviteJobId), tostring(snapshot.HasWorkshop) }
 		for _, job in ipairs(snapshot.Jobs) do
-			table.insert(parts, string.format("%s.%s.%s.%s", job.Id, job.Status, tostring(job.Diagnosed), tostring(job.CollaboratorUserId)))
+			table.insert(parts, string.format("%s.%s.%s.%s.%s.%s",
+				job.Id, job.Status, tostring(job.Diagnosed), tostring(job.CollaboratorUserId),
+				tostring(job.PrepComplete), tostring(job.Requirement and job.Requirement.EquipmentId)))
 		end
 		for _, job in ipairs(snapshot.CollabJobs or {}) do
 			table.insert(parts, "c" .. job.Id .. tostring(job.Diagnosed))

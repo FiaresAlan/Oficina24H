@@ -792,21 +792,33 @@ function HUD.start()
 	local ordersSideButton = sideButtons[1]
 
 	local bottomNav = HudParts.panel(gui, "BottomNav")
-	bottomNav.AutomaticSize = Enum.AutomaticSize.XY
+	bottomNav.Size = UDim2.fromOffset(420, 86)
 	bottomNav.AnchorPoint = Vector2.new(0.5, 1)
 	bottomNav.Position = UDim2.new(0.5, 0, 1, -22)
-	pad(bottomNav, 8, 8, 8, 8)
-	list(bottomNav, 6, true)
+	-- Seis alvos touch >=48 px físicos, roláveis em 320 px de largura.
+	local dockScroll = Instance.new("ScrollingFrame")
+	dockScroll.Name = "DockScroll"
+	dockScroll.BackgroundTransparency = 1
+	dockScroll.BorderSizePixel = 0
+	dockScroll.Size = UDim2.new(1, -16, 1, -16)
+	dockScroll.Position = UDim2.fromOffset(8, 8)
+	dockScroll.ScrollingDirection = Enum.ScrollingDirection.X
+	dockScroll.ScrollBarThickness = 0
+	dockScroll.ElasticBehavior = Enum.ElasticBehavior.WhenScrollable
+	dockScroll.ScrollingEnabled = true
+	dockScroll.CanvasSize = UDim2.fromOffset(404, 0)
+	list(dockScroll, 6, true).VerticalAlignment = Enum.VerticalAlignment.Center
+	dockScroll.Parent = bottomNav
 	local function bottomSpec(name: string, label: string, icon: string, width: number): HudParts.NavSpec
 		return { Name = name, Label = label, Icon = icon, IconSelected = nil, Layout = "bottom", Width = width, Height = 98 }
 	end
 	local bottomButtons = {
-		addNav(bottomNav, bottomSpec("B_Ordens", t("nav_orders"), "b_clipboard", 124), "orders", 1),
-		addNav(bottomNav, bottomSpec("B_Habilidades", t("nav_skills"), "b_cap", 160), "skills", 2),
-		addNav(bottomNav, bottomSpec("B_Loja", t("nav_shop"), "b_cart", 108), "shop", 3),
-		addNav(bottomNav, bottomSpec("B_Estoque", t("nav_stock"), "b_box", 134), "stock", 4),
-		addNav(bottomNav, bottomSpec("B_Ranking", t("nav_ranking"), "b_trophy", 142), "ranking", 5),
-		addNav(bottomNav, bottomSpec("B_Perfil", t("nav_profile"), "person", 126), "profile", 6),
+		addNav(dockScroll, bottomSpec("B_Ordens", t("nav_orders"), "b_clipboard", 124), "orders", 1),
+		addNav(dockScroll, bottomSpec("B_Habilidades", t("nav_skills"), "b_cap", 160), "skills", 2),
+		addNav(dockScroll, bottomSpec("B_Loja", t("nav_shop"), "b_cart", 108), "shop", 3),
+		addNav(dockScroll, bottomSpec("B_Estoque", t("nav_stock"), "b_box", 134), "stock", 4),
+		addNav(dockScroll, bottomSpec("B_Ranking", t("nav_ranking"), "b_trophy", 142), "ranking", 5),
+		addNav(dockScroll, bottomSpec("B_Perfil", t("nav_profile"), "person", 126), "profile", 6),
 	}
 	local ordersBottomButton = bottomButtons[1]
 
@@ -822,7 +834,7 @@ function HUD.start()
 	----------------------------------------------------------------------------------------------------------------
 	local compact, tight = false, false
 	local logicalWidth, logicalHeight = 1672, 941
-	local dockSize, dockHeight = 70, 70
+	local dockSize, dockHeight, dockWidth, dockContentWidth = 70, 70, 420, 404
 	local menuMinimized: boolean? = nil
 	local infoVisible: boolean? = nil
 
@@ -841,6 +853,8 @@ function HUD.start()
 		for _, button in ipairs(bottomButtons) do
 			button.SetCompact(compact, compact and dockSize or 86)
 		end
+		bottomNav.Size = UDim2.fromOffset(dockWidth, dockHeight + 16)
+		dockScroll.CanvasSize = UDim2.fromOffset(dockContentWidth, 0)
 	end
 
 	local function applyInfo()
@@ -876,7 +890,8 @@ function HUD.start()
 		gui:SetAttribute("HudLogicalWidth", logicalWidth)
 		gui:SetAttribute("CompactLayout", compact)
 		gui:SetAttribute("HudDockHeight", layout.DockHeight)
-		dockSize, dockHeight = layout.DockSize, layout.DockHeight
+		dockSize, dockHeight, dockWidth, dockContentWidth =
+			layout.DockSize, layout.DockHeight, layout.DockWidth, layout.DockContentWidth
 		topBar.Visible = not compact
 		logo.Visible = not compact
 		logoDivider.Visible = not compact

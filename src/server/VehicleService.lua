@@ -251,6 +251,13 @@ function VehicleService.MarkInspected(jobId: string, examId: string)
 	end
 end
 
+-- O mecânico designado é o único que recebe prompts de reparo no HUD local.
+-- A autorização efetiva continua sendo checada pelo WorkshopService no servidor.
+function VehicleService.SetRepairActor(jobId: string, userId: number)
+	local car = byJob[jobId]
+	if car then car:SetAttribute("AssignedRepairUserId", userId) end
+end
+
 -- Preparação server-side com progresso replicado aos prompts e marcadores locais.
 function VehicleService.SetRepairPrepProgress(jobId: string, defectId: string, stepIndex: number)
 	local car = byJob[jobId]

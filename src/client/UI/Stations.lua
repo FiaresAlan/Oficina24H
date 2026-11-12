@@ -47,6 +47,26 @@ function Stations.Target(kind: string): BasePart?
 	return nil
 end
 
+-- Locais autorizados para orientações de UI. O servidor continuará validando a ação.
+function Stations.Vehicle(jobId: string): BasePart?
+	local vehicles = workspace:FindFirstChild("Vehicles")
+	local car = vehicles and vehicles:FindFirstChild(jobId)
+	if car and car:IsA("Model") then
+		return car.PrimaryPart or car:FindFirstChildWhichIsA("BasePart", true)
+	end
+	return nil
+end
+
+function Stations.TargetEquipment(equipmentId: string): BasePart?
+	local plot = Stations.MyPlot()
+	local equipment = plot and plot:FindFirstChild("Equipment")
+	local model = equipment and equipment:FindFirstChild("Eq_" .. equipmentId)
+	if model and model:IsA("Model") then
+		return model.PrimaryPart or model:FindFirstChildWhichIsA("BasePart", true)
+	end
+	return nil
+end
+
 function Stations.Distance(kind: string): number
 	local target = Stations.Target(kind)
 	local character = player.Character

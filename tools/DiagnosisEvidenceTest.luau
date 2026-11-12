@@ -1,0 +1,23 @@
+-- Regressões puras da leitura dos exames (Studio > RunAllTests).
+local E = require(game.ReplicatedStorage.Shared.DiagnosisEvidence)
+local results = {}
+local function check(label, ok)
+	table.insert(results, (ok and "PASS " or "FAIL ") .. label)
+end
+check("3 exames registrados", #E.Exams == 3)
+check("exame valido", E.IsValidExam("TirePressure"))
+check("exame desconhecido negado", not E.IsValidExam("Unknown") and not E.IsValidExam(10))
+check("3 pilotos exigem exame", E.RequiresExam("FlatTire") and E.RequiresExam("WeakBattery") and E.RequiresExam("Overheating"))
+check("outros defeitos mantem fluxo legado", not E.RequiresExam("Dent") and not E.RequiresExam("BrakeWear"))
+check("sem exame nao comprova nada", not E.HasAnyExam({}))
+check("id adulterado nao conta", not E.HasAnyExam({ Fake = true }))
+check("exame completo conta", E.HasAnyExam({ TirePressure = true }))
+check("pneu furado gera evidencia", string.find(E.Read("FlatTire", "TirePressure") or "", "17 psi", 1, true) ~= nil)
+check("bateria ruim gera evidencia", string.find(E.Read("WeakBattery", "BatteryVoltage") or "", "10,9 V", 1, true) ~= nil)
+check("motor quente gera evidencia", string.find(E.Read("Overheating", "CoolingTemperature") or "", "115", 1, true) ~= nil)
+check("teste irrelevante nao diagnostica falha", string.find(E.Read("FlatTire", "BatteryVoltage") or "", "normal", 1, true) ~= nil)
+check("resultado desconhecido nil", E.Read("FlatTire", "Fake") == nil)
+local findings = E.Findings("Overheating", { CoolingTemperature = true, BatteryVoltage = true })
+check("so resultados realizados retornados", #findings == 2 and findings[1].Id == "BatteryVoltage" and findings[2].Id == "CoolingTemperature")
+check("resposta UI nao contem DefectId", findings[1].DefectId == nil and findings[2].DefectId == nil)
+return table.concat(results, "\n")

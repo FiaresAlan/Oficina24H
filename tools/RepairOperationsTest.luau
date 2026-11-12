@@ -8,7 +8,8 @@ end
 local tire = Rules.BuildPlan("FlatTire", 10)
 local tire2 = Rules.BuildPlan("FlatTire", 10)
 check("pneu: plano determinista", tire.LeakSpot == tire2.LeakSpot and tire.Mode == "Tire")
-check("legado: outros defeitos nao mudam", Rules.BuildPlan("Dent", 10) == nil)
+check("funilaria tem procedimento de carroceria", Rules.BuildPlan("Dent", 10).Mode == "Surface")
+check("falha fora do catálogo preserva fallback", Rules.BuildPlan("InvalidDefect", 10) == nil)
 check("plano publico nao contem gabarito", Rules.PublicPlan(tire).LeakSpot == nil)
 check("tempo minimo comunicado no plano publico", Rules.PublicPlan(tire).MinSeconds == 2
 	and Rules.PublicPlan(Rules.BuildPlan("WeakBattery", 1)).MinSeconds == 3.5

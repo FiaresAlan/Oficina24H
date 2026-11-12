@@ -1,7 +1,8 @@
 --!strict
--- Três procedimentos curtos e distintos, avaliados pelo servidor.
--- São alternativas ao minijogo de timing; mantém RepairRules para outros serviços.
+-- Quinze procedimentos com regras de avaliação do lado do servidor.
+-- Três pilotos específicos + doze receitas especializadas em quatro famílias.
 local RepairRules = require(script.Parent.RepairRules)
+local WorkshopProcedures = require(script.Parent.WorkshopProcedures)
 local RepairOperations = {}
 
 local SPOTS = { "Inner", "Center", "Outer" }
@@ -18,7 +19,7 @@ local function finite(x: any): boolean
 	return type(x) == "number" and x == x and x ~= math.huge and x ~= -math.huge
 end
 
--- nil = outro defeito, usar minijogo de timing legado.
+-- nil apenas para defeitos não cadastrados; fallback de segurança mantém o timing legado.
 function RepairOperations.BuildPlan(defectId: string, seed: number): any?
 	if defectId == "FlatTire" then
 		local spot = SPOTS[(math.floor(seed) % #SPOTS) + 1]
@@ -28,11 +29,14 @@ function RepairOperations.BuildPlan(defectId: string, seed: number): any?
 	elseif defectId == "Overheating" then
 		return { Kind = "Operations", Mode = "Cooling", TargetFluid = 2, TargetBleed = 2 }
 	end
-	return nil
+	return WorkshopProcedures.BuildPlan(defectId, seed)
 end
 
 -- Não revelar campos de correção do servidor no payload.
 function RepairOperations.PublicPlan(plan: any): any
+	if plan.Mode ~= "Tire" and plan.Mode ~= "Battery" and plan.Mode ~= "Cooling" then
+		return WorkshopProcedures.PublicPlan(plan)
+	end
 	if plan.Mode == "Tire" then
 		return { Kind = plan.Kind, Mode = plan.Mode, Hint = plan.Hint, PressureTarget = plan.TargetPressure, MinSeconds = MIN_DURATION.Tire }
 	elseif plan.Mode == "Battery" then
@@ -54,6 +58,9 @@ end
 function RepairOperations.Evaluate(plan: any, input: any, elapsed: number, mods: RepairRules.Mods): any
 	if type(plan) ~= "table" or plan.Kind ~= "Operations" or type(input) ~= "table" then
 		return invalid("procedimento inválido")
+	end
+	if plan.Mode ~= "Tire" and plan.Mode ~= "Battery" and plan.Mode ~= "Cooling" then
+		return WorkshopProcedures.Evaluate(plan, input, elapsed, mods)
 	end
 	local minDuration = MIN_DURATION[plan.Mode]
 	if not minDuration or not finite(elapsed) or elapsed < minDuration or elapsed > RepairRules.MaxSessionSeconds then

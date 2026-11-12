@@ -675,6 +675,8 @@ function HUD.start()
 				paintSelection()
 				GuiService.SelectedObject = previousSelection -- devolve o foco do gamepad
 			end
+			-- Ao fechar pela tecla X/Escape, o objetivo compacto volta a aparecer.
+			if refreshInfoVisibility then refreshInfoVisibility() end
 		end
 	end
 

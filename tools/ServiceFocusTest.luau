@@ -45,4 +45,9 @@ check("urgência limitada a 100%", Rules.Urgency({ PatienceSeconds = 100, WaitSe
 check("ordem status estranho ignorada", select({ { Id = "A", Status = "Cancelled" } }).Kind == "Idle")
 check("desempate determinista por ID", select({ { Id = "B", Status = "Available", WaitSeconds = 5, PatienceSeconds = 10 },
 	{ Id = "A", Status = "Available", WaitSeconds = 5, PatienceSeconds = 10 } }).JobId == "A")
+check("duas OS ativas não alternam aleatoriamente", select({ { Id = "B", Status = "InProgress", Diagnosed = false },
+	{ Id = "A", Status = "InProgress", Diagnosed = false } }).JobId == "A")
+check("duas OS colaborativas têm desempate fixo", select({}, nil, { { Id = "B" }, { Id = "A" } }).JobId == "A")
+check("ação para uma OS não depende de outra", Rules.ForActive({ Id = "X", Diagnosed = true }, { Parts = {} }).Kind == "Repair")
+check("OS inválida não apresenta ação técnica", Rules.ForActive(nil, nil).Kind == "Idle")
 return table.concat(out, "\n")

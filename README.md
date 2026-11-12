@@ -8,6 +8,8 @@ Simulador social de oficina mecânica para Roblox: o jogador atende clientes, di
 
 **[PR #20 — Branch de integração geral para homologação no Studio](https://github.com/FiaresAlan/Oficina24H/pull/20)** — código A1–C3 consolidado; PR draft, ainda não integrado à `main`.
 
+**[Build/CI de código](https://github.com/FiaresAlan/Oficina24H/actions/workflows/code-health.yml)** — valida mapeamento dos 15 defeitos e executa build Rojo a cada atualização. **CI verde não equivale a jogo testado no Studio.**
+
 A Issue #15 é o painel único de check-ins. Lá estão as caixas `[x]` para código e documentação registrados e `[ ]` para execução de testes, validação no Studio e merge. O arquivo `docs/PROGRESSO.md` permanece como histórico detalhado.
 
 **Status de desenvolvimento (A1–C3):** regras, HUD, diagnóstico e procedimentos especializados para **15 serviços** estão versionados na [branch mais recente de homologação](https://github.com/FiaresAlan/Oficina24H/tree/work/oficina24h-c3-gates-qualidade-2026-11-12). **Não foram executados testes novos no Roblox Studio nesta sequência e nada foi integrado à `main`.** A meta atual é **produto final**, condicionado a arte, sons, dispositivos reais, licenças, performance e testes com jogadores. O registro de Studio do MVP original não homologa as novas mudanças.

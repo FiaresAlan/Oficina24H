@@ -73,7 +73,7 @@ function ServiceFocusRules.Select(snapshot: any): Focus
 			return focus("Delegated", "SERVIÇO DELEGADO", vehicle .. " · acompanhe o profissional", "orders", active.Id)
 		end
 		if not active.Diagnosed then
-			return focus("Diagnose", "CONVERSAR E DIAGNOSTICAR", vehicle .. " · examine o carro", "vehicle", active.Id)
+			return focus("Diagnose", "DIAGNOSTICAR", vehicle .. " · examine o carro", "vehicle", active.Id)
 		end
 		if ServiceFocusRules.MissingParts(active, snapshot.Profile) then
 			return focus("Stock", "FALTAM PEÇAS", vehicle .. " · vá à loja de autopeças", "shop", active.Id)

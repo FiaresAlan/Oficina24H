@@ -154,7 +154,7 @@ function DiagnosisGame.new(gui: ScreenGui): { IsActive: () -> boolean, Fit: (num
 			end)
 			examButton.LayoutOrder = index
 			examButton.Name = "Exam_" .. tostring(exam.Id)
-			examButton.Active = not examined
+			if examined then examButton.Active = false end
 		end
 		for _, c in ipairs(options:GetChildren()) do
 			if c:IsA("GuiObject") then
@@ -201,9 +201,13 @@ function DiagnosisGame.new(gui: ScreenGui): { IsActive: () -> boolean, Fit: (num
 		end,
 		Close = close,
 		Fit = function(logicalWidth: number, logicalHeight: number)
-			holder.Size = UDim2.fromOffset(math.min(640, logicalWidth - 24), HEIGHT)
+			-- Dimensionamento proporcional dos controles fixos (604 px) também no celular.
+			-- Reduzir somente a largura externa cortava opções e botões de exame.
+			holder.Size = UDim2.fromOffset(640, HEIGHT)
 			holder.Position = UDim2.new(0.5, 0, 1, logicalHeight < 640 and -122 or -140)
-			fit.Scale = math.clamp((logicalHeight - 112 - 122) / HEIGHT, 0.7, 1)
+			local widthScale = (logicalWidth - 24) / 640
+			local heightScale = (logicalHeight - 112 - 122) / HEIGHT
+			fit.Scale = math.clamp(math.min(widthScale, heightScale), 0.4, 1)
 		end,
 	}
 end

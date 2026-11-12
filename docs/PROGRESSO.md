@@ -643,5 +643,5 @@ Detalhes em `docs/AUDITORIA_GERAL.md`. Resumo:
 - `RepairPartVisualRules` limita visualização a carros próximos, ativos e com etapas válidas; não concede recompensas.
 - `RepairPartVisuals.client.lua` desenha props metálicos de porcas, apoio do elevador, trava, presilha e bandeja, além de chave animada ao manter o prompt pressionado; remove os efeitos quando o carro muda de estado ou sai de perto.
 - `VehicleFx.client.lua` desloca visualmente a roda após concluir o apoio (sem alterar física autoritativa), preservando a abertura de capô da B2a.
-- Testes escritos: `RepairSocketTest.luau` (10) e `RepairPartVisualTest.luau` (13), integrados ao `RunAllTests.luau`. **23 checks adicionados, 157 acumulados desde A1 (escritos, não executados).**
+- Testes escritos: `RepairSocketTest.luau` (12) e `RepairPartVisualTest.luau` (13), integrados ao `RunAllTests.luau`. **25 checks adicionados, 159 acumulados desde A1 (escritos, não executados).**
 - **Limitações:** geometria procedimental de apresentação local, não modelos PBR licenciados nem desmontagem real do MeshPart. `docs/TESTE_B2B_VISUAL_PECAS_2026-11-12.md` traz convenção dos sockets e homologação necessária em Studio. Nenhum teste Studio/multiplayer/mobile foi executado nesta rodada.

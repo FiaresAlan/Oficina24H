@@ -1071,6 +1071,9 @@ function HUD.start()
 			setModel(job.VehicleModel)
 			local info = column(top, 2, 2)
 			HudParts.text(info, job.VehicleName, 32, { Font = Theme.FontTitle })
+			HudParts.text(info, tostring(job.PersonaLabel or "Cliente comum"), 19, {
+				Font = Theme.FontSemi, TextColor3 = Theme.Muted,
+			})
 			HudParts.text(info, t("customers_customer", (job.Vip and "★ VIP " or (job.Regular and "♥ " or (job.Fleet and "📋 " or ""))) .. (job.CustomerName or "?")), 24, { Font = Theme.FontTitle })
 			local waitRow = row(info, 8)
 			HudParts.text(waitRow, t("customers_wait_label"), 24, { Font = Theme.FontTitle })

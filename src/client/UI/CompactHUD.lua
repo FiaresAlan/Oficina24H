@@ -3,6 +3,7 @@
 local Theme = require(script.Parent.Theme)
 local Kit = require(script.Parent.Kit)
 local HudParts = require(script.Parent.HudParts)
+local ServiceFocusRules = require(game:GetService("ReplicatedStorage").Shared.ServiceFocusRules)
 
 local CompactHUD = {}
 
@@ -101,32 +102,19 @@ function CompactHUD.new(gui: ScreenGui, onOpenOrders: () -> ())
 			summary:SetAttribute("ReputationValue", reputation)
 		end,
 		SetObjective = function(snapshot: any)
-			local active
-			local waiting
-			for _, job in ipairs(snapshot.Jobs or {}) do
-				if job.Status == "InProgress" then active = job break end
-				if job.Status == "Available" and not waiting then waiting = job end
-			end
-			if active then
-				if not active.Diagnosed then
-					heading.Text = "DIAGNOSTICAR"
-					description.Text = tostring(active.VehicleName or "Veículo") .. " · converse com o cliente"
-				elseif active.PrepRequired and not active.PrepComplete then
-					heading.Text = "PREPARAR VEÍCULO"
-					description.Text = tostring(active.VehicleName or "Veículo") .. " · siga os marcadores"
-				else
-					heading.Text = "EXECUTAR REPARO"
-					description.Text = tostring(active.ServiceName or active.VehicleName or "Serviço") .. " · abra a OS"
-				end
-				accent.BackgroundColor3 = Theme.Accent
-			elseif waiting then
-				heading.Text = "CLIENTE AGUARDANDO"
-				description.Text = tostring(waiting.VehicleName or "Veículo") .. " · ver ordem de serviço"
+			local target = ServiceFocusRules.Select(snapshot)
+			heading.Text = target.Title
+			description.Text = target.Description
+			if target.Kind == "Urgent" then
+				accent.BackgroundColor3 = Theme.Red
+			elseif target.Kind == "Waiting" or target.Kind == "Collaboration" then
 				accent.BackgroundColor3 = Theme.Blue
-			else
-				heading.Text = "OFICINA DISPONÍVEL"
-				description.Text = "Acompanhe os próximos atendimentos"
+			elseif target.Kind == "Idle" then
 				accent.BackgroundColor3 = Theme.Green
+			elseif target.Kind == "Stock" then
+				accent.BackgroundColor3 = Theme.Yellow
+			else
+				accent.BackgroundColor3 = Theme.Accent
 			end
 		end,
 	}

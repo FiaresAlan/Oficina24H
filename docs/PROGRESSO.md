@@ -1,3 +1,8 @@
+> **CHECK-IN OFICIAL / ACOMPANHAMENTO:** [CHECKLIST MESTRE — GitHub Issue #15](https://github.com/FiaresAlan/Oficina24H/issues/15)  
+> Esta página é o **histórico técnico**, não a lista de tarefas. As caixas de seleção por fase, PRs abertos, portões de Studio e próximos passos ficam na Issue #15. Para conferir alterações, atualize a Issue no navegador; o conteúdo é atualizado em cada checkpoint via edição, não automaticamente.
+
+---
+
 # Progresso — Oficina 24H
 
 Atualizado: 2026-11-05
@@ -655,3 +660,21 @@ Detalhes em `docs/AUDITORIA_GERAL.md`. Resumo:
 - **Contratos preservados:** `Store`, `Panels.*`, trabalho NPC, inventário, reputação, DataStore e remotes não foram alterados.
 - **Verificações:** 23 invariantes de integração observadas estaticamente via GitHub; fórmulas conferidas para desktop, laptop e cinco formatos de tela. **31 casos Luau escritos** (`HudLayoutTest`: 16, `CompactHudTest`: 15), incluídos no `RunAllTests`. Total acumulado de checks novos escritos nesta sequência: **190**. **Nenhum teste Luau/Roblox Studio/mobile foi executado nesta rodada.**
 - **Portão visual:** `docs/HUD_UX_V2_2026-11-12.md` contém wireframes, princípios e roteiro completo para homologar em Studio, PC, touch, gamepad e 2 players. Nenhuma captura do place foi verificada neste ambiente.
+
+## 2026-11-12 — B3a e B4: duas fases incrementais em uma rodada (GitHub-only, PRs draft)
+
+### B3a — estabilização de navegação mobile (PR #13)
+- `HudLayoutRules.Plan` agora mantém alvos de pelo menos ~48 px físicos no menor scale touch e retorna geometria do dock.
+- `HUD.lua`: dock mobile passou para `ScrollingFrame` horizontal de largura limitada à tela; seis funções continuam presentes em telas 320px.
+- `HudLayoutTest.luau`: +5 verificações escritas de tamanho dos botões e largura/scroll.
+- Registro: `docs/TESTE_B3A_HUD_ESTABILIDADE_2026-11-12.md`.
+
+### B4 — próxima ação e localização de serviço (PR draft, dependente de B3a)
+- `ServiceFocusRules`: módulo puro de prioridade com cenários de cliente urgente, diagnóstico, preparo, falta de peças, equipamento e colaboração. Desempate determinístico de múltiplas OS.
+- `CompactHUD` e `HUD`: cartão de objetivo passa a orientar a carro, estação ou loja por `Stations.GuideTo`. Não executa ações server-side.
+- `Panels/Orders.lua`: remove botões abstratos `CompleteJob` e `DiagnoseJob` do painel; serviço começa pela interação no local correto. Preserva HireNpc, convite, abandono e colaboração.
+- `Onboarding.lua`: orientação do novato inclui a preparação física.
+- `ServiceFocusTest.luau`: 30 checks novos escritos, registrados em `RunAllTests`.
+- Registro: `docs/TESTE_B4_ORIENTACAO_ORDENS_2026-11-12.md`.
+
+**Total de verificações novas escritas nesta rodada: 35 (5 B3a + 30 B4); acumulado descrito desde A1: 225.** Estes valores representam casos de teste *escritos*, não testes aprovados em execução. Revisões estáticas do código não substituem testes em Roblox Studio, multiplayer e dispositivos. Nenhuma alteração feita na `main`.

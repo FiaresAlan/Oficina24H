@@ -8,6 +8,7 @@ local Catalog = require(ReplicatedStorage.Shared.Catalog)
 local JobRules = require(ReplicatedStorage.Shared.JobRules)
 local JobLifecycleRules = require(ReplicatedStorage.Shared.JobLifecycleRules)
 local CustomerRules = require(ReplicatedStorage.Shared.CustomerRules)
+local CustomerPersonaRules = require(ReplicatedStorage.Shared.CustomerPersonaRules)
 local RepairRules = require(ReplicatedStorage.Shared.RepairRules)
 local RepairSessionRules = require(ReplicatedStorage.Shared.RepairSessionRules)
 local CollaborationRules = require(ReplicatedStorage.Shared.CollaborationRules)
@@ -56,7 +57,7 @@ local syncStaffRef: (Player) -> () -- definido adiante (funcionários)
 local refreshPlotDisplays: () -> () -- definido adiante (placa 3D e TV)
 local rankingEntriesRef: () -> { any } -- definido adiante (ranking com rivais)
 local upgradeInfoRef: (Player, any) -> any -- definido adiante (Construtora)
-local createJobRef: (number, string?) -> any -- definido adiante (createJob)
+local createJobRef: (number, string?, string?) -> any -- definido adiante (createJob)
 local Workshops: {[number]: any} = {}
 local Jobs: {[string]: any} = {}
 local Invites: {[string]: any} = {}
@@ -169,7 +170,8 @@ local function rateService(owner: Player, job: any, service: any, defect: any, e
     local context = {
         PriceMultiplier = job.PriceMultiplier or (profile and profile.PriceMultiplier) or 1,
         WaitSeconds = os.time() - job.CreatedAt,
-        PatienceSeconds = Config.CustomerPatienceSeconds * (job.Regular and Config.RegularPatienceMultiplier or 1),
+        PatienceSeconds = job.PatienceSeconds or Config.CustomerPatienceSeconds * (job.Regular and Config.RegularPatienceMultiplier or 1),
+        PersonaId = job.PersonaId,
         LevelMargin = margin,
         ByNpc = byNpc,
         Quality = quality,
@@ -256,7 +258,7 @@ ContractService.SetOfferBuilder(function(player: Player)
 end)
 
 -- `specialization` (opcional): o cliente procurou um especialista nessa área (escolha de mercado, ver DispatchCustomers).
-local function createJob(ownerUserId: number, specialization: string?)
+local function createJob(ownerUserId: number, specialization: string?, requestedPersona: string?)
     -- O defeito depende da capacidade da oficina (nível e equipamento), ver shared/JobRules.
     local owner = Players:GetPlayerByUserId(ownerUserId)
     local profile = owner and DataService.Get(owner)
@@ -315,6 +317,16 @@ local function createJob(ownerUserId: number, specialization: string?)
     if regular then
         gender, customerName = regular.Gender, regular.Name
     end
+    local personaId = rookie and "Standard"
+        or regular and "Friendly"
+        or (requestedPersona and CustomerPersonaRules.Catalog[requestedPersona] and requestedPersona)
+        or CustomerPersonaRules.Pick(math.random)
+    -- Quote calculado na chegada. Clientes com pressa aceitam pequena tarifa de prioridade,
+    -- perfis econômicos procuram preço menor, e exigentes valorizam acabamento.
+    price = math.max(1, math.floor(price * CustomerPersonaRules.PayMultiplier(personaId) + 0.5))
+    local patienceSeconds = CustomerPersonaRules.Patience(
+        Config.CustomerPatienceSeconds * (regular and Config.RegularPatienceMultiplier or 1), personaId
+    )
     local vehicles = vip and Catalog.VipVehicleNames or Catalog.VehicleNames
     -- Não abrir OS de veículo impossível: modelos do Studio não ficam neste repositório.
     local vehicleName = JobLifecycleRules.SelectVehicle(vehicles, regular and regular.Vehicle, function(name: string): boolean
@@ -357,6 +369,8 @@ local function createJob(ownerUserId: number, specialization: string?)
         Fleet = fleet and fleet.Token or nil, -- contrato de frota ao qual este carro pertence
         FleetName = fleet and fleet.Offer.Name or nil,
         Rush = rush,
+        PersonaId = personaId,
+        PatienceSeconds = patienceSeconds,
         Complaint = complaint,
         ComplaintDefectId = complaintDefectId,
         DefectId = defectId,
@@ -465,7 +479,9 @@ function WorkshopService.GetSnapshot(player: Player)
                     Regular = job.Regular == true,
                     Fleet = job.FleetName,
                     WaitSeconds = os.time() - job.CreatedAt, -- tempo desde a chegada (a paciência acaba em PatienceSeconds)
-                    PatienceSeconds = Config.CustomerPatienceSeconds * (job.Regular and Config.RegularPatienceMultiplier or 1),
+                    PatienceSeconds = job.PatienceSeconds or Config.CustomerPatienceSeconds * (job.Regular and Config.RegularPatienceMultiplier or 1),
+                    PersonaLabel = CustomerPersonaRules.Get(job.PersonaId).Label,
+                    PersonaHint = CustomerPersonaRules.Get(job.PersonaId).Hint,
                     Complaint = job.Complaint,
                     Status = job.Status,
                     Diagnosed = job.Diagnosed,
@@ -1409,6 +1425,8 @@ function WorkshopService.DispatchCustomers(arrivals: number?, rand: (() -> numbe
     for _ = 1, count do
         -- Cada cliente precisa de uma área; os candidatos são julgados por ela.
         local specialization = Catalog.Specializations[math.floor(rand() * #Catalog.Specializations) + 1]
+        local personaId = CustomerPersonaRules.Pick(rand)
+        local elasticity = CustomerPersonaRules.PriceSensitivity(personaId)
         local candidates = {}
         for i, e in ipairs(entries) do
             candidates[i] = {
@@ -1420,17 +1438,19 @@ function WorkshopService.DispatchCustomers(arrivals: number?, rand: (() -> numbe
                 OpenJobs = getOpenJobCount(e.Owner.UserId),
                 Capacity = WorkshopLevels.MaxOpenJobs(e.Profile.WorkshopLevel or 0),
                 Distance = e.Distance,
+                PriceSensitivity = elasticity,
             }
         end
         -- Rivais disputam só parte do mercado (Config.RivalMarketShare): dão vida ao bairro sem deixar o jogador sem clientes.
         if rand() < Config.RivalMarketShare then
             for _, rc in ipairs(RivalService.Candidates()) do
+                rc.PriceSensitivity = elasticity
                 table.insert(candidates, rc)
             end
         end
         local choice = CustomerRules.Choose(candidates, rand)
         if choice and choice <= #entries then
-            if createJob(entries[choice].Owner.UserId, specialization) then
+            if createJob(entries[choice].Owner.UserId, specialization, personaId) then
                 created += 1
             else
                 lost += 1
@@ -1899,7 +1919,7 @@ function WorkshopService.Start()
                 -- Cliente que não foi atendido vai embora; ordens concluídas antigas saem da memória.
                 local age = os.time() - job.CreatedAt
                 local owner = Players:GetPlayerByUserId(job.OwnerUserId)
-                if job.Status == "Available" and age > Config.CustomerPatienceSeconds * (job.Regular and Config.RegularPatienceMultiplier or 1) then
+                if job.Status == "Available" and age > (job.PatienceSeconds or Config.CustomerPatienceSeconds * (job.Regular and Config.RegularPatienceMultiplier or 1)) then
                     Jobs[jobId] = nil
                     CustomerArrivalService.Depart(jobId)
                     if owner and eventSender then

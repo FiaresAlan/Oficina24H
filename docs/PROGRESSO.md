@@ -627,3 +627,12 @@ Detalhes em `docs/AUDITORIA_GERAL.md`. Resumo:
 - Contratos limitados a uma OS ativa por contratado; saída do dono, saída do contratado e expiração limpam permissões/estado (sessões ativas não expiram prematuramente).
 - `tools/CollaborationRulesTest.luau`: 13 verificações escritas e incluídas em `RunAllTests`.
 - **Ainda não há dupla operação simultânea** no mesmo carro. **Nenhuma execução de testes no Studio, multiplayer real, celular ou DataStore foi realizada nesta sessão.** `docs/TESTE_B1_COLAB_REPARO_2026-11-12.md` descreve os portões.
+
+## 2026-11-12 — B2a: preparação física para três reparos-piloto (GitHub-only; PR draft)
+
+- `shared/RepairPrepRules.lua` define duas etapas de preparo por reparo (pneu: porcas/apoio; bateria: capô/presilha; arrefecimento: capô/bandeja), com sequência server-side e fallback legado.
+- `VehicleService` cria sockets invisíveis soldados em cada carro, prompts de ação espacial e trava o botão Reparar até terminar o preparo. `WorkshopService.PrepareRepairStep` valida executor, ordem, estágio, peça e distância antes de avançar. `StartRepair` e `FinishRepair` voltam a validar a conclusão.
+- `RepairPrepMarkers.client.lua` exibe etapa em amarelo e concluídas em verde para dono/contratado responsável. `HUD.lua` mostra a preparação no checklist. `VehicleFx.client.lua` abre capô onde disponível, sem incluir sockets na detecção de malha.
+- `employeeWork` recebe fallback para retomada de OS se NPC falha; NPC deixa de sequestrar ordem cujo preparo manual já progrediu.
+- 35 novos checks em `tools/RepairPrepTest.luau` registrados em `RunAllTests` (total acumulado nesta sequência: 134 checks novos escritos).
+- **Limitação explícita:** sockets posicionados relativamente às dimensões declaradas, ainda sem mesh/pivô real validado. Nenhum teste Luau/Studio, multiplayer, celular ou DataStore foi executado nesta rodada. Ver `docs/TESTE_B2_PREPARO_FISICO_2026-11-12.md`.

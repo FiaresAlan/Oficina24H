@@ -11,6 +11,7 @@ local RepairRules = require(ReplicatedStorage.Shared.RepairRules)
 local RepairSessionRules = require(ReplicatedStorage.Shared.RepairSessionRules)
 local CollaborationRules = require(ReplicatedStorage.Shared.CollaborationRules)
 local RepairOperations = require(ReplicatedStorage.Shared.RepairOperations)
+local RepairPrepRules = require(ReplicatedStorage.Shared.RepairPrepRules)
 local DiagnosisRules = require(ReplicatedStorage.Shared.DiagnosisRules)
 local DiagnosisEvidence = require(ReplicatedStorage.Shared.DiagnosisEvidence)
 local WorkshopLevels = require(ReplicatedStorage.Shared.WorkshopLevels)
@@ -461,6 +462,8 @@ function WorkshopService.GetSnapshot(player: Player)
                 }
                 -- Requisitos e pagamento só são revelados após o diagnóstico (o defeito real fica no servidor).
                 if job.Diagnosed then
+                    entry.PrepRequired = RepairPrepRules.Requires(job.DefectId)
+                    entry.PrepComplete = RepairPrepRules.Ready(job.DefectId, job.PreparationStep)
                     local defect = Catalog.Defects[job.DefectId]
                     local service = Catalog.Services[job.ServiceId]
                     entry.Requirement = {
@@ -653,6 +656,7 @@ function WorkshopService.AcceptJob(player: Player, jobId: string)
     funnel(player, "Accepted")
     VehicleService.SetSymptom(job.Id, defectSymptom(job.Diagnosed and job.DefectId or job.ComplaintDefectId))
     job.AssignedWorkerUserId = player.UserId
+    VehicleService.SetRepairActor(job.Id, player.UserId)
     return true, "Ordem aceita. " .. placeMessage
 end
 
@@ -727,6 +731,9 @@ function WorkshopService.DiagnoseJob(player: Player, jobId: string, choice: any?
     end
 
     job.Diagnosed = true
+    job.PreparationStep = 1
+    -- Preparação fica visível apenas depois que o defeito foi diagnosticado.
+    VehicleService.SetRepairPrepProgress(job.Id, job.DefectId, job.PreparationStep)
     funnel(player, "Diagnosed")
     VehicleService.SetStage(job.Id, "Repair")
     VehicleService.SetSymptom(job.Id, defectSymptom(job.DefectId))
@@ -813,6 +820,34 @@ local function checkRepairable(player: Player, jobId: string): (boolean, string,
     return true, "", job, defect, service, owner
 end
 
+-- O jogador executa preparação no mundo físico ANTES de abrir o painel de reparo.
+-- Não entrega moedas, peças, XP ou conclusão. Servidor controla sequência e proximidade.
+function WorkshopService.PrepareRepairStep(player: Player, jobId: string, stepId: string)
+    local job = Jobs[jobId]
+    if not CollaborationRules.IsAuthorized(job, player.UserId) or not job.Diagnosed then
+        return false, "Você não está autorizado a preparar esta ordem."
+    end
+    if not RepairPrepRules.Requires(job.DefectId) then
+        return false, "Esta ordem usa o procedimento tradicional."
+    end
+    if not VehicleService.IsParked(jobId) then
+        return false, "Espere o carro estacionar."
+    end
+    local nextStep = RepairPrepRules.Advance(job.DefectId, job.PreparationStep, stepId)
+    if not nextStep then
+        return false, "Esta etapa não está liberada. Siga o marcador do carro."
+    end
+    if not VehicleService.IsNearRepairPrepPoint(player, jobId, stepId) then
+        return false, "Aproxime-se do componente indicado para trabalhar."
+    end
+    job.PreparationStep = nextStep
+    VehicleService.SetRepairPrepProgress(job.Id, job.DefectId, nextStep)
+    if RepairPrepRules.Ready(job.DefectId, nextStep) then
+        return true, "Preparação concluída. Use a ferramenta no carro ou a máquina da oficina."
+    end
+    return true, "Etapa concluída. Siga o próximo marcador no veículo."
+end
+
 -- Inicia o minijogo: o servidor sorteia o plano e guarda o instante de início. Nada é cobrado até o envio final.
 -- `assist` (Reduzir movimento) deixa a barra mais lenta e a zona maior.
 function WorkshopService.SetRepairAssist(player: Player, value: boolean)
@@ -824,6 +859,9 @@ function WorkshopService.StartRepair(player: Player, jobId: string, assist: bool
     local ok, message, job, defect = checkRepairable(player, jobId)
     if not ok then
         return false, message
+    end
+    if not RepairPrepRules.Ready(job.DefectId, job.PreparationStep) then
+        return false, "Prepare primeiro o veículo: siga as etapas destacadas no carro."
     end
     local previous = Repairs[player.UserId]
     if previous then
@@ -876,6 +914,10 @@ function WorkshopService.FinishRepair(player: Player, jobId: string, presses: an
     if not ok then
         VehicleService.SetRepairing(session.JobId, false)
         return false, message
+    end
+    if not RepairPrepRules.Ready(job.DefectId, job.PreparationStep) then
+        VehicleService.SetRepairing(session.JobId, false)
+        return false, "A preparação do veículo não foi concluída."
     end
     local mods: RepairRules.Mods = {
         Margin = math.max(0, DataService.GetSkillLevel(player, defect.Specialization) - defect.RequiredLevel),
@@ -1173,6 +1215,7 @@ function WorkshopService.RespondInvite(worker: Player, inviteId: string, accepte
     job.CollaboratorUserId = worker.UserId
     job.CollaborationSplitPercent = invite.SplitPercent
     job.CollabAt = os.time()
+    VehicleService.SetRepairActor(job.Id, worker.UserId)
     worker:SetAttribute("CollaborationOwnerUserId", invite.OwnerUserId)
     worker:SetAttribute("CollaborationJobId", job.Id)
     return true, "Convite aceito. Vá até o carro ou a máquina da oficina contratante para reparar."
@@ -1237,6 +1280,8 @@ function WorkshopService.Interact(player: Player, jobId: string, kind: string): 
         return WorkshopService.DiagnoseJob(player, jobId)
     elseif string.sub(kind, 1, 8) == "Inspect_" then
         return WorkshopService.ExamineJob(player, jobId, string.sub(kind, 9))
+    elseif string.sub(kind, 1, 5) == "Prep_" then
+        return WorkshopService.PrepareRepairStep(player, jobId, string.sub(kind, 6))
     elseif kind == "Repair" then
         if job.CollaboratorUserId == player.UserId then
             return WorkshopService.CompleteCollaborativeJob(player, jobId)
@@ -1290,6 +1335,7 @@ function WorkshopService.PlayerLeft(userId: number)
             job.CollaboratorUserId = nil
             job.CollaborationSplitPercent = nil
             job.AssignedWorkerUserId = job.OwnerUserId
+            VehicleService.SetRepairActor(job.Id, job.OwnerUserId)
         end
     end
     for inviteId, invite in pairs(Invites) do
@@ -1585,6 +1631,9 @@ local function employeeWork(owner: Player, job: any, npc: Model)
         NpcKit.ServerOwned(npc)
     end
     job.Diagnosed = true
+    -- Se o NPC não puder terminar, os sockets de preparo precisam existir para o jogador retomar.
+    job.PreparationStep = job.PreparationStep or 1
+    VehicleService.SetRepairPrepProgress(job.Id, job.DefectId, job.PreparationStep)
     VehicleService.SetStage(job.Id, "None")
     VehicleService.SetSymptom(job.Id, defectSymptom(job.DefectId))
     VehicleService.SetRepairing(job.Id, true)
@@ -1658,7 +1707,8 @@ local function staffTick()
             local waiting = 0
             for jobId, job in pairs(Jobs) do
                 if job.OwnerUserId == userId and job.Status == "InProgress" and not entry.Busy[jobId] and not job.CollaboratorUserId
-                    and VehicleService.IsParked(jobId) and not (Repairs[userId] and Repairs[userId].JobId == jobId) then
+                    and VehicleService.IsParked(jobId) and not (Repairs[userId] and Repairs[userId].JobId == jobId)
+                    and not (RepairPrepRules.Requires(job.DefectId) and (job.PreparationStep or 1) > 1) then
                     waiting += 1
                 end
             end
@@ -1670,6 +1720,7 @@ local function staffTick()
                     if job.OwnerUserId == userId and job.Status == "InProgress" and not entry.Busy[jobId]
                         and not job.CollaboratorUserId and VehicleService.IsParked(jobId)
                         and not (Repairs[userId] and Repairs[userId].JobId == jobId)
+                        and not (RepairPrepRules.Requires(job.DefectId) and (job.PreparationStep or 1) > 1)
                         and os.time() >= (job.EmployeeRetryAt or 0) then
                         local free: Model? = nil
                         for _, npc in ipairs(entry.Npcs) do
@@ -1853,6 +1904,7 @@ function WorkshopService.Start()
                     job.CollaborationSplitPercent = nil
                     job.CollabAt = nil
                     job.AssignedWorkerUserId = job.OwnerUserId
+                    VehicleService.SetRepairActor(job.Id, job.OwnerUserId)
                     if owner and eventSender then
                         eventSender(owner, "Notice", { Message = "O colaborador demorou demais: a ordem voltou para você.", Success = false })
                     end

@@ -872,7 +872,7 @@ function WorkshopService.FinishRepair(player: Player, jobId: string, presses: an
         return false, "O reparo demorou demais e foi cancelado."
     end
     local elapsed = now - session.StartedAt
-    local ok, message, job, defect, service = checkRepairable(player, jobId)
+    local ok, message, job, defect, service, owner = checkRepairable(player, jobId)
     if not ok then
         VehicleService.SetRepairing(session.JobId, false)
         return false, message
@@ -893,45 +893,76 @@ function WorkshopService.FinishRepair(player: Player, jobId: string, presses: an
     if not result.Valid then
         return false, "Reparo inválido (" .. tostring(result.Reason) .. ")."
     end
-    if not DataService.TakeParts(player, defect.Parts) then
-        return false, "Faltam peças."
+    -- As peças pertencem sempre ao dono da OS, nunca ao estoque particular do contratado.
+    local workshopOwner = owner :: Player
+    if not DataService.TakeParts(workshopOwner, defect.Parts) then
+        return false, "Faltam peças na oficina."
     end
 
+    -- Autoridade: depois do consumo único da peça, qualquer retransmissão não volta a pagar.
+    local delegated = CollaborationRules.IsWorker(job, player.UserId)
     job.Status = "Completed"
     VehicleService.Flash(job.Id, Color3.fromRGB(90, 220, 130))
     VehicleService.Despawn(job.Id)
     local basePrice = job.Price or service.Reward
-    local combo = comboMultiplier(player.UserId)
-    local friend = ProgressService.FriendMultiplier(player) -- jogando com amigo: +10%
+    -- Bônus por combo/amigos pertencem ao trabalho individual, não se multiplicam em contratos terceirizados.
+    local combo = delegated and 1 or comboMultiplier(player.UserId)
+    local friend = delegated and 1 or ProgressService.FriendMultiplier(player)
     local price = math.floor(basePrice * RepairRules.PayMultiplier(result.Quality) * combo * friend + 0.5)
-    if result.Quality >= COMBO_MIN_QUALITY then
-        Combo[player.UserId] = (Combo[player.UserId] or 0) + 1
-    else
-        breakCombo(player.UserId)
+    if not delegated then
+        if result.Quality >= COMBO_MIN_QUALITY then
+            Combo[player.UserId] = (Combo[player.UserId] or 0) + 1
+        else
+            breakCombo(player.UserId)
+        end
     end
     local tip = RepairRules.Tip(basePrice, result.Quality)
     local xp = RepairRules.XPBonus(service.XP, result.Quality)
-    DataService.AddCoins(player, price + tip, "Serviço: " .. service.DisplayName .. (tip > 0 and " (+gorjeta)" or ""))
+    local actorPay, ownerPay = price + tip, 0
+    if delegated then
+        ownerPay, actorPay = CollaborationRules.Split(price + tip, job.CollaborationSplitPercent or 25)
+        DataService.AddCoins(player, actorPay, "Reparo contratado: " .. service.DisplayName)
+        DataService.AddCoins(workshopOwner, ownerPay, "Reparo colaborativo: " .. service.DisplayName)
+        player:SetAttribute("CollaborationOwnerUserId", nil)
+        player:SetAttribute("CollaborationJobId", nil)
+    else
+        DataService.AddCoins(player, actorPay, "Serviço: " .. service.DisplayName .. (tip > 0 and " (+gorjeta)" or ""))
+    end
     DataService.AddSkillXP(player, defect.Specialization, xp)
-    DataService.AddReputation(player, service.Reputation)
-    local stars = rateService(player, job, service, defect, player, false, result.Quality)
-    ProgressService.Record(player, {
-        Kind = "RepairDone", Amount = price + tip, Spec = defect.Specialization, Quality = result.Quality, Stars = stars,
-        Vip = job.Vip == true, FirstTry = (job.DiagnoseAttempts or 1) <= 1, Rush = job.Rush == true or ProgressService.IsRush(),
+    DataService.AddReputation(workshopOwner, service.Reputation)
+    local stars = rateService(workshopOwner, job, service, defect, player, false, result.Quality)
+    ProgressService.Record(workshopOwner, {
+        Kind = "RepairDone", Amount = delegated and ownerPay or actorPay, Spec = defect.Specialization,
+        Quality = result.Quality, Stars = stars, Vip = job.Vip == true,
+        FirstTry = (job.DiagnoseAttempts or 1) <= 1, Rush = job.Rush == true or ProgressService.IsRush(),
     })
-    local bonus = DataService.CompleteOnboarding(player, Config.OnboardingBonus)
-    WorkshopService.UpdateSkin(player)
+    local bonus = DataService.CompleteOnboarding(workshopOwner, Config.OnboardingBonus)
+    WorkshopService.UpdateSkin(workshopOwner)
     if eventSender then
         eventSender(player, "RepairDone", {
-            Bonus = bonus,
+            Bonus = delegated and 0 or bonus,
             Quality = result.Quality, Perfect = result.Perfect, Good = result.Good, Miss = result.Miss,
             Corrected = result.Corrected, Uncorrected = result.Uncorrected, Breakdown = result.Breakdown,
-            Tip = tip, Price = price, XP = xp, Stars = stars, Combo = combo, NextCombo = comboMultiplier(player.UserId),
+            Tip = delegated and 0 or tip, Price = delegated and actorPay or price,
+            XP = xp, Stars = stars, Combo = combo, NextCombo = delegated and 1 or comboMultiplier(player.UserId),
         })
+        if delegated then
+            eventSender(workshopOwner, "Notice", {
+                Message = string.format("%s concluiu %s com %d%% de qualidade: sua parte foi %d moedas.",
+                    player.DisplayName, service.DisplayName, result.Quality, ownerPay),
+                Success = true,
+            })
+        end
     end
-    funnel(player, "Repaired")
-    return true, "Serviço concluído. +" .. tostring(price + tip) .. " moedas (qualidade " .. tostring(result.Quality) .. "%"
-        .. (combo > 1 and string.format(", combo x%.1f", combo) or "") .. (friend > 1 and ", bônus de amigo" or "") .. "), +" .. tostring(xp)
+    funnel(workshopOwner, "Repaired")
+    if delegated then
+        return true, "Serviço colaborativo concluído. Sua parte: +" .. tostring(actorPay)
+            .. " moedas e +" .. tostring(xp) .. " XP. Nota: "
+            .. CustomerRules.StarsText(stars)
+    end
+    return true, "Serviço concluído. +" .. tostring(actorPay) .. " moedas (qualidade " .. tostring(result.Quality) .. "%"
+        .. (combo > 1 and string.format(", combo x%.1f", combo) or "")
+        .. (friend > 1 and ", bônus de amigo" or "") .. "), +" .. tostring(xp)
         .. " XP. Avaliação: " .. CustomerRules.StarsText(stars) .. " (" .. tostring(stars) .. ")"
         .. (bonus > 0 and (" Bônus do primeiro serviço: +" .. tostring(bonus) .. ".") or "")
 end

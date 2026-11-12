@@ -284,7 +284,12 @@ end
 function VehicleService.IsNearRepairPrepPoint(player: Player, jobId: string, stepId: string): boolean
 	if not RepairPrepRules.FromPrompt("Prep_" .. stepId) then return false end
 	local car = byJob[jobId]
-	if not car or car:GetAttribute("Estacionado") ~= true then return false end
+	if not car or car:GetAttribute("Estacionado") ~= true
+		or car:GetAttribute("Etapa") ~= "Repair" or car:GetAttribute("Reparando") == true
+		or car:GetAttribute("PrepRequired") ~= true
+		or car:GetAttribute("PrepStepId") ~= stepId then
+		return false
+	end
 	local folder = car:FindFirstChild("RepairPrepPoints")
 	local point = folder and folder:FindFirstChild("Prep_" .. stepId)
 	local character = player.Character

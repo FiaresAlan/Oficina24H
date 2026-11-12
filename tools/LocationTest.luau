@@ -1,12 +1,8 @@
 -- Testes de proximidade de estabelecimentos; requer execução no Edit do Roblox Studio.
 local Rules = require(game.ReplicatedStorage.Shared.LocationRules)
-local passes, failures = 0, {}
+local results = {}
 local function check(label, condition)
-	if condition then
-		passes += 1
-	else
-		table.insert(failures, "FAIL " .. label)
-	end
+	table.insert(results, (condition and "PASS " or "FAIL ") .. label)
 end
 
 local cf = CFrame.new(100, 0, 30) * CFrame.Angles(0, math.rad(90), 0)
@@ -23,6 +19,4 @@ check("distancia NaN", not Rules.IsNearBlock(cf, size, cf.Position, 0 / 0))
 check("publicado: sem bloco e negado", not Rules.MissingBlockAllowed(false))
 check("Studio: ausencia explicitamente tolerada", Rules.MissingBlockAllowed(true))
 
-local output = { string.format("LocationTest: %d aprovados, %d falhas", passes, #failures) }
-for _, f in ipairs(failures) do table.insert(output, f) end
-return table.concat(output, "\n")
+return table.concat(results, "\n")

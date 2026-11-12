@@ -80,6 +80,7 @@ function OperationRepairGame.new(gui: ScreenGui)
 
 	local active, waiting, showingResult = false, false, false
 	local jobId, currentPlan = "", nil :: any
+	local startedAt = 0
 	local pressure, spot, sequence = 28, nil :: string?, {} :: { string }
 	local fluid, bleed, fan = 1.5, 0, false
 	local close: (boolean) -> ()
@@ -114,6 +115,7 @@ function OperationRepairGame.new(gui: ScreenGui)
 		jobId = tostring(payload.JobId)
 		currentPlan = payload.Plan
 		active, waiting, showingResult = true, false, false
+		startedAt = os.clock()
 		pressure, spot, sequence = 28, nil, {}
 		fluid, bleed, fan = 1.5, 0, false
 		title.Text = tostring(payload.Service or "Reparo") .. " · procedimento"
@@ -215,6 +217,12 @@ function OperationRepairGame.new(gui: ScreenGui)
 				input = { Steps = table.clone(sequence) }
 			else
 				input = { Fluid = fluid, BleedCycles = bleed, FanChecked = fan }
+			end
+			local minSeconds = tonumber(currentPlan.MinSeconds) or 0
+			local remaining = minSeconds - (os.clock() - startedAt)
+			if remaining > 0 then
+				status.Text = string.format("Revise o procedimento: aguarde mais %.1f s antes de finalizar.", remaining)
+				return
 			end
 			waiting = true
 			status.Text = "Verificando reparo com o servidor..."

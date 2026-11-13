@@ -1,6 +1,7 @@
 -- C12/C13: a reivindicação só é resgatável com pagamento do dono persistido.
 local Rules = require(game.ReplicatedStorage.Shared.SettlementClaimRules)
 local Ledger = require(game.ReplicatedStorage.Shared.SettlementLedgerRules)
+local OwnerProofs = require(game.ReplicatedStorage.Shared.OwnerSettlementProofRules)
 local lines, fail = {}, 0
 local function check(name: string, ok: boolean)
 	if not ok then fail += 1 end
@@ -28,7 +29,22 @@ check("sanitização ignora duplicatas/corrupção", #clean == 1 and clean[1].Ow
 local ownerLedger = {}
 check("sem prova do dono não autoriza", not Rules.Authorized(c, ownerLedger))
 check("registra parcela do dono", Ledger.Record(ownerLedger, "job_1", token, 80, "Owner", 1790000000, "Freios", "Hatch"))
-check("prova do dono autoriza", Rules.Authorized(c, ownerLedger))
+check("C25: ledger antigo sem identidade do worker NÃO autoriza",
+	not Rules.Authorized(c, ownerLedger, {}, 901)
+	and Rules.EvidenceStatus(c, ownerLedger, {}, 901) == "LegacyUnverified")
+local boundProof = OwnerProofs.Make("job_1", token, 901, 80, 275, "Freios", "Hatch", 1790000000)
+check("C25: prova identificando worker autoriza", Rules.Authorized(c,
+	ownerLedger, { boundProof }, 901))
+check("C25: prova de outra pessoa é conflito", not Rules.Authorized(c,
+	ownerLedger, { boundProof }, 903)
+	and Rules.EvidenceStatus(c, ownerLedger, { boundProof }, 903) == "Conflict")
+check("C25: prova divergente nunca recua para ledger", not Rules.Authorized(c,
+	ownerLedger, { OwnerProofs.Make("job_1", token, 901, 80, 276,
+		"Freios", "Hatch", 1790000000) }, 901))
+check("C25: sem workerId não autoriza", not Rules.Authorized(c,
+	ownerLedger, { boundProof }))
+check("C25: sem comprovante nem ledger classifica falta",
+	Rules.EvidenceStatus(c, {}, {}, 901) == "Missing")
 ownerLedger[1].Amount = 81
 check("pagamento divergente não autoriza", not Rules.Authorized(c, ownerLedger))
 ownerLedger[1].Amount, ownerLedger[1].Role = 80, "Worker"

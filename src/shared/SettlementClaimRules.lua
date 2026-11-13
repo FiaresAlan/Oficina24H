@@ -79,8 +79,9 @@ function Claims.Remove(raw: any, jobId: any, token: any): boolean
 	return false
 end
 
--- Prova C14 prevalece, incluindo identidade do contratado. Quando há prova
--- divergente, NÃO recua para o ledger legado de 64 lançamentos.
+-- C25: o extrato do proprietário não identifica o mecânico beneficiário.
+-- Uma linha de ledger legado sem prova vinculada nunca autoriza crédito
+-- automático: a reivindicação continua aberta para auditoria.
 function Claims.Recoverable(claim: any, now: any): boolean
 	return Claims.Valid(claim) and type(now) == "number"
 		and now == now and now - claim.At >= Claims.RecoveryGraceSeconds
@@ -101,15 +102,27 @@ function Claims.Summary(raw: any, now: number): any
 	return summary
 end
 
-function Claims.Authorized(claim: any, ownerLedger: any, ownerProofs: any?, workerId: any?): boolean
-	if not Claims.Valid(claim) then return false end
+function Claims.EvidenceStatus(claim: any, ownerLedger: any, ownerProofs: any?,
+	workerId: any?): string
+	if not Claims.Valid(claim) or not integer(workerId, -1e15, 1e15)
+		or workerId == 0 then return "Invalid" end
 	local proof = OwnerProofs.Find(ownerProofs, claim.JobId, claim.Token)
-	if proof then return OwnerProofs.Authorizes(proof, claim, workerId) end
-	-- Compatibilidade com pagamentos antigos (C12/C13, antes do schema 7).
+	if proof then
+		return OwnerProofs.Authorizes(proof, claim, workerId) and "Verified" or "Conflict"
+	end
 	local entry = Ledger.Find(ownerLedger, claim.JobId, claim.Token)
-	return type(entry) == "table" and entry.Role == "Owner"
-		and entry.Amount == claim.OwnerPay
-		and entry.Service == claim.Service and entry.Vehicle == claim.Vehicle
+	if not entry then return "Missing" end
+	if entry.Role ~= "Owner" or entry.Amount ~= claim.OwnerPay
+		or entry.Service ~= claim.Service or entry.Vehicle ~= claim.Vehicle then
+		return "Conflict"
+	end
+	-- Mesmo JobId/token/valor/serviço no extrato NÃO identifica beneficiário.
+	return "LegacyUnverified"
+end
+
+function Claims.Authorized(claim: any, ownerLedger: any, ownerProofs: any?,
+	workerId: any?): boolean
+	return Claims.EvidenceStatus(claim, ownerLedger, ownerProofs, workerId) == "Verified"
 end
 
 return Claims

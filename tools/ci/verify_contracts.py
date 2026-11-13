@@ -998,6 +998,25 @@ check("V2-09: regressao de abuso, dupla venda e salvamento escrita",
     and 'estoque ausente' in used_test)
 
 
+used_visual=text(ROOT/"src"/"server"/"V2UsedMarketDisplay.lua")
+used_visual_test=text(TOOLS/"V2UsedMarketDisplayTest.luau")
+check("V2-09: vitrine de patio sem substituir carros de OS, limpeza e prompts",
+    all(k in used_visual for k in (
+        "function Display.Sync", "function Display.Clear",
+        "Safety.StripScripts(cloned)", "descendant.CanCollide = false",
+        "descendant.CanTouch = false", "descendant.CanQuery = false",
+        'model.Name = "V2UsedMarketDisplay"', 'prompt.Triggered:Connect',
+        "Rules" if False else "UsedRules.Sanitize",
+        'active[player.UserId] = model',
+    )) and "V2UsedMarketDisplay.Sync(player, profile" in workshop
+    and "V2UsedMarketDisplay.Clear(userId)" in workshop)
+check("V2-09: preview fisico testado em Edit e registrado",
+    (TOOLS/"V2UsedMarketDisplayTest.luau").is_file()
+    and '"V2UsedMarketDisplayTest"' in runner
+    and 'vitrine nao reivindica bay/OS' in used_visual_test
+    and "nao duplica carro" in used_visual_test)
+
+
 print(f"\nStatic checks: {passed} passed, {len(failures)} failed")
 if failures:
     raise SystemExit(1)

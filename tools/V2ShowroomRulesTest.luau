@@ -75,6 +75,7 @@ test("repetição de showcase não duplica reputação",
 local afterReopen=R.Sanitize(q.UsedMarket)
 test("relogin preserva UID, material, rodas e marca da reputação",
     afterReopen.Showroom[1].Uid==uid
+    and afterReopen.Showroom[1].Style=="Graphite"
     and afterReopen.Showroom[1].Finish=="Matte"
     and afterReopen.Showroom[1].Wheels=="Sport"
     and afterReopen.ShowroomSeen.Hatch)

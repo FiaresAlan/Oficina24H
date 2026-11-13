@@ -182,7 +182,7 @@ local function detectWheels(model: Model, root: BasePart, parts: { BasePart }): 
 	return groups
 end
 
-local function detectHood(model: Model, root: BasePart, parts: { BasePart }): Hood?
+local function detectHood(_model: Model, root: BasePart, parts: { BasePart }): Hood?
 	local hoodParts = {}
 	for _, p in ipairs(parts) do
 		local n = string.lower(p.Name)

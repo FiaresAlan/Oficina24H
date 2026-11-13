@@ -24,3 +24,6 @@ docs/hud_comparacao.png
 # Área de trabalho de assets (GLBs de terceiros, prévias, downloads): não versionar
 _assets_work/
 pipeline/asset_ids_antigos.json
+
+# Pacotes brutos de terceiros baixados pelo proprietário (licenças CGTrader/Shuriken não permitem redistribuir)
+assets/Assets v1 Baixados/

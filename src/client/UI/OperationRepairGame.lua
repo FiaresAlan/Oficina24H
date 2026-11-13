@@ -2,7 +2,6 @@
 -- Quinze serviços com interações distintas por especialidade: três pilotos e doze receitas.
 -- O servidor avalia todos os valores, fases e consequências; esta UI apenas coleta decisões.
 -- O minijogo legado permanece como fallback para defeitos desconhecidos.
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Store = require(script.Parent.Store)
 local HudParts = require(script.Parent.HudParts)
 local Kit = require(script.Parent.Kit)

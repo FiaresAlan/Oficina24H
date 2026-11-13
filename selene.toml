@@ -1,0 +1,6 @@
+std = "roblox"
+
+# Estilo do projeto: várias instruções curtas por linha e UDim2.new(scale, offset) são intencionais.
+[lints]
+multiple_statements = "allow"
+roblox_manual_fromscale_or_fromoffset = "allow"

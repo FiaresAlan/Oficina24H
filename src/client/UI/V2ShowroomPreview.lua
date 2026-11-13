@@ -72,7 +72,8 @@ local function thumbnail(parent: Instance,title: string,
     local folder=ReplicatedStorage:FindFirstChild("VehiclePreviews")
     local template=modelName and folder and folder:FindFirstChild(modelName)
     local carModel: Model
-    if template and template:IsA("Model") then
+    if template and template:IsA("Model") and template.Archivable
+        and template:FindFirstChildWhichIsA("BasePart",true) then
         carModel=template:Clone()
     else
         carModel=fallback()

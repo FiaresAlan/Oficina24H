@@ -111,10 +111,12 @@ check("receipt bounded by time and per-user count",
 check("receipt returns defensive copy", "return clonePayload(entry.Payload)" in receipt_rules)
 check("receipt tests in runner", '"RepairReceiptTest"' in runner
       and (TOOLS / "RepairReceiptTest.luau").is_file())
-check("server stores settled receipt before notifying",
+check("server keeps receipt before delivering after durable save",
       "RepairReceiptRules.Remember(receipts, jobId, session.Token, receiptPayload" in workshop
-      and workshop.index("RepairReceiptRules.Remember(receipts, jobId, session.Token, receiptPayload")
-      < workshop.index('eventSender(entry.Worker, "RepairDone", entry.Receipt)'))
+      and 'entry.Receipt = receiptPayload' not in workshop
+      and 'entry.Delegated, entry.Receipt = delegated, receiptPayload' in workshop
+      and "return confirmDelivery(entry)" in workshop
+      and 'eventSender(entry.Worker, "RepairDone", entry.Receipt)' in workshop)
 check("server duplicate FinishRepair returns receipt without settlement",
       "Entrega já concluída. Comprovante recuperado." in workshop)
 check("server read-only outcome query",

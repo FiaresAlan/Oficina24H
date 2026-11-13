@@ -1014,8 +1014,8 @@ local function retryDelivery(entry: any)
         -- Cada Save já faz retentativas com backoff; limitar a repetição externa.
         for attempt = 1, 6 do
             task.wait(math.min(8 + attempt * 4, 30))
-            if SettlingRepairs[entry.WorkerUserId] ~= entry
-                or entry.Worker.Parent ~= Players or entry.Owner.Parent ~= Players then return end
+            if SettlingRepairs[entry.WorkerUserId] ~= entry or entry.Worker.Parent ~= Players
+                or (not entry.OwnerSaved and entry.Owner.Parent ~= Players) then return end
             if persistDelivery(entry) then return end
         end
         if SettlingRepairs[entry.WorkerUserId] == entry and eventSender

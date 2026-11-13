@@ -32,7 +32,7 @@ A aplicação está limitada, por enquanto, aos três carros piloto com rig V2-0
 
 ## Segurança, avaliação e retrabalho
 
-Os ProximityPrompts são criados pelo servidor só depois do diagnóstico. Cada comando verifica ator autorizado, OS, peça, equipamento e sequência; repetição, salto de etapa, veículo em movimento e falta de estoque são recusados. Os gestos físicos não criam XP, saldo nem peças. O consumo de materiais e o pagamento continuam exclusivamente na liquidação comprovada da V1, com controles contra replay.
+Os ProximityPrompts são criados pelo servidor só depois do diagnóstico. Cada comando verifica ator autorizado, OS, peça, equipamento e sequência; repetição, salto de etapa, veículo em movimento e falta de estoque são recusados. Os gestos físicos não criam XP, saldo nem peças. O consumo de materiais e o pagamento continuam exclusivamente na liquidação comprovada da V1, com controles contra replay. Nos serviços de roda/suspensão, o passo de apoio eleva fisicamente o carro pelo elevador do box; a roda só pode ser manipulada após a estabilização confirmada no servidor. Um box sem elevador válido não libera a desmontagem. O suporte permanece até a saída/cancelamento seguro da OS.
 
 O usuário pode cancelar a tentativa antes de confirmar o reparo sem consumos, e repetir. O botão de reinício de sequências agora usa o Reset confirmado pelo servidor. O recap indica decisões imprecisas que reduzem qualidade e recompensa. Retrabalho após pagamento ou teste pós-reparo pertence à V2-13 opcional e não é simulado aqui.
 

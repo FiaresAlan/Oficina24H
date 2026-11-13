@@ -276,8 +276,23 @@ local function refresh(now: number,focus: Vector3,budget: any)
     for id in pairs(live) do
         if selectedRoutes[id]==nil then release(id,now+3) end
     end
+    if courierActive and live[Rules.Courier.Id]==nil then
+        -- Um evento confirmado (compra REAL de peças) tem preferência sobre
+        -- qualquer figurante. Nunca ultrapassa o teto global de malhas.
+        local count,worstId,farthest=0,nil,-1
+        for id,actor in pairs(live) do
+            count+=1
+            if id~=Rules.Courier.Id then
+                local distance=Rules.Distance(actor.Route,focus)
+                if distance>farthest then farthest=distance;worstId=id end
+            end
+        end
+        if count>=Rules.MaxActive and worstId then
+            release(worstId,now+4)
+        end
+        spawn(Rules.Courier,focus,now)
+    end
     for _,route in ipairs(routes) do spawn(route,focus,now) end
-    if courierActive then spawn(Rules.Courier,focus,now) end
 end
 
 local actionEvent=ReplicatedStorage:WaitForChild("OficinaRemotes",30)

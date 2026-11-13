@@ -87,7 +87,10 @@ check("server validates repair actions", "function WorkshopService.RepairAction"
 check("remote sends revision acknowledgements", '"RepairActionAck"' in main and '"RepairAction"' in main)
 check("client receives server ack", "Store.RepairActionAck.Event:Connect" in ui)
 check("operation UI attaches session token", "input.Token = sessionToken" in ui)
-check("legacy timing repair remains supported", "RepairRules.Evaluate(session.Plan, presses, elapsed, mods)" in workshop)
+check("timing repair remains supported with durable session token",
+      "RepairRules.Evaluate(session.Plan, presses, elapsed, mods)" in workshop
+      and "Token = game:GetService(\"HttpService\"):GenerateGUID(false)" in workshop
+      and "presses.Token = sessionToken" in text(CLIENT / "UI" / "RepairGame.lua"))
 
 # C6: a mesma ação aceita pode ser reenviada com segurança sob alta latência.
 session_rules = text(SHARED / "RepairSessionRules.lua")
@@ -126,6 +129,13 @@ check("server queries do not call FinishRepair",
       'action == "CheckRepairResult"' in main and '"RepairOutcome"' in main)
 check("client consumes private repair outcome", "Store.RepairOutcome.Event:Connect" in ui
       and "Store.RepairOutcome:Fire(payload)" in store)
+check("timing UI correlates results and queries durable outcome",
+      'Store.Act("CheckRepairResult", { JobId = jobId, Token = sessionToken })'
+      in text(CLIENT / "UI" / "RepairGame.lua")
+      and 'payload.Token ~= sessionToken' in text(CLIENT / "UI" / "RepairGame.lua"))
+check("both repair modes use durable delivery path, no direct coin fallback",
+      'local ownerSaved = DataService.Save(workshopOwner)' not in workshop
+      and 'DataService.AddCoins(player, actorPay' not in workshop)
 check("client checks receipt before resending a finish",
       'Store.Act("CheckRepairResult"' in ui
       and 'payload.Status == "Completed"' in ui and 'payload.Status == "Active"' in ui)

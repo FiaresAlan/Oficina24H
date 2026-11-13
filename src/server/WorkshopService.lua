@@ -904,7 +904,7 @@ function WorkshopService.StartRepair(player: Player, jobId: string, assist: bool
     Repairs[player.UserId] = {
         JobId = job.Id, Plan = plan, StartedAt = os.clock(),
         Progress = plan.Kind == "Operations" and RepairActionRules.New(plan) or nil,
-        Token = plan.Kind == "Operations" and game:GetService("HttpService"):GenerateGUID(false) or nil,
+        Token = game:GetService("HttpService"):GenerateGUID(false), -- timing e operações têm a mesma garantia de entrega
     }
     VehicleService.SetRepairing(job.Id, true) -- carro sobe no elevador / capô abre / pneu sai (efeitos no cliente)
     if eventSender then
@@ -1061,17 +1061,15 @@ function WorkshopService.FinishRepair(player: Player, jobId: string, presses: an
         end
         return false, "Nenhum reparo em andamento."
     end
-    -- Um pacote atrasado de uma sessão anterior não pode cancelar a sessão atual.
-    if session.Plan.Kind == "Operations"
-        and (type(presses) ~= "table" or type(presses.Token) ~= "string"
-            or presses.Token ~= session.Token) then
+    -- Todo reparo exige o seu token (inclusive o antigo minijogo de timing).
+    -- Pacote atrasado de outro reparo jamais consome peças da sessão atual.
+    if type(presses) ~= "table" or type(presses.Token) ~= "string"
+        or presses.Token ~= session.Token then
         return false, "Identificador de sessão inválido."
     end
     Repairs[player.UserId] = nil -- sessão de uso único: reenviar não paga duas vezes
     local now = os.clock()
-    if type(session.Token) == "string" then
-        SettlingRepairs[player.UserId] = { JobId = jobId, Token = session.Token, At = now }
-    end
+    SettlingRepairs[player.UserId] = { JobId = jobId, Token = session.Token, At = now }
     local function finishFailure(message: string): (boolean, string)
         SettlingRepairs[player.UserId] = nil
         VehicleService.SetRepairing(jobId, false)
@@ -1137,7 +1135,7 @@ function WorkshopService.FinishRepair(player: Player, jobId: string, presses: an
     if not DataService.HasParts(workshopOwner, defect.Parts) then
         return finishFailure("Faltam peças na oficina.")
     end
-    if delegated and workshopOwner ~= player and type(session.Token) == "string" then
+    if delegated and workshopOwner ~= player then
         local staged = DataService.StageWorkerClaim(player, workshopOwner.UserId,
             jobId, session.Token, ownerPay, actorPay, xp, result.Quality,
             service.DisplayName, job.VehicleName, defect.Specialization)
@@ -1147,7 +1145,7 @@ function WorkshopService.FinishRepair(player: Player, jobId: string, presses: an
     end
     -- As peças pertencem sempre ao dono da OS.
     if not DataService.TakeParts(workshopOwner, defect.Parts) then
-        if delegated and type(session.Token) == "string" then
+        if delegated then
             DataService.DiscardWorkerClaim(player, jobId, session.Token)
         end
         return finishFailure("Faltam peças na oficina.")
@@ -1163,9 +1161,8 @@ function WorkshopService.FinishRepair(player: Player, jobId: string, presses: an
             breakCombo(player.UserId)
         end
     end
-    -- O crédito é escrito no perfil junto da marca idempotente; não existe um
-    -- comando financeiro público. O modo timing legado mantém a rotina anterior.
-    if type(session.Token) == "string" then
+    -- Tanto operações quanto timing usam ledger durável, token e idempotência.
+    do
         local role = delegated and "Worker" or "Owner"
         if not DataService.CreditRepairOnce(player, jobId, session.Token, actorPay,
             role, service.DisplayName, job.VehicleName) then
@@ -1177,11 +1174,6 @@ function WorkshopService.FinishRepair(player: Player, jobId: string, presses: an
                 warn("[WorkshopService] Falha ao registrar parte do dono:", jobId, workshopOwner.UserId)
             end
         end
-    elseif delegated then
-        DataService.AddCoins(player, actorPay, "Reparo contratado: " .. service.DisplayName)
-        DataService.AddCoins(workshopOwner, ownerPay, "Reparo colaborativo: " .. service.DisplayName)
-    else
-        DataService.AddCoins(player, actorPay, "Serviço: " .. service.DisplayName)
     end
     if delegated then
         player:SetAttribute("CollaborationOwnerUserId", nil)
@@ -1205,7 +1197,7 @@ function WorkshopService.FinishRepair(player: Player, jobId: string, presses: an
         Tip = delegated and 0 or tip, Price = delegated and actorPay or price,
         XP = xp, Stars = stars, Combo = combo, NextCombo = delegated and 1 or comboMultiplier(player.UserId),
     }
-    if type(session.Token) == "string" then
+    do
         -- Mesmo perfil DataStore: marca de crédito e recibo seguem a mesma gravação.
         DataService.AttachRepairReceipt(player, jobId, session.Token, receiptPayload)
         if delegated and workshopOwner ~= player then
@@ -1225,7 +1217,7 @@ function WorkshopService.FinishRepair(player: Player, jobId: string, presses: an
     -- C10: nenhum RepairDone enquanto alguma parcela não tiver sido persistida.
     -- C11: salvamento com retentativa controlada; não reaplica saldo/peças/XP.
     funnel(workshopOwner, "Repaired")
-    if type(session.Token) == "string" then
+    do
         local entry = SettlementDeliveryRules.New(jobId, session.Token,
             workshopOwner.UserId, player.UserId)
         if not entry then
@@ -1249,25 +1241,6 @@ function WorkshopService.FinishRepair(player: Player, jobId: string, presses: an
             end
             retryDelivery(entry)
             return false, "Pagamento em processamento: aguardando confirmação do DataStore."
-        end
-    else
-        -- Caminho legado do minijogo timing, sem token; permanece sem recibo durável.
-        local ownerSaved = DataService.Save(workshopOwner)
-        local workerSaved = workshopOwner == player and ownerSaved or DataService.Save(player)
-        SettlingRepairs[player.UserId] = nil
-        if not ownerSaved or not workerSaved then
-            warn("[WorkshopService] Minijogo legado: salvamento não confirmado:", jobId)
-            return false, "Reparo executado, mas o salvamento falhou. Evite sair."
-        end
-        if eventSender then
-            eventSender(player, "RepairDone", receiptPayload)
-            if delegated then
-                eventSender(workshopOwner, "Notice", {
-                    Message = string.format("%s concluiu %s com %d%% de qualidade: sua parte foi %d moedas.",
-                        player.DisplayName, service.DisplayName, result.Quality, ownerPay),
-                    Success = true,
-                })
-            end
         end
     end
     if delegated then

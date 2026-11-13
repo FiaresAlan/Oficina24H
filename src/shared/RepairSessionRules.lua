@@ -15,16 +15,14 @@ function RepairSessionRules.IsActive(session: any?, now: number, maxSeconds: num
 	return elapsed >= 0 and elapsed <= maxSeconds
 end
 
--- Cancelamento atrasado de um painel antigo não deve derrubar um novo reparo.
--- Sessões de operações têm token obrigatório; o minijogo timing mantém compatibilidade.
+-- Cancelamento atrasado de qualquer painel (timing ou operações) nunca derruba sessão nova.
+-- Um estado sem token é inválido; não criar exceções para reparos legacy.
 function RepairSessionRules.CanCancel(session: any?, jobId: any, token: any): boolean
 	if session == nil then return true end
 	if type(session) ~= "table" then return false end
 	if jobId ~= nil and jobId ~= session.JobId then return false end
-	if session.Token ~= nil then
-		return type(token) == "string" and token == session.Token and jobId == session.JobId
-	end
-	return true
+	return type(session.Token) == "string" and type(token) == "string"
+		and token == session.Token and jobId == session.JobId
 end
 
 return RepairSessionRules

@@ -976,6 +976,16 @@ function DataService.RequestSupply(player: Player, needed: any): (boolean, strin
     return true, "Lista atualizada. Compre as peças na Loja de Autopeças."
 end
 
+-- Descarte explicito de wishlist: nenhuma transacao financeira nem estoque muda.
+function DataService.ClearSupplyRequests(player: Player): (boolean, string)
+    local profile = Profiles[player.UserId]
+    if not profile then return false, "Perfil indisponível." end
+    if next(profile.SupplyRequests) == nil then return false, "Lista já está vazia." end
+    profile.SupplyRequests = {}
+    Dirty[player.UserId] = true
+    return true, "Lista de compras descartada sem alterar estoque ou saldo."
+end
+
 -- Devolve true se o estoque cobre TODAS as peças pedidas ({ [partId] = quantidade }).
 function DataService.HasParts(player: Player, needed: { [string]: number }?): boolean
 	local profile = Profiles[player.UserId]

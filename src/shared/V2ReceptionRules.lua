@@ -61,6 +61,25 @@ function Rules.MissingParts(parts: any, stock: any): { [string]: number }
     return missing
 end
 
+-- Soma a necessidade dos jobs diagnosticados, com a mesma peça podendo atender
+-- múltiplas OS. Nunca consulta/replica o defeito de uma ordem não diagnosticada.
+function Rules.AggregateMissing(openJobs: any, ownerId: number, stock: any): { [string]: number }
+    local required: { [string]: number } = {}
+    if type(openJobs) ~= "table" then return required end
+    for _, job in pairs(openJobs) do
+        if type(job) == "table" and job.OwnerUserId == ownerId
+            and job.Status == "InProgress" and job.Diagnosed == true then
+            local defect = type(job.DefectId) == "string" and Catalog.Defects[job.DefectId] or nil
+            for partId, qty in pairs(defect and defect.Parts or {}) do
+                if type(qty) == "number" and qty > 0 and qty % 1 == 0 then
+                    required[partId] = math.min(100, (required[partId] or 0) + qty)
+                end
+            end
+        end
+    end
+    return Rules.MissingParts(required, stock)
+end
+
 -- Projecao atual das pecas, visivel SOMENTE apos o diagnostico.
 -- Nao inclui mao-de-obra, salario, aluguel ou custo historico: nao e lucro liquido.
 function Rules.EstimatedPartsCost(parts: any): number

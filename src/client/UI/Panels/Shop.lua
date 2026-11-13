@@ -362,7 +362,12 @@ function Shop.new(parent: Instance)
                     cartOpen = true
                     refresh()
                 end)
-            load.Position = UDim2.fromOffset(10, 130)
+            load.Position = UDim2.fromOffset(10, 94)
+            local clear = PanelKit.button(requestCard, "DESCARTAR LISTA", "dark",
+                Vector2.new(130, 40), function()
+                    Store.Act("ClearSupplyRequests", {})
+                end)
+            clear.Position = UDim2.fromOffset(10, 144)
         end
         for _, p in ipairs(list) do
             if categoryFilter == "all" or p.Category == categoryFilter then

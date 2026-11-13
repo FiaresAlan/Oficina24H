@@ -606,6 +606,15 @@ check("V2-02: wishlist so limpa em pagamento confirmado",
     and "DataService.FulfillSupplyRequest(player, partId, quantity)" in workshop
     and "V2SupplyRules.OnPurchase(profile.SupplyRequests" in data_service)
 
+check("V2-02: compras concorrentes somadas sem revelar OS nao diagnosticada",
+    "function Rules.AggregateMissing" in v2_reception
+    and "V2ReceptionRules.AggregateMissing(Jobs, player.UserId, profile.Parts)" in workshop)
+check("V2-02: pedido cancelavel sem custo via autorizacao servidor",
+    'function DataService.ClearSupplyRequests' in data_service
+    and 'function WorkshopService.ClearSupplyRequests' in workshop
+    and '"ClearSupplyRequests"' in server
+    and 'Store.Act("ClearSupplyRequests"' in text(CLIENT / "UI" / "Panels" / "Shop.lua"))
+
 print(f"\nStatic checks: {passed} passed, {len(failures)} failed")
 if failures:
     raise SystemExit(1)

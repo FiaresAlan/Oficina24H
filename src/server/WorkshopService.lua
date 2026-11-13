@@ -752,6 +752,15 @@ function WorkshopService.DiscountJob(player: Player, jobId: string, percent: any
     return true, "Proposta registrada: " .. tostring(amount) .. " moedas."
 end
 
+-- O jogador também pode descartar uma lista velha após cancelamento de OS.
+function WorkshopService.ClearSupplyRequests(player: Player): (boolean, string)
+    if not getWorkshop(player) then return false, "Registre a oficina primeiro." end
+    if not nearReception(player) and not nearShop(player) then
+        return false, "Acesse a recepção ou a Loja de Autopeças."
+    end
+    return DataService.ClearSupplyRequests(player)
+end
+
 function WorkshopService.RequestJobSupplies(player: Player, jobId: string): (boolean, string)
     local job = Jobs[jobId]
     if not V2ReceptionRules.CanManage(player.UserId, job, "InProgress") or not job.Diagnosed then
@@ -760,8 +769,8 @@ function WorkshopService.RequestJobSupplies(player: Player, jobId: string): (boo
     if not nearReception(player) then return false, "Use o balcão de recepção da sua oficina." end
     local profile = DataService.Get(player)
     if not profile then return false, "Perfil indisponível." end
-    local required = Catalog.Defects[job.DefectId].Parts or {}
-    local missing = V2ReceptionRules.MissingParts(required, profile.Parts)
+    -- Não considerar apenas a OS clicada: duas ordens podem exigir a MESMA peça.
+    local missing = V2ReceptionRules.AggregateMissing(Jobs, player.UserId, profile.Parts)
     if next(missing) == nil then return false, "Você já tem todas as peças necessárias." end
     return DataService.RequestSupply(player, missing)
 end

@@ -15,6 +15,14 @@ check("agendamento vencido retorna fila",R.Stage(j,{},201)=="Aguardando cliente"
 local v=R.BuildVisible(j,{PriceMultiplier=1},100)
 check("pre-diagnostico nao expoe valor exato",v.PriceGuideMin>0 and v.MissingParts~=nil and v.DiscountPercent==0)
 check("ordenacao por prioridade e antiguidade",R.QueueLess({Priority=1,WaitSeconds=2},{Priority=0,WaitSeconds=300}))
+local needs={
+    {OwnerUserId=31,Status="InProgress",Diagnosed=true,DefectId="WeakBattery"},
+    {OwnerUserId=31,Status="InProgress",Diagnosed=true,DefectId="WeakBattery"},
+    {OwnerUserId=31,Status="InProgress",Diagnosed=false,DefectId="EngineOverhaul"},
+    {OwnerUserId=32,Status="InProgress",Diagnosed=true,DefectId="Overheating"},
+}
+local aggregate=R.AggregateMissing(needs,31,{Battery=1})
+check("duas OS exigem quantidade total com estoque abatido",aggregate.Battery==1 and aggregate.EngineKit==nil and aggregate.Coolant==nil)
 local missing=R.MissingParts({Battery=1,Fuse=2},{Battery=0,Fuse=1})
 check("faltas somente de itens reais",missing.Battery==1 and missing.Fuse==1)
 j.Status="InProgress" j.Diagnosed=true

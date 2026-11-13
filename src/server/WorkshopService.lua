@@ -12,6 +12,7 @@ local RepairSessionRules = require(ReplicatedStorage.Shared.RepairSessionRules)
 local CollaborationRules = require(ReplicatedStorage.Shared.CollaborationRules)
 local RepairOperations = require(ReplicatedStorage.Shared.RepairOperations)
 local RepairActionRules = require(ReplicatedStorage.Shared.RepairActionRules)
+local RepairReceiptRules = require(ReplicatedStorage.Shared.RepairReceiptRules)
 local RepairPrepRules = require(ReplicatedStorage.Shared.RepairPrepRules)
 local DiagnosisRules = require(ReplicatedStorage.Shared.DiagnosisRules)
 local DiagnosisEvidence = require(ReplicatedStorage.Shared.DiagnosisEvidence)
@@ -65,6 +66,10 @@ local nextInviteId = 0
 local ratingNotifier: ((Player, any) -> ())? = nil -- definido por Main (envia o evento "Rated" ao cliente)
 local eventSender: ((Player, string, any) -> ())? = nil -- definido por Main (RepairStart / RepairDone)
 local Repairs: { [number]: { JobId: string, Plan: any, StartedAt: number, Progress: any?, Token: string?, LastActionAt: number? } } = {} -- sessões do minijogo, por jogador
+-- Comprovantes são privados do executor: últimos oito por jogador durante 15 minutos.
+-- Só guardamos um resultado DEPOIS de aplicar consumo, dinheiro, XP e avaliação.
+local RepairReceipts: { [number]: { any } } = {}
+local SettlingRepairs: { [number]: { JobId: string, Token: string, At: number } } = {}
 -- Funcionários por dono: NPCs, ordens em que estão trabalhando e próximo pagamento de salário.
 local Staff: { [number]: { Npcs: { Model }, Busy: { [string]: boolean }, NextPay: number } } = {}
 local RepairAssist: { [number]: boolean } = {} -- preferência de acessibilidade (Reduzir movimento), por jogador
@@ -927,6 +932,32 @@ function WorkshopService.RepairAction(player: Player, jobId: string, token: any,
     return false, reason, session.Progress.Revision
 end
 
+-- Consulta sem efeitos colaterais: não reexecuta o serviço nem altera a economia.
+function WorkshopService.CheckRepairOutcome(player: Player, jobId: any, token: any): any
+    if not RepairReceiptRules.ValidRequest(jobId, token) then
+        return { Status = "Unknown", JobId = "", Token = "" }
+    end
+    local userId = player.UserId
+    local answer = { JobId = jobId, Token = token, Status = "Unknown" }
+    local receipt = RepairReceiptRules.Lookup(RepairReceipts[userId], jobId, token, os.clock())
+    if receipt then
+        answer.Status = "Completed"
+        answer.Result = receipt
+        return answer
+    end
+    local settling = SettlingRepairs[userId]
+    if settling and settling.JobId == jobId and settling.Token == token then
+        answer.Status = "Processing"
+        return answer
+    end
+    local current = Repairs[userId]
+    if current and current.JobId == jobId and current.Token == token
+        and RepairSessionRules.IsActive(current, os.clock(), RepairRules.MaxSessionSeconds) then
+        answer.Status = "Active"
+    end
+    return answer
+end
+
 function WorkshopService.CancelRepair(player: Player, jobId: any?, token: any?)
     local session = Repairs[player.UserId]
     if not RepairSessionRules.CanCancel(session, jobId, token) then
@@ -943,6 +974,14 @@ end
 function WorkshopService.FinishRepair(player: Player, jobId: string, presses: any)
     local session = Repairs[player.UserId]
     if not session or session.JobId ~= jobId then
+        -- A conclusão anterior pode ter sido paga, mas o ACK se perdeu.
+        -- Reenvie o MESMO comprovante; jamais chame as rotinas financeiras outra vez.
+        local token = type(presses) == "table" and presses.Token
+        local receipt = RepairReceiptRules.Lookup(RepairReceipts[player.UserId], jobId, token, os.clock())
+        if receipt then
+            if eventSender then eventSender(player, "RepairDone", receipt) end
+            return true, "Entrega já concluída. Comprovante recuperado."
+        end
         return false, "Nenhum reparo em andamento."
     end
     -- Um pacote atrasado de uma sessão anterior não pode cancelar a sessão atual.
@@ -953,19 +992,24 @@ function WorkshopService.FinishRepair(player: Player, jobId: string, presses: an
     end
     Repairs[player.UserId] = nil -- sessão de uso único: reenviar não paga duas vezes
     local now = os.clock()
+    if type(session.Token) == "string" then
+        SettlingRepairs[player.UserId] = { JobId = jobId, Token = session.Token, At = now }
+    end
+    local function finishFailure(message: string): (boolean, string)
+        SettlingRepairs[player.UserId] = nil
+        VehicleService.SetRepairing(jobId, false)
+        return false, message
+    end
     if not RepairSessionRules.IsActive(session, now, RepairRules.MaxSessionSeconds) then
-        VehicleService.SetRepairing(session.JobId, false)
-        return false, "O reparo demorou demais e foi cancelado."
+        return finishFailure("O reparo demorou demais e foi cancelado.")
     end
     local elapsed = now - session.StartedAt
     local ok, message, job, defect, service, owner = checkRepairable(player, jobId)
     if not ok then
-        VehicleService.SetRepairing(session.JobId, false)
-        return false, message
+        return finishFailure(message)
     end
     if not RepairPrepRules.Ready(job.DefectId, job.PreparationStep) then
-        VehicleService.SetRepairing(session.JobId, false)
-        return false, "A preparação do veículo não foi concluída."
+        return finishFailure("A preparação do veículo não foi concluída.")
     end
     local mods: RepairRules.Mods = {
         Margin = math.max(0, DataService.GetSkillLevel(player, defect.Specialization) - defect.RequiredLevel),
@@ -977,8 +1021,7 @@ function WorkshopService.FinishRepair(player: Player, jobId: string, presses: an
     if session.Plan.Kind == "Operations" then
         local verifiedInput, reason = RepairActionRules.FinalInput(session.Plan, session.Progress)
         if not verifiedInput then
-            VehicleService.SetRepairing(jobId, false)
-            return false, reason or "Ações do reparo incompletas."
+            return finishFailure(reason or "Ações do reparo incompletas.")
         end
         -- presses nunca é fonte de verdade em operações: só conta o estado observado no servidor.
         result = RepairOperations.Evaluate(session.Plan, verifiedInput, elapsed, mods)
@@ -987,12 +1030,12 @@ function WorkshopService.FinishRepair(player: Player, jobId: string, presses: an
     end
     VehicleService.SetRepairing(jobId, false)
     if not result.Valid then
-        return false, "Reparo inválido (" .. tostring(result.Reason) .. ")."
+        return finishFailure("Reparo inválido (" .. tostring(result.Reason) .. ").")
     end
     -- As peças pertencem sempre ao dono da OS, nunca ao estoque particular do contratado.
     local workshopOwner = owner :: Player
     if not DataService.TakeParts(workshopOwner, defect.Parts) then
-        return false, "Faltam peças na oficina."
+        return finishFailure("Faltam peças na oficina.")
     end
 
     -- Autoridade: depois do consumo único da peça, qualquer retransmissão não volta a pagar.
@@ -1034,14 +1077,25 @@ function WorkshopService.FinishRepair(player: Player, jobId: string, presses: an
     })
     local bonus = DataService.CompleteOnboarding(workshopOwner, Config.OnboardingBonus)
     WorkshopService.UpdateSkin(workshopOwner)
+    local receiptPayload = {
+        JobId = jobId, Token = session.Token,
+        Bonus = delegated and 0 or bonus,
+        Quality = result.Quality, Perfect = result.Perfect, Good = result.Good, Miss = result.Miss,
+        Corrected = result.Corrected, Uncorrected = result.Uncorrected, Breakdown = result.Breakdown,
+        Tip = delegated and 0 or tip, Price = delegated and actorPay or price,
+        XP = xp, Stars = stars, Combo = combo, NextCombo = delegated and 1 or comboMultiplier(player.UserId),
+    }
+    if type(session.Token) == "string" then
+        local receipts = RepairReceipts[player.UserId]
+        if not receipts then
+            receipts = {}
+            RepairReceipts[player.UserId] = receipts
+        end
+        RepairReceiptRules.Remember(receipts, jobId, session.Token, receiptPayload, os.clock())
+    end
+    SettlingRepairs[player.UserId] = nil
     if eventSender then
-        eventSender(player, "RepairDone", {
-            Bonus = delegated and 0 or bonus,
-            Quality = result.Quality, Perfect = result.Perfect, Good = result.Good, Miss = result.Miss,
-            Corrected = result.Corrected, Uncorrected = result.Uncorrected, Breakdown = result.Breakdown,
-            Tip = delegated and 0 or tip, Price = delegated and actorPay or price,
-            XP = xp, Stars = stars, Combo = combo, NextCombo = delegated and 1 or comboMultiplier(player.UserId),
-        })
+        eventSender(player, "RepairDone", receiptPayload)
         if delegated then
             eventSender(workshopOwner, "Notice", {
                 Message = string.format("%s concluiu %s com %d%% de qualidade: sua parte foi %d moedas.",
@@ -1921,6 +1975,14 @@ function WorkshopService.Start()
                 if ownerNow then
                     WorkshopService.UpdateSkin(ownerNow) -- ganhos de colaboração e mecânico NPC também contam
                 end
+            end
+            local receiptNow = os.clock()
+            for userId, receipts in pairs(RepairReceipts) do
+                RepairReceiptRules.Prune(receipts, receiptNow)
+                if #receipts == 0 then RepairReceipts[userId] = nil end
+            end
+            for userId, settling in pairs(SettlingRepairs) do
+                if receiptNow - settling.At > 60 then SettlingRepairs[userId] = nil end
             end
             for userId, session in pairs(Repairs) do
                 if not RepairSessionRules.IsActive(session, os.clock(), RepairRules.MaxSessionSeconds + 5) then

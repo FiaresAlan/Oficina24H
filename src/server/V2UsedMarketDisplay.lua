@@ -64,7 +64,8 @@ local function createVehicle(parent: Model, offer: any, car: any,
     local modelName = Catalog.VehicleModels[offer.VehicleName]
     local source = vehicles and modelName and vehicles:FindFirstChild(modelName)
     local displayFrame = frame * CFrame.new(x, 0.8, z) * CFrame.Angles(0, math.pi, 0)
-    if source and source:IsA("Model") then
+    if source and source:IsA("Model") and source.Archivable
+        and source:FindFirstChildWhichIsA("BasePart",true) then
         local clone = source:Clone()
         Safety.StripScripts(clone)
         for _, piece in ipairs(clone:GetDescendants()) do

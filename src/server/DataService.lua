@@ -17,11 +17,13 @@ local SettlementClaimRules = require(ReplicatedStorage.Shared.SettlementClaimRul
 local OwnerSettlementProofRules = require(ReplicatedStorage.Shared.OwnerSettlementProofRules)
 local OwnerProofSweepRules = require(ReplicatedStorage.Shared.OwnerProofSweepRules)
 local WorkerSettlementProofRules = require(ReplicatedStorage.Shared.WorkerSettlementProofRules)
+local WorkerPaidTombstoneRules = require(ReplicatedStorage.Shared.WorkerPaidTombstoneRules)
+local WorkerProofArchiveRules = require(ReplicatedStorage.Shared.WorkerProofArchiveRules)
 local EquipmentUpgradeRules = require(ReplicatedStorage.Shared.EquipmentUpgradeRules)
 
 local DataService = {}
 
-local SCHEMA_VERSION = 9 -- 9: arquivo privado e durável de quitações do contratado
+local SCHEMA_VERSION = 10 -- 10: compactação verificada de quitações com tombstones
 local MAX_ATTEMPTS = 4
 local LOCK_TIMEOUT = 360 -- s; maior que 2 autosaves, para um servidor que caiu não prender o jogador para sempre
 local LOCK_WAIT_STEP = 3
@@ -39,6 +41,9 @@ local LastClaimAlert: { [number]: number } = {}
 local OwnerProofSweepRunning: { [number]: boolean } = {}
 local OwnerProofSweepCursor: { [number]: number } = {}
 local OwnerProofSweepLastAt: { [number]: number } = {}
+local WorkerArchiveRunning: { [number]: boolean } = {}
+local WorkerArchiveCursor: { [number]: number } = {}
+local WorkerArchiveLastAt: { [number]: number } = {}
 local Store: any = nil
 local JobId: string = game.JobId ~= "" and game.JobId or "studio"
 local MemoryMode = false
@@ -95,7 +100,8 @@ local function makeDefaultData(): any
 		RecentRatings = {}, -- últimas 10: { Stars, Service, At, CommentKey, Customer }
 		OrderHistory = {}, -- últimos serviços concluídos: { At, Vehicle, Customer, Service, Price, Stars }
 		RepairLedger = {}, -- C8: extrato limitado de crédito/recibo por JobId+token
-		WorkerSettlementProofs = {}, -- C23: quitações do contratado além do extrato de 64
+		WorkerSettlementProofs = {}, -- C23: quitações detalhadas além do extrato de 64
+		WorkerPaidTombstones = {}, -- C24: identificadores de pagamentos encerrados
 		PendingClaims = {}, -- C12: provas pendentes do mecânico, privadas, nunca replicadas
 		OwnerSettlementProofs = {}, -- C14: comprovantes compactos de repasse
 		Onboarding = { Done = false }, -- guia do 1º atendimento (servidor decide; salvo por jogador)
@@ -212,6 +218,7 @@ local function reconcile(data: any): any
 	data.RepairLedger = SettlementLedgerRules.Sanitize(data.RepairLedger)
 	data.WorkerSettlementProofs = WorkerSettlementProofRules.FromLedger(
 		data.WorkerSettlementProofs, data.RepairLedger)
+	data.WorkerPaidTombstones = WorkerPaidTombstoneRules.Sanitize(data.WorkerPaidTombstones)
 	data.PendingClaims = SettlementClaimRules.Sanitize(data.PendingClaims)
 	data.OwnerSettlementProofs = OwnerSettlementProofRules.Sanitize(data.OwnerSettlementProofs)
 	if type(data.Parts) ~= "table" then
@@ -467,10 +474,15 @@ function DataService.CreditRepairOnce(player: Player, jobId: string, token: stri
 	profile.RepairLedger = profile.RepairLedger or {}
 	profile.OwnerSettlementProofs = profile.OwnerSettlementProofs or {}
 	profile.WorkerSettlementProofs = profile.WorkerSettlementProofs or {}
+	profile.WorkerPaidTombstones = profile.WorkerPaidTombstones or {}
 	local workerProof = nil
 	if role == "Worker" then
+		-- Mesmo um crédito antigo já compactado é imutável: não pagar
+		-- novamente quando o extrato de 64 e o marcador detalhado sumirem.
+		if WorkerPaidTombstoneRules.Find(profile.WorkerPaidTombstones, jobId, token) then return false end
+		local claim = SettlementClaimRules.Find(profile.PendingClaims, jobId, token)
 		workerProof = WorkerSettlementProofRules.Make(jobId, token, amount, os.time(),
-			serviceName, vehicleName)
+			serviceName, vehicleName, claim and claim.OwnerUserId or nil)
 		if not workerProof or not WorkerSettlementProofRules.CanAdd(
 			profile.WorkerSettlementProofs, workerProof) then
 			return false -- marcador ausente ou arquivo cheio: NÃO conceder moedas
@@ -524,7 +536,8 @@ function DataService.HasRepairCredit(player: Player, jobId: any, token: any): bo
 	local profile = Profiles[player.UserId]
 	return profile ~= nil and (
 		SettlementLedgerRules.Find(profile.RepairLedger, jobId, token) ~= nil
-		or WorkerSettlementProofRules.Find(profile.WorkerSettlementProofs, jobId, token) ~= nil)
+		or WorkerSettlementProofRules.Find(profile.WorkerSettlementProofs, jobId, token) ~= nil
+		or WorkerPaidTombstoneRules.Find(profile.WorkerPaidTombstones, jobId, token) ~= nil)
 end
 
 function DataService.HasWorkerProofCapacity(player: Player): boolean
@@ -712,6 +725,68 @@ function DataService.ReconcileOwnerProofs(owner: Player): number
 	end
 	OwnerProofSweepRunning[userId] = nil
 	return persisted and removed or 0
+end
+
+-- C24: compactar somente quitações verificadas, sem apagar a proteção
+-- contra replay. Marcador e tombstone mudam na MESMA chave DataStore.
+-- Não compactar créditos v9 sem OwnerUserId (histórico incompleto).
+function DataService.ReconcileWorkerProofs(worker: Player): number
+	local userId = worker.UserId
+	local profile = Profiles[userId]
+	if not profile or #profile.WorkerSettlementProofs == 0
+		or WorkerArchiveRunning[userId] or MemoryMode or not Store
+		or type(Store.GetAsync) ~= "function" or Removing[userId] then return 0 end
+	if #profile.WorkerPaidTombstones >= WorkerPaidTombstoneRules.MaxEntries then return 0 end
+	local now = os.time()
+	if now - (WorkerArchiveLastAt[userId] or 0) < WorkerProofArchiveRules.MinIntervalSeconds then
+		return 0
+	end
+	WorkerArchiveLastAt[userId] = now
+	WorkerArchiveRunning[userId] = true
+	local proofs = profile.WorkerSettlementProofs
+	local candidates, nextCursor = WorkerProofArchiveRules.Batch(proofs,
+		WorkerArchiveCursor[userId] or 1, now)
+	WorkerArchiveCursor[userId] = nextCursor
+	-- Garantir que saldo, marcador e remoção da claim foram gravados ANTES
+	-- de consultar a liberação do proprietário.
+	if #candidates == 0 or not DataService.Save(worker) then
+		WorkerArchiveRunning[userId] = nil
+		return 0
+	end
+	local compacted = 0
+	for _, marker in ipairs(candidates) do
+		if Profiles[userId] ~= profile or Removing[userId] or worker.Parent ~= Players then break end
+		if #profile.WorkerPaidTombstones >= WorkerPaidTombstoneRules.MaxEntries then break end
+		local ok, ownerRaw = pcall(function()
+			return Store:GetAsync(keyFor(marker.OwnerUserId))
+		end)
+		if ok and WorkerProofArchiveRules.CanCompact(marker, ownerRaw,
+			profile.PendingClaims, marker.OwnerUserId)
+			and Profiles[userId] == profile and worker.Parent == Players and not Removing[userId] then
+			local current = WorkerSettlementProofRules.Find(proofs, marker.JobId, marker.Token)
+			if current and current.OwnerUserId == marker.OwnerUserId
+				and current.Amount == marker.Amount and current.At == marker.At
+				and current.Service == marker.Service and current.Vehicle == marker.Vehicle
+				and WorkerProofArchiveRules.CanCompact(current, ownerRaw,
+					profile.PendingClaims, marker.OwnerUserId)
+				and WorkerPaidTombstoneRules.Compact(proofs, profile.WorkerPaidTombstones,
+					marker.JobId, marker.Token) then
+				Dirty[userId] = true
+				compacted += 1
+			end
+		elseif not ok then
+			warn("[DataService] C24: falha ao verificar quitação com proprietário; prova preservada:", userId)
+		end
+	end
+	if compacted > 0 and Profiles[userId] == profile and not Removing[userId] then
+		if not DataService.Save(worker) then
+			warn("[DataService] C24: compactação não confirmada no DataStore:", userId)
+			WorkerArchiveRunning[userId] = nil
+			return 0
+		end
+	end
+	WorkerArchiveRunning[userId] = nil
+	return compacted
 end
 
 -- Encerra o guia do 1º atendimento. Com `bonus` (serviço concluído de verdade) paga uma única vez; pular não paga.
@@ -1026,6 +1101,13 @@ function DataService.Load(player: Player)
 	if #profile.PendingClaims > 0 then
 		task.spawn(DataService.ReconcileWorkerClaims, player)
 	end
+	if #profile.WorkerSettlementProofs > 0 then
+		task.delay(20, function()
+			if Profiles[userId] == profile and player.Parent == Players then
+				DataService.ReconcileWorkerProofs(player)
+			end
+		end)
+	end
 	if #profile.OwnerSettlementProofs > 0 then
 		-- Tempo para o join/estado inicial estabilizar; não esperar sweep para jogar.
 		task.delay(15, function()
@@ -1077,6 +1159,8 @@ function DataService.Remove(player: Player)
 		LastClaimAlert[userId] = nil
 		OwnerProofSweepCursor[userId] = nil
 		OwnerProofSweepLastAt[userId] = nil
+		WorkerArchiveCursor[userId] = nil
+		WorkerArchiveLastAt[userId] = nil
 	end
 	Removing[userId] = nil
 end
@@ -1096,6 +1180,7 @@ function DataService.Start()
 				task.spawn(DataService.Save, player) -- sempre grava: renova a trava de sessão
 				task.spawn(DataService.ReconcileWorkerClaims, player) -- recuperação C13 sob trava da própria conta
 				task.spawn(DataService.ReconcileOwnerProofs, player) -- C22: comprovantes de ex-colaboradores
+				task.spawn(DataService.ReconcileWorkerProofs, player) -- C24: compactar quitações confirmadas
 			end
 		end
 	end)
@@ -1130,6 +1215,11 @@ end
 function DataService._resetProofSweepForTesting(userId: number)
 	OwnerProofSweepLastAt[userId] = nil
 	OwnerProofSweepCursor[userId] = nil
+end
+
+function DataService._resetWorkerArchiveForTesting(userId: number)
+	WorkerArchiveLastAt[userId] = nil
+	WorkerArchiveCursor[userId] = nil
 end
 
 function DataService._peekProfile(userId: number): any

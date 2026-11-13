@@ -303,6 +303,31 @@ check("C23: recovery does not discard claim after credit failure",
 check("C23: test suite registered",
       '"WorkerSettlementProofRulesTest"' in runner
       and (TOOLS / "WorkerSettlementProofRulesTest.luau").is_file())
+archive = text(SHARED / "WorkerProofArchiveRules.lua")
+tombs = text(SHARED / "WorkerPaidTombstoneRules.lua")
+check("C24: compact credit markers retain permanent replay tombstone",
+      "Tombstones.MaxEntries = 8192" in tombs
+      and "function Tombstones.Compact" in tombs
+      and "table.insert(raw, { JobId = jobId, Token = token })" in tombs
+      and "WorkerPaidTombstoneRules.Find(profile.WorkerPaidTombstones, jobId, token)" in data_service)
+check("C24: no compaction while worker has claim or owner still has proof",
+      "function Archive.CanCompact" in archive
+      and "Claims.Find(workerPending, marker.JobId, marker.Token)" in archive
+      and "OwnerProofs.Find(ownerRaw.OwnerSettlementProofs, marker.JobId, marker.Token) == nil" in archive)
+check("C24: verify durable owner data, with limited reads and two worker saves",
+      "Store:GetAsync(keyFor(marker.OwnerUserId))" in data_service
+      and "WorkerProofArchiveRules.MinIntervalSeconds" in data_service
+      and "Archive.MaxReadsPerPass = 4" in archive
+      and "WorkerPaidTombstoneRules.Compact(proofs, profile.WorkerPaidTombstones," in data_service)
+check("C24: schema v10 private tombstones and scheduled reconciliation",
+      "local SCHEMA_VERSION = 10" in data_service
+      and "WorkerPaidTombstones = {}" in data_service
+      and "WorkerPaidTombstoneRules.Sanitize(data.WorkerPaidTombstones)" in data_service
+      and "profileView.WorkerPaidTombstones = nil" in workshop
+      and "task.spawn(DataService.ReconcileWorkerProofs, player)" in data_service)
+check("C24: test suite registered",
+      '"WorkerProofArchiveRulesTest"' in runner
+      and (TOOLS / "WorkerProofArchiveRulesTest.luau").is_file())
 # C16/C17: upgrades persistentes e pads físicos autorizados no servidor.
 equipment_rules = text(SHARED / "EquipmentUpgradeRules.lua")
 pad_service = text(ROOT / "src" / "server" / "EquipmentUpgradePads.lua")

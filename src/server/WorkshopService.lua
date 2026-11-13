@@ -550,6 +550,7 @@ function WorkshopService.GetSnapshot(player: Player)
         profileView.PendingClaims = nil -- tokens e referências financeiras nunca chegam ao cliente
         profileView.OwnerSettlementProofs = nil -- arquivo de provas não replicado
         profileView.WorkerSettlementProofs = nil -- quitações privadas C23: não expor tokens
+        profileView.WorkerPaidTombstones = nil -- C24: identificadores financeiros privados
     end
     return {
         Ranking = CustomerRules.Rank(ranking),

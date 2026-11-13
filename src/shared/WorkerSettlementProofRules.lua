@@ -16,12 +16,14 @@ function Paid.Valid(v: any): boolean
 		and whole(v.Amount, 0, 1e8) and whole(v.At, 1, 1e12)
 		and type(v.Service) == "string" and #v.Service <= 64
 		and type(v.Vehicle) == "string" and #v.Vehicle <= 60
+		and (v.OwnerUserId == nil
+			or (whole(v.OwnerUserId, 1, 1e15)))
 end
 
 function Paid.Make(jobId: string, token: string, amount: number, at: number,
-	service: string, vehicle: string): any?
+	service: string, vehicle: string, ownerUserId: number?): any?
 	local v = { JobId = jobId, Token = token, Amount = amount, At = at,
-		Service = service, Vehicle = vehicle }
+		Service = service, Vehicle = vehicle, OwnerUserId = ownerUserId }
 	return Paid.Valid(v) and v or nil
 end
 
@@ -42,7 +44,7 @@ end
 function Paid.Add(raw: any, proof: any): boolean
 	if not Paid.CanAdd(raw, proof) then return false end
 	table.insert(raw, Paid.Make(proof.JobId, proof.Token, proof.Amount,
-		proof.At, proof.Service, proof.Vehicle))
+		proof.At, proof.Service, proof.Vehicle, proof.OwnerUserId))
 	return true
 end
 
@@ -71,7 +73,7 @@ function Paid.Sanitize(raw: any): { any }
 		if #clean >= Paid.MaxEntries then break end
 		if Paid.Valid(entry) and not Paid.Find(clean, entry.JobId, entry.Token) then
 			table.insert(clean, Paid.Make(entry.JobId, entry.Token, entry.Amount,
-				entry.At, entry.Service, entry.Vehicle))
+				entry.At, entry.Service, entry.Vehicle, entry.OwnerUserId))
 		end
 	end
 	return clean

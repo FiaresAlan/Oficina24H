@@ -279,6 +279,29 @@ check("C22: owner sweep runs after load and autosave",
 check("C22: sweep tests in runner",
       '"OwnerProofSweepRulesTest"' in runner
       and (TOOLS / "OwnerProofSweepRulesTest.luau").is_file())
+paid = text(SHARED / "WorkerSettlementProofRules.lua")
+check("C23: worker paid confirmation archive validates and never silently rotates",
+      "Paid.MaxEntries = 2048" in paid and "function Paid.FromLedger" in paid
+      and "function Paid.CanAdd" in paid and "function Paid.Matches" in paid
+      and "while #raw > Paid.MaxEntries" not in paid)
+check("C23: worker confirmation stored with coins and ledger in schema v9",
+      "local SCHEMA_VERSION = 9" in data_service
+      and "WorkerSettlementProofs = {}" in data_service
+      and "WorkerSettlementProofRules.FromLedger" in data_service
+      and "WorkerSettlementProofRules.Add(profile.WorkerSettlementProofs, workerProof)" in data_service
+      and "DataService.AddCoins(player, amount" in data_service)
+check("C23: payouts idempotent even after ledger rotates",
+      "WorkerSettlementProofRules.Find(profile.WorkerSettlementProofs, jobId, token)" in data_service
+      and "DataService.HasWorkerProofCapacity(player)" in workshop)
+check("C23: owner can verify durable paid marker without exposing it to clients",
+      "WorkerProofs.Matches(proof, marker)" in sweep
+      and "profileView.WorkerSettlementProofs = nil" in workshop)
+check("C23: recovery does not discard claim after credit failure",
+      "if DataService.HasRepairCredit(worker, claim.JobId, claim.Token)" in data_service
+      and "and DataService.Save(worker) then" in data_service)
+check("C23: test suite registered",
+      '"WorkerSettlementProofRulesTest"' in runner
+      and (TOOLS / "WorkerSettlementProofRulesTest.luau").is_file())
 # C16/C17: upgrades persistentes e pads físicos autorizados no servidor.
 equipment_rules = text(SHARED / "EquipmentUpgradeRules.lua")
 pad_service = text(ROOT / "src" / "server" / "EquipmentUpgradePads.lua")

@@ -549,6 +549,7 @@ function WorkshopService.GetSnapshot(player: Player)
         profileView.RepairLedger = nil
         profileView.PendingClaims = nil -- tokens e referências financeiras nunca chegam ao cliente
         profileView.OwnerSettlementProofs = nil -- arquivo de provas não replicado
+        profileView.WorkerSettlementProofs = nil -- quitações privadas C23: não expor tokens
     end
     return {
         Ranking = CustomerRules.Rank(ranking),
@@ -1188,6 +1189,9 @@ function WorkshopService.FinishRepair(player: Player, jobId: string, presses: an
     end
     if delegated and workshopOwner ~= player and not DataService.HasOwnerProofCapacity(workshopOwner) then
         return finishFailure("Arquivo de repasses aguardando confirmação está cheio. Aguarde os pagamentos pendentes ou procure suporte.")
+    end
+    if delegated and workshopOwner ~= player and not DataService.HasWorkerProofCapacity(player) then
+        return finishFailure("Arquivo privado do mecânico está cheio. Aguarde regularização antes de concluir outra OS colaborativa.")
     end
     if delegated and workshopOwner ~= player then
         local staged = DataService.StageWorkerClaim(player, workshopOwner.UserId,

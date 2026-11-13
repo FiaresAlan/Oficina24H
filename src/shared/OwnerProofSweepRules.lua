@@ -5,6 +5,7 @@
 local Proofs = require(script.Parent.OwnerSettlementProofRules)
 local Ledger = require(script.Parent.SettlementLedgerRules)
 local Claims = require(script.Parent.SettlementClaimRules)
+local WorkerProofs = require(script.Parent.WorkerSettlementProofRules)
 
 local Sweep = {}
 Sweep.MaxReadsPerPass = 4
@@ -41,9 +42,13 @@ function Sweep.CanRelease(proof: any, workerRaw: any, queriedUserId: any): boole
 	-- Claim ainda presente => pode ser resgate em andamento; jamais retirar.
 	if Claims.Find(workerRaw.PendingClaims, proof.JobId, proof.Token) then return false end
 	local credit = Ledger.Find(workerRaw.RepairLedger, proof.JobId, proof.Token)
-	return type(credit) == "table" and credit.Role == "Worker"
-		and credit.Amount == proof.WorkerPay
-		and credit.Service == proof.Service and credit.Vehicle == proof.Vehicle
+	if type(credit) == "table" and credit.Role == "Worker"
+		and credit.Amount == proof.WorkerPay and credit.Service == proof.Service
+		and credit.Vehicle == proof.Vehicle then return true end
+	-- C23: confirmação independente do extrato comum limitado a 64.
+	-- A prova só entra nesse arquivo junto com o crédito no mesmo Save.
+	local marker = WorkerProofs.Find(workerRaw.WorkerSettlementProofs, proof.JobId, proof.Token)
+	return WorkerProofs.Matches(proof, marker)
 end
 
 return Sweep

@@ -16,11 +16,12 @@ local SettlementLedgerRules = require(ReplicatedStorage.Shared.SettlementLedgerR
 local SettlementClaimRules = require(ReplicatedStorage.Shared.SettlementClaimRules)
 local OwnerSettlementProofRules = require(ReplicatedStorage.Shared.OwnerSettlementProofRules)
 local OwnerProofSweepRules = require(ReplicatedStorage.Shared.OwnerProofSweepRules)
+local WorkerSettlementProofRules = require(ReplicatedStorage.Shared.WorkerSettlementProofRules)
 local EquipmentUpgradeRules = require(ReplicatedStorage.Shared.EquipmentUpgradeRules)
 
 local DataService = {}
 
-local SCHEMA_VERSION = 8 -- 8: evolução de nível dos equipamentos possuídos
+local SCHEMA_VERSION = 9 -- 9: arquivo privado e durável de quitações do contratado
 local MAX_ATTEMPTS = 4
 local LOCK_TIMEOUT = 360 -- s; maior que 2 autosaves, para um servidor que caiu não prender o jogador para sempre
 local LOCK_WAIT_STEP = 3
@@ -93,7 +94,8 @@ local function makeDefaultData(): any
 		RatingSum = 0,
 		RecentRatings = {}, -- últimas 10: { Stars, Service, At, CommentKey, Customer }
 		OrderHistory = {}, -- últimos serviços concluídos: { At, Vehicle, Customer, Service, Price, Stars }
-		RepairLedger = {}, -- C8: crédito e comprovante por JobId+token, no mesmo perfil persistido
+		RepairLedger = {}, -- C8: extrato limitado de crédito/recibo por JobId+token
+		WorkerSettlementProofs = {}, -- C23: quitações do contratado além do extrato de 64
 		PendingClaims = {}, -- C12: provas pendentes do mecânico, privadas, nunca replicadas
 		OwnerSettlementProofs = {}, -- C14: comprovantes compactos de repasse
 		Onboarding = { Done = false }, -- guia do 1º atendimento (servidor decide; salvo por jogador)
@@ -208,6 +210,8 @@ local function reconcile(data: any): any
 	end
 	data.OrderHistory = cleanHistory
 	data.RepairLedger = SettlementLedgerRules.Sanitize(data.RepairLedger)
+	data.WorkerSettlementProofs = WorkerSettlementProofRules.FromLedger(
+		data.WorkerSettlementProofs, data.RepairLedger)
 	data.PendingClaims = SettlementClaimRules.Sanitize(data.PendingClaims)
 	data.OwnerSettlementProofs = OwnerSettlementProofRules.Sanitize(data.OwnerSettlementProofs)
 	if type(data.Parts) ~= "table" then
@@ -462,6 +466,16 @@ function DataService.CreditRepairOnce(player: Player, jobId: string, token: stri
 	if not profile then return false end
 	profile.RepairLedger = profile.RepairLedger or {}
 	profile.OwnerSettlementProofs = profile.OwnerSettlementProofs or {}
+	profile.WorkerSettlementProofs = profile.WorkerSettlementProofs or {}
+	local workerProof = nil
+	if role == "Worker" then
+		workerProof = WorkerSettlementProofRules.Make(jobId, token, amount, os.time(),
+			serviceName, vehicleName)
+		if not workerProof or not WorkerSettlementProofRules.CanAdd(
+			profile.WorkerSettlementProofs, workerProof) then
+			return false -- marcador ausente ou arquivo cheio: NÃO conceder moedas
+		end
+	end
 	local proof = nil
 	if workerUserId ~= nil or workerPay ~= nil then
 		if role ~= "Owner" or type(workerUserId) ~= "number"
@@ -477,6 +491,11 @@ function DataService.CreditRepairOnce(player: Player, jobId: string, token: stri
 	if proof then
 		-- Mesmo perfil DataStore: arquivo de prova, ledger e moedas entram no mesmo Save.
 		OwnerSettlementProofRules.Add(profile.OwnerSettlementProofs, proof)
+	end
+	if workerProof then
+		-- Crédito e marcador do trabalhador são escritos no MESMO perfil e Save.
+		-- Não há yield entre a checagem de capacidade e a inclusão.
+		WorkerSettlementProofRules.Add(profile.WorkerSettlementProofs, workerProof)
 	end
 	DataService.AddCoins(player, amount, "Liquidação de OS: " .. serviceName)
 	Dirty[player.UserId] = true
@@ -503,7 +522,15 @@ end
 
 function DataService.HasRepairCredit(player: Player, jobId: any, token: any): boolean
 	local profile = Profiles[player.UserId]
-	return profile ~= nil and SettlementLedgerRules.Find(profile.RepairLedger, jobId, token) ~= nil
+	return profile ~= nil and (
+		SettlementLedgerRules.Find(profile.RepairLedger, jobId, token) ~= nil
+		or WorkerSettlementProofRules.Find(profile.WorkerSettlementProofs, jobId, token) ~= nil)
+end
+
+function DataService.HasWorkerProofCapacity(player: Player): boolean
+	local profile = Profiles[player.UserId]
+	return profile ~= nil and type(profile.WorkerSettlementProofs) == "table"
+		and #profile.WorkerSettlementProofs < WorkerSettlementProofRules.MaxEntries
 end
 
 function DataService.AttachRepairReceipt(player: Player, jobId: string, token: string,
@@ -609,9 +636,10 @@ function DataService.ReconcileWorkerClaims(worker: Player): number
 					recovered += 1
 					warn("[DataService] Pagamento de contratado restaurado da prova do proprietário:", userId, claim.JobId)
 				end
-				-- Salva saldo+ledger ANTES de descartar a prova. Em erro, claim
-				-- continua disponível e o ledger impede duplo crédito no retry.
-				if DataService.Save(worker) then
+				-- C23: nunca remover a claim se o crédito falhou (ex.: arquivo
+				-- cheio). O marcador durável também protege após giro do ledger.
+				if DataService.HasRepairCredit(worker, claim.JobId, claim.Token)
+					and DataService.Save(worker) then
 					SettlementClaimRules.Remove(profile.PendingClaims, claim.JobId, claim.Token)
 					Dirty[userId] = true
 				end

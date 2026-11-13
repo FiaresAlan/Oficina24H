@@ -1003,11 +1003,11 @@ used_visual_test=text(TOOLS/"V2UsedMarketDisplayTest.luau")
 check("V2-09: vitrine de patio sem substituir carros de OS, limpeza e prompts",
     all(k in used_visual for k in (
         "function Display.Sync", "function Display.Clear",
-        "Safety.StripScripts(cloned)", "descendant.CanCollide = false",
-        "descendant.CanTouch = false", "descendant.CanQuery = false",
-        'model.Name = "V2UsedMarketDisplay"', 'prompt.Triggered:Connect',
-        "Rules" if False else "UsedRules.Sanitize",
-        'active[player.UserId] = model',
+        "Safety.StripScripts(clone)", "piece.CanCollide = false",
+        "piece.CanTouch = false", "piece.CanQuery = false",
+        'or "V2UsedMarketDisplay"', 'prompt.Triggered:Connect',
+        "UsedRules.Sanitize",
+        'active[player.UserId]=createDisplay',
     )) and "V2UsedMarketDisplay.Sync(player, profile" in workshop
     and "V2UsedMarketDisplay.Clear(userId)" in workshop)
 check("V2-09: preview fisico testado em Edit e registrado",
@@ -1015,6 +1015,60 @@ check("V2-09: preview fisico testado em Edit e registrado",
     and '"V2UsedMarketDisplayTest"' in runner
     and 'vitrine nao reivindica bay/OS' in used_visual_test
     and "nao duplica carro" in used_visual_test)
+
+
+
+# V2-10: cosméticos pagos uma vez, showroom finito, primeira exposição
+# com reputação única por variante, sem ação financeira via UI de prévia.
+show_rules=text(SHARED/"V2ShowroomRules.lua")
+show_visual=text(SHARED/"V2ShowroomVisual.lua")
+show_preview=text(CLIENT/"UI"/"V2ShowroomPreview.lua")
+show_test=text(TOOLS/"V2ShowroomRulesTest.luau")
+show_persistence=text(TOOLS/"PersistenceTest.luau")
+check("V2-10: catálogo fechado com preço maior que bônus e limites do showroom",
+    all(k in show_rules for k in (
+        'Rules.MaxShowroom = 2','Rules.MaxUniqueReputation = 3',
+        'function Rules.ValidOption','function Rules.Parse','function Rules.Quote',
+        'function Rules.SaleBonus','function Rules.Spent',
+        'Paint = {','Finish = {','Wheels = {')))
+    and 'Appearance.Quote(category, choice, car)' in used_rules)
+check("V2-10: UID conservado em vitrines com reputação que não repete",
+    all(k in used_rules for k in (
+        'state.ShowroomSeen[variant] = true',
+        'if exhibit.Uid == input then index = i break end',
+        'market.ShowroomSeen[car.Variant] = true',
+        'market.Owned = {}',
+        'operation == "Showcase"',
+        'operation == "Recall"',
+        'operation == "SellExhibit"',
+        'Appearance.Spent(exhibit)',
+        'Appearance.SaleBonus(car)'))
+    and 'planned.ReputationAward > 0' in data_service
+    and 'DataService.AddReputation(player, planned.ReputationAward)' in data_service
+    and 'profile.UsedMarket = planned.Market' in data_service)
+check("V2-10: não altera crédito de OS e showroom fica fora dos boxes",
+    'CreditRepairOnce' not in show_rules + show_visual
+    and 'VehicleService.Spawn' not in used_visual
+    and 'showcases[player.UserId]=displays' in used_visual
+    and 'local positions={{-32,-36},{31,-36}}' in used_visual
+    and 'piece.CanCollide = false' in used_visual)
+check("V2-10: UI preview antes/depois sem enviar seleção antes de confirmar",
+    'function Preview.Pair' in show_preview
+    and 'Visual.Apply(carModel,car)' in show_preview
+    and 'previewChoice[car.Uid]=spec' in finance_ui
+    and 'V2ShowroomPreview.Pair' in finance_ui
+    and '"CONFIRMAR PERSONALIZAÇÃO"' in finance_ui
+    and '"CANCELAR PRÉVIA (GRÁTIS)"' in finance_ui
+    and 'Operation="Customize"' in finance_ui
+    and 'Operation="SellExhibit"' in finance_ui
+    and '"EXIBIR NO SHOWROOM' in finance_ui)
+check("V2-10: suites econômicas, visuais e persistência no runner",
+    all((TOOLS/(name+".luau")).is_file() and ('"'+name+'"') in runner
+        for name in (
+            "V2ShowroomRulesTest","V2ShowroomVisualTest","V2ShowroomDisplayTest"))
+    and 'repetição de showcase não duplica reputação' in show_test
+    and 'reexibir mesma variante não gera mais reputação' in show_test
+    and 'V2-10: showroom não ressurge após venda e reconexão' in show_persistence)
 
 
 print(f"\nStatic checks: {passed} passed, {len(failures)} failed")

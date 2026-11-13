@@ -512,6 +512,26 @@ for relative, cloned_name in (
 check("C30: regressao de sanitizacao registrada no runner",
       '"AssetSafetyRulesTest"' in runner and (TOOLS / "AssetSafetyRulesTest.luau").is_file())
 
+# C31 / G1: estrutura dos modelos reais e validada pelo StudioPlaceAudit.
+asset_integrity = text(SHARED / "AssetIntegrityRules.lua")
+place_audit = text(TOOLS / "StudioPlaceAudit.luau")
+check("C31: estrutural de veiculo, NPC e equipamento",
+      "function Rules.Vehicle" in asset_integrity
+      and "function Rules.Customer" in asset_integrity
+      and "function Rules.Equipment" in asset_integrity)
+check("C31: dimensoes, colisao, R15, genero e sockets",
+      all(x in asset_integrity for x in ("Largura", "Comprimento", "Altura",
+          "Motorista", "Casco", "HumanoidRootPart", "RigType", "Genero",
+          "OficinaSocket_", "Anchored")))
+check("C31: auditoria do place usa regras em 21 veiculos, NPCs e equipamentos",
+      "AssetIntegrityRules.Vehicle(model)" in place_audit
+      and "AssetIntegrityRules.Customer(npc)" in place_audit
+      and "AssetIntegrityRules.Equipment(template)" in place_audit
+      and "listed == 21" in place_audit)
+check("C31: suite nao destrutiva registrada",
+      '"AssetIntegrityRulesTest"' in runner
+      and (TOOLS / "AssetIntegrityRulesTest.luau").is_file())
+
 print(f"\nStatic checks: {passed} passed, {len(failures)} failed")
 if failures:
     raise SystemExit(1)

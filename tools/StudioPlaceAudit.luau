@@ -6,6 +6,7 @@ local Catalog = require(ReplicatedStorage.Shared.Catalog)
 local Evidence = require(ReplicatedStorage.Shared.DiagnosisEvidence)
 local Procedures = require(ReplicatedStorage.Shared.WorkshopProcedures)
 local Operations = require(ReplicatedStorage.Shared.RepairOperations)
+local AssetIntegrityRules = require(ReplicatedStorage.Shared.AssetIntegrityRules)
 local output = {}
 local function check(label, ok)
 	table.insert(output, (ok and "PASS " or "FAIL ") .. label)
@@ -31,26 +32,58 @@ check("biblioteca de modelos de veiculos", vehicles ~= nil)
 local customers = assets and assets:FindFirstChild("Clientes")
 check("biblioteca de NPCs clientes", customers ~= nil)
 local validCustomers = 0
+local customerGender = { M = 0, F = 0 }
 if customers then
-	for _, model in ipairs(customers:GetChildren()) do
-		if model:IsA("Model") and model.PrimaryPart and model:FindFirstChildOfClass("Humanoid") then
+	for _, npc in ipairs(customers:GetChildren()) do
+		local problems = AssetIntegrityRules.Customer(npc)
+		if #problems == 0 then
 			validCustomers += 1
+			local gender = npc:GetAttribute("Genero")
+			customerGender[gender] = (customerGender[gender] or 0) + 1
+		else
+			for _, problem in ipairs(problems) do
+				check("NPC " .. npc.Name .. ": " .. problem, false)
+			end
 		end
 	end
 end
 check("ao menos um cliente NPC funcional", validCustomers >= 1)
-local listed = 0
-local missing = 0
+check("NPCs validos dos dois generos", customerGender.M >= 1 and customerGender.F >= 1)
+
+local listed, validVehicles = 0, 0
 for name, assetName in pairs(Catalog.VehicleModels) do
 	listed += 1
 	local model = vehicles and vehicles:FindFirstChild(assetName)
-	local good = model ~= nil and model:IsA("Model") and model.PrimaryPart ~= nil
-	if not good then
-		missing += 1
-		warn("modelo ausente ou sem PrimaryPart: " .. tostring(name) .. " -> " .. assetName)
+	local problems, alerts = AssetIntegrityRules.Vehicle(model)
+	if #problems == 0 then validVehicles += 1 end
+	for _, problem in ipairs(problems) do
+		check("veiculo " .. tostring(name) .. " (" .. assetName .. "): " .. problem, false)
+	end
+	for _, alert in ipairs(alerts) do
+		warn("veiculo " .. assetName .. ": " .. alert)
 	end
 end
-check("todos modelos do catalogo disponíveis: " .. tostring(listed - missing) .. "/" .. tostring(listed), missing == 0)
+check("21 veiculos catalogados e estruturalmente validos: " .. tostring(validVehicles) .. "/" .. tostring(listed),
+	listed == 21 and validVehicles == listed)
+
+local equipmentFolder = assets and assets:FindFirstChild("Equipamentos")
+local importedEquipment, optionalMissing = 0, 0
+for equipmentId in pairs(Catalog.Equipment) do
+	local template = equipmentFolder and equipmentFolder:FindFirstChild("Eq_" .. equipmentId)
+	if not template then
+		optionalMissing += 1 -- fallback procedural previsto no jogo
+	else
+		importedEquipment += 1
+		for _, problem in ipairs(AssetIntegrityRules.Equipment(template)) do
+			check("equipamento Eq_" .. equipmentId .. ": " .. problem, false)
+		end
+	end
+end
+check("biblioteca de equipamentos: assets reais ou fallback disponivel",
+	importedEquipment + optionalMissing == 11)
+if optionalMissing > 0 then
+	warn(tostring(optionalMissing) .. " equipamentos ausentes; o jogo usara fallback procedural")
+end
 local embeddedScripts = {}
 if assets then
 	for _, item in ipairs(assets:GetDescendants()) do

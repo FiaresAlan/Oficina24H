@@ -234,7 +234,7 @@ check("client result correlated with job and token",
 ledger = text(SHARED / "SettlementLedgerRules.lua")
 data_service = text(ROOT / "src" / "server" / "DataService.lua")
 check("ledger bounded and sanitized", "SettlementLedgerRules.MaxEntries" in ledger and "function SettlementLedgerRules.Sanitize" in ledger)
-check("ledger persists across additive profile schema v12", "local SCHEMA_VERSION = 14" in data_service
+check("ledger persists across additive profile schema v12", "local SCHEMA_VERSION = 15" in data_service
       and "RepairLedger = {}" in data_service
       and "SettlementLedgerRules.Sanitize(data.RepairLedger)" in data_service)
 check("ledger credit idempotency", "function DataService.CreditRepairOnce" in data_service
@@ -392,7 +392,7 @@ check("C23: worker paid confirmation archive validates and never silently rotate
       and "function Paid.CanAdd" in paid and "function Paid.Matches" in paid
       and "while #raw > Paid.MaxEntries" not in paid)
 check("C23: worker confirmation survives schema v12",
-      "local SCHEMA_VERSION = 14" in data_service
+      "local SCHEMA_VERSION = 15" in data_service
       and "WorkerSettlementProofs = {}" in data_service
       and "WorkerSettlementProofRules.FromLedger" in data_service
       and "WorkerSettlementProofRules.Add(profile.WorkerSettlementProofs, workerProof)" in data_service
@@ -426,7 +426,7 @@ check("C24: verify durable owner data, with limited reads and two worker saves",
       and "Archive.MaxReadsPerPass = 4" in archive
       and "WorkerPaidTombstoneRules.Compact(proofs, profile.WorkerPaidTombstones," in data_service)
 check("C24: schema v12 preserves v11 private tombstones and schedules reconciliation",
-      "local SCHEMA_VERSION = 14" in data_service
+      "local SCHEMA_VERSION = 15" in data_service
       and "WorkerPaidTombstones = {}" in data_service
       and "WorkerPaidTombstoneRules.Sanitize(data.WorkerPaidTombstones)" in data_service
       and "data.RepairLedger, data.WorkerPaidTombstones)" in data_service
@@ -743,7 +743,7 @@ nav_v2=text(ROOT / "src" / "server" / "V2StaffNavigator.lua")
 orders_v2=text(CLIENT / "UI" / "Panels" / "Orders.lua")
 server_v2=text(ROOT / "src" / "server" / "Main.server.lua")
 check("V2-05: schema v13 preserves all V1 financial evidence",
-    "SCHEMA_VERSION = 14" in data_service
+    "SCHEMA_VERSION = 15" in data_service
     and "StaffSlots = V2StaffRules.Sanitize(nil)" in data_service
     and "data.StaffSlots = V2StaffRules.Sanitize" in data_service
     and "RepairLedger = {}" in data_service and "PendingClaims = {}" in data_service)
@@ -913,7 +913,7 @@ finance_test=text(TOOLS/"V2FinancialRulesTest.luau")
 finance_persistence=text(TOOLS/"PersistenceTest.luau")
 finance_ui=text(CLIENT/"UI"/"Panels"/"Orders.lua")
 check("V2-08/09: esquema 15 preserva o ledger v14 e inicia caixa categorizado",
-    "SCHEMA_VERSION = 14" in data_service
+    "SCHEMA_VERSION = 15" in data_service
     and "FinanceLedger = V2FinancialRules.New" in data_service
     and "V2FinancialRules.Bootstrap" in data_service
     and "V2FinancialRules.Sanitize" in data_service

@@ -947,9 +947,21 @@ function DataService.AddParts(player: Player, partId: string, amount: number): b
 		return false
 	end
 		profile.Parts[partId] = (profile.Parts[partId] or 0) + n
-	profile.SupplyRequests = V2SupplyRules.OnPurchase(profile.SupplyRequests, partId, n)
 	Dirty[player.UserId] = true
 	return true
+end
+
+-- Apenas compra confirmada na loja reduz a lista de requisicoes.
+-- AddParts generico serve tambem para rollback e recompensas; nao deve diminuir pedidos.
+function DataService.FulfillSupplyRequest(player: Player, partId: string, count: number): boolean
+    local profile = Profiles[player.UserId]
+    if not profile or Catalog.Parts[partId] == nil or type(count) ~= "number"
+        or count ~= count or count % 1 ~= 0 or count <= 0 or count > Catalog.MaxPartPurchase then
+        return false
+    end
+    profile.SupplyRequests = V2SupplyRules.OnPurchase(profile.SupplyRequests, partId, count)
+    Dirty[player.UserId] = true
+    return true
 end
 
 -- V2-02: pedido de compra SEM transacao financeira; a compra real continua na loja V1.

@@ -1514,6 +1514,7 @@ function WorkshopService.BuyPart(player: Player, partId: string, quantity: numbe
     end
     DataService.AddCoins(player, -cost, string.format("Peças: %dx %s", quantity, part.DisplayName))
     DataService.AddParts(player, partId, quantity)
+    DataService.FulfillSupplyRequest(player, partId, quantity)
     return true, string.format("%dx %s comprado(s).", quantity, part.DisplayName)
 end
 
@@ -1576,6 +1577,7 @@ function WorkshopService.Checkout(player: Player, items: any)
     DataService.AddCoins(player, -total, "Loja de peças")
     for partId, quantity in pairs(partQuantities) do
         DataService.AddParts(player, partId, quantity)
+        DataService.FulfillSupplyRequest(player, partId, quantity)
     end
     for equipmentId in pairs(equipmentIds) do
         DataService.GrantEquipment(player, equipmentId)

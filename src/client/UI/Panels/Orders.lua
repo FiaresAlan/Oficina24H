@@ -656,6 +656,8 @@ function Orders.new(parent: Instance)
                 financialCard(scroll,"FinanceCash",1,"FLUXO DE CAIXA · "..coverage,{
                     string.format("Saldo: %d · entradas: +%d · saídas: -%d",
                         finance.Cash or 0,finance.CashIn or 0,finance.CashOut or 0),
+                    string.format("Conciliação de saldo: %+d · livro iniciado em %s",
+                        finance.ReconciliationGap or 0,os.date("%d/%m/%Y",finance.Since or os.time())),
                     {Text=string.format("Variação de caixa: %+d · %d movimentações",
                         finance.CashDelta or 0,finance.TransactionsCount or 0),
                         Color=(finance.CashDelta or 0)>=0 and Theme.Accent or rgb(255,128,100)},

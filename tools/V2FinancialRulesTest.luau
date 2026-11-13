@@ -57,6 +57,10 @@ end
 local warning=R.Snapshot(R.New(0,0),{Coins=8,Employees=1,Transactions={}},100,25)
 test("caixa insuficiente não é mascarado",warning.Warning:find("INSUFICIENTE")~=nil)
 test("saldo não negativo e fonte só no perfil",warning.Cash==8)
+local discrepancy=R.Snapshot(b,{Coins=999,Employees=0,Transactions={}},200,0)
+test("diferença entre saldo e extrato sempre visível",
+    discrepancy.ReconciliationGap~=0
+    and discrepancy.Warning:find("AUDITORIA")~=nil)
 local stock={Parts={Battery=0,TirePatch=1},OrderHistory={},
     Coins=5,Employees=0,Transactions={}}
 local hidden={Status="InProgress",Diagnosed=false,

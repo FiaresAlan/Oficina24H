@@ -237,11 +237,14 @@ function Rules.Snapshot(book: any, profile: any,now: number,employeeSalary: numb
     local employees=int(p.Employees,2)
     local payable=employees*int(employeeSalary,100000)
     local available=int(p.Coins,Rules.MaxMoney)
+    local reconciliationGap=available-(b.OpeningBalance+cashDelta)
     local nextPay=payable>0 and int(p.NextPayAt,4102444800) or 0
     local reserve=payable
     local restock=Rules.Restock(p,jobs)
     local warning=""
-    if available<reserve then warning="CAIXA INSUFICIENTE PARA PRÓXIMA FOLHA"
+    if reconciliationGap~=0 then
+        warning="DIFERENÇA ENTRE LIVRO FINANCEIRO E SALDO: AUDITORIA NECESSÁRIA"
+    elseif available<reserve then warning="CAIXA INSUFICIENTE PARA PRÓXIMA FOLHA"
     elseif restock.UrgentCost>0 and available-reserve<restock.UrgentCost then
         warning="FALTA CAIXA PARA PEÇAS DE ORDENS EM ANDAMENTO"
     elseif operatingCash<0 and b.Count>=2 then warning="FLUXO OPERACIONAL NEGATIVO NO PERÍODO"
@@ -250,6 +253,7 @@ function Rules.Snapshot(book: any, profile: any,now: number,employeeSalary: numb
     local recent=Rules.CleanTransactions(p.Transactions)
     return {
         Since=b.Since,LegacyWindow=b.LegacyWindow,TransactionsCount=b.Count,
+        OpeningBalance=b.OpeningBalance,ReconciliationGap=reconciliationGap,
         CashIn=b.CashIn,CashOut=b.CashOut,CashDelta=cashDelta,
         ServiceReceipts=operationIn,OperatingOut=operationOut,
         OperatingCash=operatingCash,NonOperatingIn=b.CashIn-operationIn,

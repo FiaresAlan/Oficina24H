@@ -110,6 +110,16 @@ P0 = prioridade para o núcleo de lançamento. P1 = opcional condicionado a viab
 **Aceite:** contato mecânico convincente sem simulação física integral de motor.
 
 ## V2-04 — Reparos ricos e variados (15 serviços)
+
+**Engenharia em branch V2, sem homologação no Studio:** [matriz dos 15 procedimentos e roteiro de QA](V2_FASE_04_15_SERVICOS.md).
+
+- [x] [C] Três etapas mecânicas distintas para cada um dos 15 defeitos, com interação física nos pivôs do carro e validação de proprietário/ator, sequência, proximidade e componentes.
+- [x] [C] Integração com os 15 minijogos V1 e regras V2-03, equipamento e estoque; bloqueio do reparo antes das etapas físicas.
+- [x] [C] HUD pós-diagnóstico, antes/depois visual, recap de qualidade, reinício de sequência confirmado e opção de tentar novamente sem cobrança antes da entrega.
+- [x] [A] Verificações estáticas e build Rojo executados, suites físicas e cruzamento com os sete modos V1 registradas.
+- [ ] [S] Studio: malhas e pivôs reais, 15 serviços, multiusuário, mobile/gamepad, performance, remotes e DataStore.
+
+
 - [ ] [C] Auditar cada um dos 15 serviços existentes quanto à integração com rig, peça e equipamento.
 - [ ] [C] Procedimentos diferenciados por família; interação real em pneu, elétrica, motor, suspensão, direção e lataria.
 - [ ] [C] Qualidade visível: defeito, peça danificada, ferramenta, ação e “antes/depois”.

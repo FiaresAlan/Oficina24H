@@ -189,13 +189,20 @@ P0 = prioridade para o núcleo de lançamento. P1 = opcional condicionado a viab
 **Aceite do livro de caixa:** lançamentos reais sem duplicação. **Aceite completo da fase:** resta aquisição por qualidade e homologação Studio.
 
 ## V2-09 — Mercado de carros velhos / compra e revenda (P1, protótipo)
-- [ ] [C] Mercado controlado, carro avariado, avaliação de custo e previsão aproximada de lucro.
-- [ ] [C] Três variantes no primeiro slice e limite de estoque/vagas de carros próprios.
-- [ ] [C] Reparar, modificar aparência e vender com risco e margem visíveis.
-- [ ] [C] Não roubar espaço de OS de clientes; limitar dinheiro vindo de revenda.
-- [ ] [A] Testes de compra/venda duplicadas, rollback e persistência do carro.
-- [ ] [S] Provar que complementa a gestão, não transforma tudo em compra-venda.
-- [ ] DECISÃO: expandir, simplificar ou retirar após playtest.
+
+**Engenharia de protótipo codificada na PR #27, QA Studio pendente:** [escopo, estimativas, UX, segurança e roteiro de testes](V2_FASE_09_USADOS.md).
+
+- [x] [C] Mercado limitado a quem concluiu 3 OS de clientes e ampliou a oficina; valores e sorteio de risco somente no servidor. As estimativas de contribuição não são lucro contábil.
+- [x] [C] Três variantes (Hatch/Sedã/Picape), um único carro próprio e cooldown persistente de 10 minutos entre ciclos. Carros próprios não ocupam boxes das OS.
+- [x] [C] Fluxo compra → inspecionar → desmontar → restaurar consumindo peças e pagamento → pintura opcional → venda ou venda como sucata; previews 3D dos modelos existentes no painel.
+- [x] [C] Idempotência de revenda, limite de capacidade e anti-replay; custos do mercado segregados em categoria financeira própria, sem crédito/XP/reputação de OS.
+- [x] [C] Schema v15 aditivo, teste de reconexão e persistência de veículo/caixa, regressões Luau e contratos de CI escritos.
+- [ ] [A] Confirmar execução verde de contratos estáticos e build Rojo no commit final V2-09.
+- [ ] [S] Validar localização física e interfaces reais, três modelos, multiplayer, mobile/gamepad, relog, cooldown e economia no Studio.
+- [ ] [C] Interação 3D com desmontagem em peças e showroom de revenda (**não implementada**; avaliar integração V2-10 em vez de anunciar como concluída).
+- [ ] DECISÃO: expandir, simplificar ou retirar após playtest que compare o tempo e o ganho por OS.
+
+**Pendência herdada da V2-08:** graus Econômico/Padrão/Premium por lotes FIFO ainda precisam de controle de custos, consumo, migração e rollback. Não apresentar como implementados.
 
 ## V2-10 — Personalização comercial e showroom (P1)
 - [ ] [C] Pintura/acabamento/rodas com visual antes/depois e preço transparente.

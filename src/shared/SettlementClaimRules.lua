@@ -58,7 +58,7 @@ end
 
 function Claims.Add(raw: any, claim: any): boolean
 	if type(raw) ~= "table" or not Claims.Valid(claim)
-		or Claims.Find(raw, claim.JobId, claim.Token) then return false end
+		or #raw >= Claims.MaxPending or Claims.Find(raw, claim.JobId, claim.Token) then return false end
 	table.insert(raw, Claims.Make(claim.OwnerUserId, claim.JobId, claim.Token,
 		claim.OwnerPay, claim.WorkerPay, claim.XP, claim.Quality,
 		claim.Service, claim.Vehicle, claim.Spec, claim.At))

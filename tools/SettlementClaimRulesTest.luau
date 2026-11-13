@@ -15,6 +15,12 @@ check("rejeita qualidade adulterada", Rules.Make(902, "job_1", token, 80, 275, 4
 local pending = {}
 check("adiciona claim", Rules.Add(pending, c))
 check("não duplica claim", not Rules.Add(pending, c) and #pending == 1)
+local full = {}
+for i = 1, Rules.MaxPending do
+	local tk = string.format("00000000-1111-2222-3333-%012d", i)
+	Rules.Add(full, Rules.Make(902, "job_" .. i, tk, 80, 275, 45, 95, "Freios", "Hatch", "Freios", 1790000000))
+end
+check("fila limitada não apaga claim pendente", #full == Rules.MaxPending and not Rules.Add(full, c))
 check("busca claim", Rules.Find(pending, "job_1", token) ~= nil)
 check("não vê token diferente", Rules.Find(pending, "job_1", "bbbbbbbb-1111-2222-3333-cccccccccccc") == nil)
 local clean = Rules.Sanitize({ c, c, { OwnerPay = math.huge }, "evil" })

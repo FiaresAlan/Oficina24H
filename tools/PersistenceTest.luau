@@ -22,7 +22,14 @@ local function deepCopy(v: any): any
 end
 
 local function newStore()
-	local store = { data = {}, failNext = 0, calls = 0 }
+	local store = { data = {}, failNext = 0, failGetNext = 0, calls = 0 }
+	function store:GetAsync(key: string)
+		if self.failGetNext > 0 then
+			self.failGetNext -= 1
+			error("simulated GetAsync failure")
+		end
+		return deepCopy(self.data[key])
+	end
 	function store:UpdateAsync(key: string, fn: (any) -> any)
 		self.calls += 1
 		if self.failNext > 0 then
@@ -381,6 +388,96 @@ do
 	check("dono vê somente o seu comprovante", B.GetRepairReceipt(owner, "job_1", token).Price == 80)
 	check("lista do executor omite token", B.RecentRepairSettlements(p, 3)[1].Token == nil)
 	check("lista de operações mostra valor e papel", B.RecentRepairSettlements(p, 3)[1].Amount == 275 and B.RecentRepairSettlements(p, 3)[1].Role == "Worker")
+end
+
+-- C12/C13: crash entre salvamento do dono e do contratado.
+-- A reivindicação é salva ANTES de qualquer pagamento; o dono é prova de autorização.
+do
+	local token = "cccccccc-1111-2222-3333-dddddddddddd"
+	local store = newStore()
+	local A = server(store, "claimA")
+	local worker = fakePlayer(1101)
+	local owner = fakePlayer(1102)
+	A.Load(worker) A.Load(owner)
+	local workerInitial = A.Get(worker).Coins
+	check("C12: reivindicação pode ser preparada",
+		A.StageWorkerClaim(worker, 1102, "job_77", token, 120, 280, 44, 92,
+			"Freios", "Hatch", "Freios"))
+	check("C12: salva a reivindicação antes de creditar", A.Save(worker))
+	check("C12: claim foi persistida sem saldo", #store.data["u_1101"].PendingClaims == 1
+		and store.data["u_1101"].Coins == workerInitial)
+	check("C12: dono recebe crédito uma vez", A.CreditRepairOnce(owner, "job_77",
+		token, 120, "Owner", "Freios", "Hatch"))
+	check("C12: dono salva antes do executor", A.Save(owner))
+	A.Remove(worker) A.Remove(owner) -- simula novo servidor sem aplicar parcela do contratado
+	local B = server(store, "claimB")
+	B.Load(worker)
+	check("C13: migração do schema v6", B.Get(worker).SchemaVersion == 6)
+	local recovered = B.ReconcileWorkerClaims(worker)
+	check("C13: parcela ausente recuperada", recovered == 1
+		or B.HasRepairCredit(worker, "job_77", token))
+	check("C13: saldo exato recuperado uma vez", B.Get(worker).Coins == workerInitial + 280)
+	check("C13: XP pago após crash", B.Get(worker).SkillXP.Freios == 44)
+	check("C13: recibo mínimo disponível", B.GetRepairReceipt(worker, "job_77", token).Price == 280)
+	B.ReconcileWorkerClaims(worker)
+	check("C13: repetição nunca gera segundo crédito/XP",
+		B.Get(worker).Coins == workerInitial + 280 and B.Get(worker).SkillXP.Freios == 44)
+	check("C13: comprovante permanece após segunda reconexão", B.Save(worker))
+	B.Remove(worker)
+	local C = server(store, "claimC")
+	C.Load(worker)
+	check("C13: reentrada mantém crédito único", C.Get(worker).Coins == workerInitial + 280
+		and C.HasRepairCredit(worker, "job_77", token))
+end
+
+-- Não pagar uma claim se a parcela do dono não foi gravada ou está divergente.
+do
+	local store = newStore()
+	local A = server(store, "claimNoOwnerA")
+	local worker, owner = fakePlayer(1201), fakePlayer(1202)
+	local token = "eeeeeeee-1111-2222-3333-ffffffffffff"
+	A.Load(worker) A.Load(owner)
+	check("C13: reivindicação isolada salva",
+		A.StageWorkerClaim(worker, 1202, "job_88", token, 80, 220, 32, 88,
+			"Freios", "Hatch", "Freios") and A.Save(worker))
+	A.Remove(worker)
+	local B = server(store, "claimNoOwnerB")
+	B.Load(worker)
+	B.ReconcileWorkerClaims(worker)
+	check("C13: sem crédito do dono não paga", B.Get(worker).Coins == 250
+		and not B.HasRepairCredit(worker, "job_88", token))
+	check("C13: reivindicação não desaparece sem prova", #B.Get(worker).PendingClaims == 1)
+	A.CreditRepairOnce(owner, "job_88", token, 81, "Owner", "Freios", "Hatch")
+	A.Save(owner)
+	B.ReconcileWorkerClaims(worker)
+	check("C13: valor divergente não autoriza", B.Get(worker).Coins == 250)
+	-- O ledger persistido demonstra agora o pagamento correto em um novo serviço.
+	local token2 = "11111111-2222-3333-4444-555555555555"
+	check("C13: nova reivindicação preparada",
+		B.StageWorkerClaim(worker, 1202, "job_89", token2, 80, 220, 32, 88,
+			"Freios", "Hatch", "Freios") and B.Save(worker))
+	check("C13: dono paga próxima OS", A.CreditRepairOnce(owner, "job_89", token2,
+		80, "Owner", "Freios", "Hatch") and A.Save(owner))
+	store.failGetNext = 1
+	B.ReconcileWorkerClaims(worker)
+	check("C13: falha de leitura não inventa receita", not B.HasRepairCredit(worker, "job_89", token2))
+	B.ReconcileWorkerClaims(worker)
+	check("C13: leitura recuperada paga", B.HasRepairCredit(worker, "job_89", token2)
+		and B.Get(worker).Coins == 470)
+end
+
+-- C13: dados corrompidos de reivindicação são descartados na migração.
+do
+	local store = newStore()
+	store.data["u_1301"] = {
+		SchemaVersion = 5, Coins = 300,
+		PendingClaims = { { WorkerPay = math.huge }, "corrompida" },
+	}
+	local A = server(store, "claimCorruptA")
+	local p = fakePlayer(1301)
+	A.Load(p)
+	check("C13: sanitize de reivindicações corrompidas", #A.Get(p).PendingClaims == 0)
+	check("C13: mantém saldo antigo", A.Get(p).Coins == 300)
 end
 
 for _, c in ipairs(clones) do c:Destroy() end

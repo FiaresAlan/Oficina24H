@@ -13,6 +13,7 @@ local Catalog = require(game:GetService("ReplicatedStorage").Shared.Catalog)
 local PlotService = require(script.Parent.PlotService)
 local NpcKit = require(script.Parent.NpcKit)
 local LotPath = require(script.Parent.LotPath)
+local VehicleSceneRules = require(game:GetService("ReplicatedStorage").Shared.VehicleSceneRules)
 
 local CustomerArrivalService = {}
 
@@ -51,12 +52,15 @@ local function folder(): Folder
 end
 
 -- Carros que já saíram do controle desta cena mas ainda estão parados no meio-fio (cliente voltando ao volante).
-local lingering: { [string]: { Car: Model, At: Vector3 } } = {}
+local lingering: { [string]: { Car: Model, At: Vector3, OwnerUserId: number, Npc: Model? } } = {}
 
 local function linger(state: State)
 	local car = state.Car
 	if car and car.PrimaryPart then
-		lingering[state.OwnerUserId .. ":" .. state.Slot] = { Car = car, At = car.PrimaryPart.Position }
+		lingering[state.OwnerUserId .. ":" .. state.Slot] = {
+			Car = car, At = car.PrimaryPart.Position,
+			OwnerUserId = state.OwnerUserId, Npc = state.Npc,
+		}
 	end
 end
 
@@ -194,16 +198,27 @@ function CustomerArrivalService.Arrive(job: any): number
 	local eta = LotPath.Duration(path, LotPath.StreetSpeed) + 3.5
 
 	task.spawn(function()
+		-- Uma OS pode ser cancelada antes que a coroutine de chegada inicie.
+		-- Não recriar carro ou NPC depois de PlayerLeft/Depart/Claim.
+		if not VehicleSceneRules.IsCurrentArrival(states, job.Id, state) then return end
 		local first, second = path[1], path[2]
 		local car, npc, animator = CustomerArrivalService.BuildCar(job, CFrame.lookAt(first, second), "CarroRua_" .. job.Id)
 		if not car then
-			states[job.Id] = nil
+			if VehicleSceneRules.IsCurrentArrival(states, job.Id, state) then
+				states[job.Id] = nil
+			end
+			return
+		end
+		-- Clone/animação podem ceder execução; a OS pode ter sido cancelada.
+		if not VehicleSceneRules.IsCurrentArrival(states, job.Id, state) then
+			if npc then npc:Destroy() end
+			car:Destroy()
 			return
 		end
 		state.Car, state.Npc, state.Animator = car, npc, animator
 		LotPath.Drive(car.PrimaryPart :: BasePart, path, LotPath.StreetSpeed)
-		if states[job.Id] ~= state then
-			return -- cancelado durante a chegada (quem cancelou já cuidou do que existia)
+		if not VehicleSceneRules.IsCurrentArrival(states, job.Id, state) then
+			return -- removido durante o movimento; quem cancelou destruiu a cena
 		end
 		if npc then
 			task.wait(0.4)
@@ -305,13 +320,21 @@ end
 -- Dono saiu: limpa tudo dele na hora, sem animação.
 function CustomerArrivalService.Clear(ownerUserId: number)
 	for jobId, state in pairs(states) do
-		if state.OwnerUserId == ownerUserId then
+		if VehicleSceneRules.IsOwnedBy(state, ownerUserId) then
 			states[jobId] = nil
-			if state.Npc then
-				state.Npc:Destroy()
-			end
-			if state.Car then
-				state.Car:Destroy()
+			if state.Npc then state.Npc:Destroy() end
+			if state.Car then state.Car:Destroy() end
+		end
+	end
+	-- Carros de clientes que já iniciaram a saída não estão em states.
+	-- Remover essas cenas também (nunca destruir carros já adotados pela oficina).
+	local arrivals = workspace:FindFirstChild("Arrivals")
+	for key, entry in pairs(lingering) do
+		if VehicleSceneRules.IsOwnedBy(entry, ownerUserId) then
+			lingering[key] = nil
+			if entry.Npc and entry.Npc.Parent then entry.Npc:Destroy() end
+			if arrivals and entry.Car.Parent == arrivals then
+				entry.Car:Destroy()
 			end
 		end
 	end

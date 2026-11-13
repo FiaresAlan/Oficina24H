@@ -190,19 +190,24 @@ function OperationRepairGame.new(gui: ScreenGui)
 			label(content, tostring(currentPlan.Hint or "") .. " Repare no ponto correto e calibre a " .. tostring(currentPlan.PressureTarget or 32) .. " psi.", 5, 62, 22)
 			for i, item in ipairs({ { "Ombro interno", "Inner" }, { "Centro", "Center" }, { "Ombro externo", "Outer" } }) do
 				button(content, item[1], 16 + (i - 1) * 200, 120, 190, 48, function()
-					if waiting then return end
-					spot = item[2]
-					update()
+					submit("Spot", nil, item[2], function()
+						spot = item[2]
+						update()
+					end)
 				end)
 			end
 			label(content, "Ajustar a pressão", 184, 38, 22)
 			button(content, "− 2 psi", 340, 188, 112, 40, function()
-				pressure = math.max(0, pressure - 2)
-				update()
+				local value = math.max(0, pressure - 2)
+				if value ~= pressure then
+					submit("Pressure", nil, value, function() pressure = value update() end)
+				end
 			end)
 			button(content, "+ 2 psi", 468, 188, 112, 40, function()
-				pressure = math.min(44, pressure + 2)
-				update()
+				local value = math.min(44, pressure + 2)
+				if value ~= pressure then
+					submit("Pressure", nil, value, function() pressure = value update() end)
+				end
 			end)
 		elseif currentPlan.Mode == "Battery" then
 			label(content, tostring(currentPlan.Hint or ""), 5, 60, 22)
@@ -216,39 +221,49 @@ function OperationRepairGame.new(gui: ScreenGui)
 				local row = math.floor((i - 1) / 2)
 				button(content, op[1], 16 + col * 302, 116 + row * 57, 286, 48, function()
 					if waiting or #sequence >= 4 then return end
-					table.insert(sequence, op[2])
-					update()
+					submit("Step", nil, op[2], function()
+						table.insert(sequence, op[2])
+						update()
+					end)
 				end)
 			end
 			button(content, "Refazer sequência", 16, 265, 244, 48, function()
-				if waiting then return end
-				sequence = {}
-				update()
+				submit("Reset", nil, nil, function()
+					sequence = {}
+					update()
+				end)
 			end)
 		elseif currentPlan.Mode == "Cooling" then
 			label(content, tostring(currentPlan.Hint or ""), 5, 60, 22)
 			label(content, "Volume do fluido", 113, 40, 22)
 			button(content, "− 0,25 L", 330, 112, 116, 40, function()
-				fluid = math.max(0, fluid - 0.25)
-				update()
+				local value = math.max(0, fluid - 0.25)
+				if value ~= fluid then
+					submit("Fluid", nil, value, function() fluid = value update() end)
+				end
 			end)
 			button(content, "+ 0,25 L", 466, 112, 116, 40, function()
-				fluid = math.min(3, fluid + 0.25)
-				update()
+				local value = math.min(3, fluid + 0.25)
+				if value ~= fluid then
+					submit("Fluid", nil, value, function() fluid = value update() end)
+				end
 			end)
 			label(content, "Ciclos de sangria", 172, 40, 22)
 			button(content, "− 1", 330, 173, 116, 40, function()
-				bleed = math.max(0, bleed - 1)
-				update()
+				local value = math.max(0, bleed - 1)
+				if value ~= bleed then
+					submit("Bleed", nil, value, function() bleed = value update() end)
+				end
 			end)
 			button(content, "+ 1", 466, 173, 116, 40, function()
-				bleed = math.min(5, bleed + 1)
-				update()
+				local value = math.min(5, bleed + 1)
+				if value ~= bleed then
+					submit("Bleed", nil, value, function() bleed = value update() end)
+				end
 			end)
 			button(content, "Testar ventoinha", 16, 265, 244, 48, function()
-				if waiting then return end
-				fan = not fan
-				update()
+				local value = not fan
+				submit("Fan", nil, value, function() fan = value update() end)
 			end)
 		elseif currentPlan.Mode == "Sequence" then
 			label(content, tostring(currentPlan.Hint or ""), 5, 60, 21)
@@ -258,8 +273,10 @@ function OperationRepairGame.new(gui: ScreenGui)
 				button(content, tostring(op.Name), 16 + col * 300, 116 + row * 47, 285, 42, function()
 					if waiting or #sequence >= #(currentPlan.Options or {}) then return end
 					if table.find(sequence, op.Id) then return end
-					table.insert(sequence, tostring(op.Id))
-					update()
+					submit("Step", nil, tostring(op.Id), function()
+						table.insert(sequence, tostring(op.Id))
+						update()
+					end)
 				end)
 			end
 			button(content, "RECOMEÇAR ORDEM", 16, 265, 250, 48, function()
@@ -274,31 +291,29 @@ function OperationRepairGame.new(gui: ScreenGui)
 				local y = 113 + (index - 1) * 61
 				label(content, tostring(field.Name) .. " · alvo " .. tostring(field.Target) .. tostring(field.Unit), y, 44, 20)
 				button(content, "− " .. tostring(field.Step), 345, y, 108, 43, function()
-					if waiting then return end
-					measures[field.Id] = math.max(field.Min, math.round((measures[field.Id] - field.Step) * 100) / 100)
-					update()
+					local value = math.max(field.Min, math.round((measures[field.Id] - field.Step) * 100) / 100)
+					if value ~= measures[field.Id] then
+						submit("Measure", field.Id, value, function() measures[field.Id] = value update() end)
+					end
 				end)
 				button(content, "+ " .. tostring(field.Step), 471, y, 108, 43, function()
-					if waiting then return end
-					measures[field.Id] = math.min(field.Max, math.round((measures[field.Id] + field.Step) * 100) / 100)
-					update()
+					local value = math.min(field.Max, math.round((measures[field.Id] + field.Step) * 100) / 100)
+					if value ~= measures[field.Id] then
+						submit("Measure", field.Id, value, function() measures[field.Id] = value update() end)
+					end
 				end)
 			end
 		elseif currentPlan.Mode == "Circuit" then
 			label(content, tostring(currentPlan.Hint or ""), 5, 60, 20)
 			for i, source in ipairs(currentPlan.Sources or {}) do
 				button(content, tostring(source.Name), 16 + (i - 1) * 145, 118, 136, 45, function()
-					if waiting then return end
-					sourceId = source.Id
-					update()
+					submit("Source", nil, source.Id, function() sourceId = source.Id update() end)
 				end)
 			end
 			label(content, "Selecione o reparo do componente", 173, 30, 20)
 			for i, action in ipairs(currentPlan.Actions or {}) do
 				button(content, tostring(action.Name), 16 + (i - 1) * 197, 209, 185, 44, function()
-					if waiting then return end
-					actionId = action.Id
-					update()
+					submit("Action", nil, action.Id, function() actionId = action.Id update() end)
 				end)
 			end
 		elseif currentPlan.Mode == "Surface" then
@@ -308,14 +323,16 @@ function OperationRepairGame.new(gui: ScreenGui)
 				local y = 113 + (i - 1) * 51
 				label(content, tostring(zone.Name) .. " · " .. tostring(zone.Reading), y, 43, 19)
 				button(content, "−", 346, y, 106, 43, function()
-					if waiting then return end
-					zoneLevels[zone.Id] = math.max(0, zoneLevels[zone.Id] - 1)
-					update()
+					local value = math.max(0, zoneLevels[zone.Id] - 1)
+					if value ~= zoneLevels[zone.Id] then
+						submit("Level", zone.Id, value, function() zoneLevels[zone.Id] = value update() end)
+					end
 				end)
 				button(content, "+", 470, y, 106, 43, function()
-					if waiting then return end
-					zoneLevels[zone.Id] = math.min(3, zoneLevels[zone.Id] + 1)
-					update()
+					local value = math.min(3, zoneLevels[zone.Id] + 1)
+					if value ~= zoneLevels[zone.Id] then
+						submit("Level", zone.Id, value, function() zoneLevels[zone.Id] = value update() end)
+					end
 				end)
 			end
 		else

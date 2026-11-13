@@ -778,9 +778,9 @@ function DataService.ReconcileWorkerProofs(worker: Player): number
 			warn("[DataService] C24: falha ao verificar quitação com proprietário; prova preservada:", userId)
 		end
 	end
-	if compacted > 0 and Profiles[userId] == profile and not Removing[userId] then
-		if not DataService.Save(worker) then
-			warn("[DataService] C24: compactação não confirmada no DataStore:", userId)
+	if compacted > 0 then
+		if Profiles[userId] ~= profile or Removing[userId] or not DataService.Save(worker) then
+			warn("[DataService] C24: compactação ainda não confirmada no DataStore:", userId)
 			WorkerArchiveRunning[userId] = nil
 			return 0
 		end

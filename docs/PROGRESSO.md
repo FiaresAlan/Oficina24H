@@ -827,3 +827,12 @@ Detalhes em `docs/AUDITORIA_GERAL.md`. Resumo:
 - **Contenção:** arquivo cheio bloqueia novos créditos colaborativos (preflight antes de peças na OS), nunca substitui prova antiga por um pagamento novo. Não resolve atomicidade entre perfis.
 - **Testes escritos:** `WorkerSettlementProofRulesTest`, `OwnerProofSweepRulesTest`, `PersistenceTest`, `RunAllTests` e `verify_contracts.py`. Roteiro em [TESTE_C23_QUITACOES_TRABALHADORES_2026-11-13.md](TESTE_C23_QUITACOES_TRABALHADORES_2026-11-13.md). CI/Rojo não é teste de Studio.
 - **V2:** nenhuma implementação iniciada. Pacotes 3D permanecem baixados, mas não importados.
+
+
+## 2026-11-13 — V1 C24: compactação segura de quitações com bloqueio permanente de replay
+- **Problema:** os 2.048 marcadores detalhados de pagamento do mecânico poderiam ficar cheios e bloquear novas colaborações, mesmo depois de quitadas as ordens.
+- **C24:** schema v10 mantém `WorkerPaidTombstones` com até 8.192 identificadores compactos (JobId/token), independentes do extrato de 64 e do arquivo detalhado de 2.048. Sem expiração automática.
+- **Regra de compactação:** marcadores novos incluem OwnerUserId da reivindicação original. Após 900s e com claim ausente, a rotina consulta o perfil persistido do proprietário e exige prova já removida da conta dele. Salva o worker antes e depois de compactar, revalida ao voltar de `GetAsync` e limita quatro leituras por passagem/300 s.
+- **Segurança:** tombstone impede recreditar mesmo quando ledger e marcador detalhado saíram; arquivo de tombstones cheio ou comprovante antigo sem OwnerUserId mantém prova detalhada; não há exclusão silenciosa.
+- **Regressões escritas:** `WorkerProofArchiveRulesTest`, `PersistenceTest`, `verify_contracts.py` e `RunAllTests`. [Roteiro C24](TESTE_C24_COMPACTACAO_QUITACOES_2026-11-13.md). CI e Rojo ≠ teste no Studio.
+- **P0 remanescente:** pagamentos legados sem prova verificável e capacidade finita dos tombstones exigem auditoria segura, além dos portões de integração/QA do place. V2 continua documental e assets apenas baixados, sem importação.

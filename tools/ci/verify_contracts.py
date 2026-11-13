@@ -329,6 +329,9 @@ check("C24: schema v10 private tombstones and scheduled reconciliation",
 check("C24: test suite registered",
       '"WorkerProofArchiveRulesTest"' in runner
       and (TOOLS / "WorkerProofArchiveRulesTest.luau").is_file())
+check("C24: QA document included",
+      (ROOT / "docs" / "TESTE_C24_COMPACTACAO_QUITACOES_2026-11-13.md").is_file()
+      and "schema v10" in text(ROOT / "docs" / "TESTE_C24_COMPACTACAO_QUITACOES_2026-11-13.md"))
 # C16/C17: upgrades persistentes e pads físicos autorizados no servidor.
 equipment_rules = text(SHARED / "EquipmentUpgradeRules.lua")
 pad_service = text(ROOT / "src" / "server" / "EquipmentUpgradePads.lua")

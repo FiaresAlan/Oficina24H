@@ -14,6 +14,7 @@ Store.Changed = Instance.new("BindableEvent") -- dispara após cada atualizaçã
 Store.Message = Instance.new("BindableEvent") -- (texto, sucesso) vindo do servidor
 Store.Invite = Instance.new("BindableEvent") -- convite de trabalho recebido
 Store.RepairStart = Instance.new("BindableEvent") -- servidor sorteou o desafio do minijogo (Plan, Vehicle, Service)
+Store.RepairActionAck = Instance.new("BindableEvent") -- servidor confirmou/rejeitou um ajuste do procedimento
 Store.DiagnoseStart = Instance.new("BindableEvent") -- servidor enviou as opções de diagnóstico (Options, Complaint...)
 Store.DiagnoseDone = Instance.new("BindableEvent") -- diagnóstico correto
 Store.RepairDone = Instance.new("BindableEvent") -- resultado do reparo (Quality, Tip, Stars...)
@@ -63,6 +64,8 @@ actionEvent.OnClientEvent:Connect(function(kind: string, payload: any)
 	elseif kind == "Notice" then
 		Store.Message:Fire(tostring(payload.Message or ""), payload.Success == true, "")
 		task.delay(0.3, Store.Refresh) -- avisos (contrato, freguês, Rush) costumam mudar o estado
+	elseif kind == "RepairActionAck" then
+		Store.RepairActionAck:Fire(payload)
 	elseif kind == "RepairStart" then
 		Store.RepairStart:Fire(payload)
 	elseif kind == "RepairDone" then

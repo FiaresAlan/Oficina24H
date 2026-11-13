@@ -247,7 +247,8 @@ check("owner archive is private and saved with the profile",
       and "OwnerSettlementProofRules.Sanitize(data.OwnerSettlementProofs)" in data_service
       and "profileView.OwnerSettlementProofs = nil" in workshop)
 check("owner credit creates archive bound to worker",
-      '"Owner", service.DisplayName, job.VehicleName, player.UserId, actorPay)' in workshop)
+      'delegated and player.UserId or nil, delegated and actorPay or nil)' in workshop
+      and '"Owner", service, vehicle, workerUserId, workerPay)' in data_service)
 check("recovery verifies owner proof",
       "ownerRaw.OwnerSettlementProofs, userId)" in data_service
       and "OwnerProofs.Authorizes(proof, claim, workerId)" in claim)

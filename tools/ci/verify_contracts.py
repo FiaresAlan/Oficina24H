@@ -125,6 +125,14 @@ check("C29: departing workshop cars are tracked and cleared",
 check("C29: lifecycle regressions registered",
       '"VehicleSceneRulesTest"' in runner
       and (TOOLS / "VehicleSceneRulesTest.luau").is_file())
+check("C29: departing curb cars tracked beyond slot reservation",
+      "local curbDeparting:" in arrival_c29
+      and "curbDeparting[car] = {" in arrival_c29
+      and "for car, scene in pairs(curbDeparting) do" in arrival_c29
+      and "curbDeparting[car] = nil" in arrival_c29)
+check("C29: QA guide for arrival and departure present",
+      (ROOT / "docs" / "TESTE_C29_CENAS_CLIENTES_DESCONEXAO_2026-11-13.md").is_file()
+      and "VehicleSceneRules" in text(ROOT / "docs" / "TESTE_C29_CENAS_CLIENTES_DESCONEXAO_2026-11-13.md"))
 check("C28: QA and release gates documented",
       (ROOT / "docs" / "TESTE_C28_GUARDA_REPARO_COLABORATIVO_2026-11-13.md").is_file()
       and (ROOT / "docs" / "PORTOES_FINALIZACAO_V1_2026-11-13.md").is_file())

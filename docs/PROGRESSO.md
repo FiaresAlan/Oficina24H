@@ -872,3 +872,11 @@ Detalhes em `docs/AUDITORIA_GERAL.md`. Resumo:
 - **Teste preparado:** `RepairCommitGuardTest` e verificação de ordem no `verify_contracts.py`, mais [QA C28](TESTE_C28_GUARDA_REPARO_COLABORATIVO_2026-11-13.md). CI/Rojo não equivale a Luau executado no Studio.
 - **Fechamento V1:** [cinco portões principais](PORTOES_FINALIZACAO_V1_2026-11-13.md) separam código, importação de assets, 15 serviços, multiplayer/DataStore, aparelhos/licenças e aprovação de publicação. Mais de 100 tarefas abertas no histórico não são 100 fases obrigatórias.
 - **Escopo:** V1 apenas; V2 não iniciada e assets apenas baixados/organizados.
+
+
+## 2026-11-13 — V1 C29: limpeza de cenas assíncronas de clientes e veículos
+- **Falhas corrigidas:** coroutine de chegada podia criar carro após cancelamento; despachos de saída retiravam carro dos registros principais antes do fim da animação, deixando objetos sem rastreamento quando o proprietário desconectava.
+- **C29:** `VehicleSceneRules` valida identidade de cena/proprietário; `CustomerArrivalService` bloqueia criação tardia e mantém `curbDeparting` além da reserva do meio-fio; `VehicleService` mantém `departing` além de `byJob`, recolhe carro/NPC e libera a vaga ao sair.
+- **Privacidade/isolamento:** desconexão de A não destrói cenas de B; o carro já entregue à oficina continua sendo limpo por `VehicleService`, não pela rotina de chegada.
+- **Testes escritos:** `VehicleSceneRulesTest` em `RunAllTests`, contratos estáticos em `verify_contracts.py`. [QA C29](TESTE_C29_CENAS_CLIENTES_DESCONEXAO_2026-11-13.md).
+- **Pendente:** execução dos testes Luau, cenas NPC e modelos com dois jogadores no Studio. CI valida contratos e Rojo, não multiplayer. G1–G5 permanecem abertos; V2 segue documental e assets aguardam importação.

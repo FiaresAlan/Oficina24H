@@ -836,3 +836,13 @@ Detalhes em `docs/AUDITORIA_GERAL.md`. Resumo:
 - **Segurança:** tombstone impede recreditar mesmo quando ledger e marcador detalhado saíram; arquivo de tombstones cheio ou comprovante antigo sem OwnerUserId mantém prova detalhada; não há exclusão silenciosa.
 - **Regressões escritas:** `WorkerProofArchiveRulesTest`, `PersistenceTest`, `verify_contracts.py` e `RunAllTests`. [Roteiro C24](TESTE_C24_COMPACTACAO_QUITACOES_2026-11-13.md). CI e Rojo ≠ teste no Studio.
 - **P0 remanescente:** pagamentos legados sem prova verificável e capacidade finita dos tombstones exigem auditoria segura, além dos portões de integração/QA do place. V2 continua documental e assets apenas baixados, sem importação.
+
+
+## 2026-11-13 — V1 C25: auditoria privada de claims legadas e bloqueio de crédito não comprovado
+- **Falha encontrada:** a compatibilidade C12/C13 permitia recuperar crédito a partir de uma linha de ledger legado do dono que não registrava WorkerUserId. Prova de pagamento do dono sem identificar destinatário não autoriza remuneração segura.
+- **C25:** `SettlementClaimRules.EvidenceStatus` requer prova identificando o mecânico; estados `LegacyUnverified`, `Conflict`, `Missing`, `Invalid` permanecem sem crédito automático.
+- **Schema v11:** `PendingClaimAudits` privada persiste motivo/data/vínculo de reivindicação aberta, limitada a 64, com saneamento de registros órfãos. A fila da própria `PendingClaims` não é apagada.
+- **Recuperação:** `ReconcileWorkerClaims` só quita se `Verified`, ou mantém auditado e reavalia em novas tentativas. Ao confirmar crédito/salvamento, limpa claim/auditoria; falhas de leitura classificadas sem inventar pagamento.
+- **Privacidade:** snapshot elimina `PendingClaimAudits`; `PendingClaimSummary` agrega somente contagens `NeedsReview`, `LegacyUnverified`, `Conflicts`. Logs contêm agregados, sem token.
+- **Testes escritos:** `SettlementClaimAuditRulesTest`, `SettlementClaimRulesTest`, `PersistenceTest` atualizados para schema v11; runner e contratos estáticos. Detalhes e QA em [TESTE_C25_AUDITORIA_CLAIMS_LEGADAS_2026-11-13.md](TESTE_C25_AUDITORIA_CLAIMS_LEGADAS_2026-11-13.md).
+- **P0 remanescente:** casos históricos verdadeiros sem prova vinculada exigem auditoria humana com evidências verificáveis; não existe ferramenta de crédito manual auditada. CI/Rojo não equivale a teste Studio; V2 permanece só documental.

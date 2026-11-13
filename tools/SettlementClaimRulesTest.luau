@@ -46,11 +46,14 @@ check("C25: sem workerId não autoriza", not Rules.Authorized(c,
 check("C25: sem comprovante nem ledger classifica falta",
 	Rules.EvidenceStatus(c, {}, {}, 901) == "Missing")
 ownerLedger[1].Amount = 81
-check("pagamento divergente não autoriza", not Rules.Authorized(c, ownerLedger))
+check("C25: pagamento divergente classificado Conflict",
+	Rules.EvidenceStatus(c, ownerLedger, {}, 901) == "Conflict")
 ownerLedger[1].Amount, ownerLedger[1].Role = 80, "Worker"
-check("papel divergente não autoriza", not Rules.Authorized(c, ownerLedger))
+check("C25: papel divergente classificado Conflict",
+	Rules.EvidenceStatus(c, ownerLedger, {}, 901) == "Conflict")
 ownerLedger[1].Role, ownerLedger[1].Service = "Owner", "Motor"
-check("serviço divergente não autoriza", not Rules.Authorized(c, ownerLedger))
+check("C25: serviço divergente classificado Conflict",
+	Rules.EvidenceStatus(c, ownerLedger, {}, 901) == "Conflict")
 check("C15: reivindicação recém-criada não é resgatável", not Rules.Recoverable(c, 1790000000 + 2))
 check("C15: reivindicação antiga permite tentar resgate", Rules.Recoverable(c, 1790000000 + Rules.RecoveryGraceSeconds))
 local summary = Rules.Summary({ c }, 1790000000 + 90000)

@@ -231,6 +231,9 @@ check("C25: claim audit only exposes counters to HUD",
 check("C25: auditoria suite registered",
       '"SettlementClaimAuditRulesTest"' in runner
       and (TOOLS / "SettlementClaimAuditRulesTest.luau").is_file())
+check("C25: QA guide included",
+      (ROOT / "docs" / "TESTE_C25_AUDITORIA_CLAIMS_LEGADAS_2026-11-13.md").is_file()
+      and "Schema v11" in text(ROOT / "docs" / "TESTE_C25_AUDITORIA_CLAIMS_LEGADAS_2026-11-13.md"))
 check("claim reconciliation runs on load and autosave",
       "task.spawn(DataService.ReconcileWorkerClaims, player)" in data_service)
 check("claim tests registered",

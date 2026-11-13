@@ -106,9 +106,13 @@ function Pads.Interact(player: Player,id: string,plot: Instance)
     entry.Pending=nextPending -- consumido ANTES de chamar a transação
     if not execute then
         if onNotice then
+            local rewardBefore=math.floor((Rules.RewardMultiplier(entry.Level)-1)*100+0.5)
+            local rewardAfter=math.floor((Rules.RewardMultiplier(target)-1)*100+0.5)
+            local timeBefore=Rules.EmployeeSeconds(60,entry.Level)
+            local timeAfter=Rules.EmployeeSeconds(60,target)
             onNotice(player,message..string.format(
-                " Nível %d: produtividade +3%% por nível, funcionário até 8%% mais rápido.",
-                target),false)
+                " Bônus de recompensa: %d%%→%d%%. Trabalho NPC: %.0fs→%.0fs a cada 60s-base.",
+                rewardBefore,rewardAfter,timeBefore,timeAfter),false)
         end
         return
     end

@@ -75,6 +75,24 @@ check("runner has no duplicate suite names", len(set(suite_ids)) == len(suite_id
 for suite in suite_ids:
     check(f"tool exists: {suite}", (TOOLS / f"{suite}.luau").is_file())
 check("runner includes StudioPlaceAudit", "StudioPlaceAudit" in suite_ids)
+job_exit = text(SHARED / "JobExitRules.lua")
+service_flow = text(TOOLS / "AllServiceActionFlowTest.luau")
+check("C26: logout never leaves owner jobs available without a vehicle",
+      "function JobExitRules.Action" in job_exit
+      and 'return "RemoveOwner"' in job_exit
+      and "JobExitRules.Action(job, userId)" in text(ROOT / "src" / "server" / "WorkshopService.lua")
+      and 'job.Status = "Available"' not in text(ROOT / "src" / "server" / "WorkshopService.lua").split(
+          "function WorkshopService.PlayerLeft", 1)[-1].split("function WorkshopService.DispatchCustomers", 1)[0])
+check("C26: 15 real incremental action paths tested",
+      "for defectId, defect in pairs(Catalog.Defects)" in service_flow
+      and "Actions.Apply(plan, state, cmd)" in service_flow
+      and "Actions.FinalInput(plan, state)" in service_flow
+      and "Operations.Evaluate(plan, input, time, mods)" in service_flow
+      and "count == 15" in service_flow)
+check("C26: gameplay and job-exit suites registered",
+      '"AllServiceActionFlowTest"' in runner and '"JobExitRulesTest"' in runner
+      and (TOOLS / "AllServiceActionFlowTest.luau").is_file()
+      and (TOOLS / "JobExitRulesTest.luau").is_file())
 # Repair C5: the operation UI must not pay from an unrecorded final form.
 action_rules = text(SHARED / "RepairActionRules.lua")
 workshop = text(ROOT / "src" / "server" / "WorkshopService.lua")

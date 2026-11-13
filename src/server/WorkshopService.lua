@@ -11,6 +11,7 @@ local CustomerRules = require(ReplicatedStorage.Shared.CustomerRules)
 local RepairRules = require(ReplicatedStorage.Shared.RepairRules)
 local RepairSessionRules = require(ReplicatedStorage.Shared.RepairSessionRules)
 local CollaborationRules = require(ReplicatedStorage.Shared.CollaborationRules)
+local JobExitRules = require(ReplicatedStorage.Shared.JobExitRules)
 local RepairOperations = require(ReplicatedStorage.Shared.RepairOperations)
 local RepairActionRules = require(ReplicatedStorage.Shared.RepairActionRules)
 local RepairReceiptRules = require(ReplicatedStorage.Shared.RepairReceiptRules)
@@ -1674,7 +1675,8 @@ function WorkshopService.Interact(player: Player, jobId: string, kind: string): 
     return false, "Você não participa desta ordem."
 end
 
--- Dono saiu: devolve ordens em andamento para "Available" e remove os veículos físicos do lote.
+-- C26: dono saiu, a OS NÃO pode voltar a "Available" sem oficina/carros.
+-- Todos os jobs do dono são removidos; eventos de reparo do contratado são cancelados.
 function WorkshopService.PlayerLeft(userId: number)
     local ownSession = Repairs[userId]
     if ownSession then
@@ -1688,37 +1690,44 @@ function WorkshopService.PlayerLeft(userId: number)
     CustomerArrivalService.Clear(userId) -- clientes que ainda esperavam na rua somem junto
     RepairAssist[userId] = nil
     for jobId, job in pairs(Jobs) do
-        if job.OwnerUserId == userId and job.Status ~= "InProgress" then
-            Jobs[jobId] = nil -- cliente que esperava vai embora com o dono; não fica ordem fantasma para a reentrada
-        elseif job.OwnerUserId == userId and job.Status == "InProgress" then
-            if job.CollaboratorUserId then
+        local action = JobExitRules.Action(job, userId)
+        if action == "RemoveOwner" then
+            if job.Status == "InProgress" and job.CollaboratorUserId then
                 local worker = Players:GetPlayerByUserId(job.CollaboratorUserId)
-                if worker and worker:GetAttribute("CollaborationJobId") == jobId then
-                    worker:SetAttribute("CollaborationOwnerUserId", nil)
-                    worker:SetAttribute("CollaborationJobId", nil)
+                if worker then
+                    if worker:GetAttribute("CollaborationJobId") == jobId then
+                        worker:SetAttribute("CollaborationOwnerUserId", nil)
+                        worker:SetAttribute("CollaborationJobId", nil)
+                    end
+                    -- Cancelar a sessão mesmo se os atributos do avatar já
+                    -- tiverem sido limpos: não pode finalizar carro apagado.
                     local session = Repairs[worker.UserId]
                     if session and session.JobId == jobId then
                         Repairs[worker.UserId] = nil
                         VehicleService.SetRepairing(jobId, false)
                         if eventSender then
-                            -- Fecha o minijogo do contratado; não credita nada.
                             eventSender(worker, "Result", {
-                                Action = "FinishRepair", Success = false, Message = "O dono da oficina desconectou.",
+                                Action = "FinishRepair", Success = false,
+                                Message = "O dono da oficina desconectou.",
                             })
                         end
                     end
                     if eventSender then
-                        eventSender(worker, "Notice", { Message = "O proprietário saiu: a ordem colaborativa foi cancelada.", Success = false })
+                        eventSender(worker, "Notice", {
+                            Message = "O proprietário saiu: a ordem colaborativa foi cancelada.",
+                            Success = false,
+                        })
                     end
                 end
             end
-            job.Status = "Available"
-            job.AssignedWorkerUserId = nil
-            job.CollaboratorUserId = nil
-        elseif job.CollaboratorUserId == userId and job.Status == "InProgress" then
-            -- O colaborador pode sair a qualquer momento: a ordem volta ao dono, sem prendê-lo ao trabalho.
+            -- Não converter InProgress em Available quando o carro some:
+            -- descartar o job evita ordem fantasma após reentrada do dono.
+            Jobs[jobId] = nil
+        elseif action == "ReturnToOwner" then
+            -- O colaborador saiu mas o dono continua ativo: manter a OS.
             job.CollaboratorUserId = nil
             job.CollaborationSplitPercent = nil
+            job.CollabAt = nil
             job.AssignedWorkerUserId = job.OwnerUserId
             VehicleService.SetRepairActor(job.Id, job.OwnerUserId)
         end

@@ -1016,8 +1016,23 @@ local function confirmDelivery(entry: any)
         or not SettlementDeliveryRules.Ready(entry) then return false end
     SettlingRepairs[entry.WorkerUserId] = nil
     if entry.Delegated and entry.Worker.Parent == Players then
-        DataService.DiscardWorkerClaim(entry.Worker, entry.JobId, entry.Token)
-        task.spawn(DataService.Save, entry.Worker) -- limpeza posterior não altera o crédito confirmado
+        -- Prova do proprietário só é dispensável após a claim sumir da conta
+        -- do contratado em um Save CONFIRMADO, não após um descarte em memória.
+        task.spawn(function()
+            if not DataService.DiscardWorkerClaim(entry.Worker, entry.JobId, entry.Token) then
+                return -- claim ausente: conservar prova até auditoria/recuperação
+            end
+            if not DataService.Save(entry.Worker) then
+                warn("[WorkshopService] Remoção de claim não confirmada; prova do dono preservada:", entry.JobId)
+                return
+            end
+            if entry.Owner.Parent == Players and DataService.DiscardConfirmedOwnerProof(
+                entry.Owner, entry.JobId, entry.Token, entry.WorkerUserId) then
+                if not DataService.Save(entry.Owner) then
+                    warn("[WorkshopService] Limpeza da prova do proprietário pendente:", entry.JobId)
+                end
+            end
+        end)
     end
     if eventSender and entry.Worker.Parent == Players then
         eventSender(entry.Worker, "RepairDone", entry.Receipt)
@@ -1150,6 +1165,9 @@ function WorkshopService.FinishRepair(player: Player, jobId: string, presses: an
     end
     if not DataService.HasParts(workshopOwner, defect.Parts) then
         return finishFailure("Faltam peças na oficina.")
+    end
+    if delegated and workshopOwner ~= player and not DataService.HasOwnerProofCapacity(workshopOwner) then
+        return finishFailure("Arquivo de repasses aguardando confirmação está cheio. Aguarde os pagamentos pendentes ou procure suporte.")
     end
     if delegated and workshopOwner ~= player then
         local staged = DataService.StageWorkerClaim(player, workshopOwner.UserId,

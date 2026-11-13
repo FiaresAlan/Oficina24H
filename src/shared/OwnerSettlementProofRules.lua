@@ -32,17 +32,51 @@ function Proofs.Find(raw: any, jobId: any, token: any): any?
 	end
 	return nil
 end
+-- Nunca descartar a prova antiga para abrir espaço: pode corresponder a
+-- uma claim ainda pendente e um crédito perdido após queda de servidor.
+function Proofs.CanAdd(raw: any, proof: any): boolean
+	return type(raw) == "table" and #raw < Proofs.MaxEntries
+		and Proofs.Valid(proof) and not Proofs.Find(raw, proof.JobId, proof.Token)
+end
 function Proofs.Add(raw: any, proof: any): boolean
-	if type(raw) ~= "table" or not Proofs.Valid(proof) or Proofs.Find(raw, proof.JobId, proof.Token) then return false end
+	if not Proofs.CanAdd(raw, proof) then return false end
 	table.insert(raw, Proofs.Make(proof.JobId, proof.Token, proof.WorkerUserId,
 		proof.OwnerPay, proof.WorkerPay, proof.Service, proof.Vehicle, proof.At))
-	while #raw > Proofs.MaxEntries do table.remove(raw, 1) end
 	return true
+end
+-- Só remover após confirmação de que a claim do contratado foi removida
+-- do perfil DELE e a gravação com o crédito já retornou sucesso.
+function Proofs.Remove(raw: any, jobId: any, token: any, workerUserId: any): boolean
+	if type(raw) ~= "table" or not Ledger.ValidKey(jobId, token)
+		or not whole(workerUserId, -1e15, 1e15) then return false end
+	for i = #raw, 1, -1 do
+		local entry = raw[i]
+		if type(entry) == "table" and entry.JobId == jobId
+			and entry.Token == token and entry.WorkerUserId == workerUserId then
+			table.remove(raw, i)
+			return true
+		end
+	end
+	return false
 end
 function Proofs.Sanitize(raw: any): { any }
 	local clean = {}
 	if type(raw) ~= "table" then return clean end
-	for _, v in ipairs(raw) do Proofs.Add(clean, v) end
+	-- Compatibilidade defensiva com dados antigos acima do teto: conservar
+	-- os registros mais recentes no mesmo formato; nunca criar duplicata.
+	local seen = {}
+	for i = #raw, 1, -1 do
+		if #clean >= Proofs.MaxEntries then break end
+		local v = raw[i]
+		if Proofs.Valid(v) then
+			local key = v.JobId .. ":" .. v.Token
+			if not seen[key] then
+				seen[key] = true
+				table.insert(clean, 1, Proofs.Make(v.JobId, v.Token, v.WorkerUserId,
+					v.OwnerPay, v.WorkerPay, v.Service, v.Vehicle, v.At))
+			end
+		end
+	end
 	return clean
 end
 function Proofs.Authorizes(proof: any, claim: any, workerId: any): boolean

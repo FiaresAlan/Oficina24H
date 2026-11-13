@@ -464,8 +464,8 @@ function DataService.CreditRepairOnce(player: Player, jobId: string, token: stri
 			or type(workerPay) ~= "number" then return false end
 		proof = OwnerSettlementProofRules.Make(jobId, token, workerUserId, amount,
 			workerPay, serviceName, vehicleName, os.time())
-		if not proof or OwnerSettlementProofRules.Find(profile.OwnerSettlementProofs, jobId, token) then
-			return false
+		if not proof or not OwnerSettlementProofRules.CanAdd(profile.OwnerSettlementProofs, proof) then
+			return false -- sem espaço, não altera moedas ou ledger
 		end
 	end
 	if not SettlementLedgerRules.Record(profile.RepairLedger, jobId, token, amount, role,
@@ -476,6 +476,24 @@ function DataService.CreditRepairOnce(player: Player, jobId: string, token: stri
 	end
 	DataService.AddCoins(player, amount, "Liquidação de OS: " .. serviceName)
 	Dirty[player.UserId] = true
+	return true
+end
+
+-- Controle de capacidade antes de consumir peças do dono na OS colaborativa.
+function DataService.HasOwnerProofCapacity(player: Player): boolean
+	local profile = Profiles[player.UserId]
+	return profile ~= nil and type(profile.OwnerSettlementProofs) == "table"
+		and #profile.OwnerSettlementProofs < OwnerSettlementProofRules.MaxEntries
+end
+
+-- O dono só descarta sua prova quando o contratado já recebeu e a remoção
+-- da claim foi persistida no perfil do contratado. Nunca expor via remoto.
+function DataService.DiscardConfirmedOwnerProof(owner: Player, jobId: any, token: any,
+	workerUserId: number): boolean
+	local profile = Profiles[owner.UserId]
+	if not profile or not OwnerSettlementProofRules.Remove(profile.OwnerSettlementProofs,
+		jobId, token, workerUserId) then return false end
+	Dirty[owner.UserId] = true
 	return true
 end
 

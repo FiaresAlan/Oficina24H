@@ -223,6 +223,16 @@ check("claim tests registered",
 proof = text(SHARED / "OwnerSettlementProofRules.lua")
 check("archive compact proofs for 1024 collaboration payments",
       "Proofs.MaxEntries = 1024" in proof and "function Proofs.Sanitize" in proof)
+check("C21: owner proofs never evict unresolved claims at capacity",
+      "function Proofs.CanAdd" in proof and "function Proofs.Remove" in proof
+      and "while #raw > Proofs.MaxEntries" not in proof)
+check("C21: capacity verified before consuming collaborative repair parts",
+      "DataService.HasOwnerProofCapacity(workshopOwner)" in workshop
+      and "OwnerSettlementProofRules.CanAdd(profile.OwnerSettlementProofs, proof)" in data_service)
+check("C21: owner proof released only after worker claim cleanup saved",
+      "DataService.DiscardWorkerClaim(entry.Worker, entry.JobId, entry.Token)" in workshop
+      and "if not DataService.Save(entry.Worker) then" in workshop
+      and "DataService.DiscardConfirmedOwnerProof(" in workshop)
 check("owner archive is private and saved with the profile",
       "OwnerSettlementProofs = {}" in data_service
       and "OwnerSettlementProofRules.Sanitize(data.OwnerSettlementProofs)" in data_service

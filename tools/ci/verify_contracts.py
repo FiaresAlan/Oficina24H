@@ -567,7 +567,7 @@ server = text(ROOT / "src" / "server" / "Main.server.lua")
 arrival = text(ROOT / "src" / "server" / "CustomerArrivalService.lua")
 ui_orders = text(CLIENT / "UI" / "Panels" / "Orders.lua")
 check("V2-00: migracao aditiva schema v12 com lista persistente",
-    "SCHEMA_VERSION = 14" in data_service and "V2SupplyRules.Sanitize" in data_service
+    "SCHEMA_VERSION = 15" in data_service and "V2SupplyRules.Sanitize" in data_service
     and "SupplyRequests = {}" in data_service and "SupplyRequests" in v2_compatibility)
 check("V2-02: compra no estoque desconta lista sem debitar pedido",
     "V2SupplyRules.OnPurchase" in data_service
@@ -912,7 +912,7 @@ finance=text(SHARED/"V2FinancialRules.lua")
 finance_test=text(TOOLS/"V2FinancialRulesTest.luau")
 finance_persistence=text(TOOLS/"PersistenceTest.luau")
 finance_ui=text(CLIENT/"UI"/"Panels"/"Orders.lua")
-check("V2-08: esquema 14 preserva o ledger existente e inicia caixa categorizado",
+check("V2-08/09: esquema 15 preserva o ledger v14 e inicia caixa categorizado",
     "SCHEMA_VERSION = 14" in data_service
     and "FinanceLedger = V2FinancialRules.New" in data_service
     and "V2FinancialRules.Bootstrap" in data_service
@@ -956,6 +956,47 @@ check("V2-08: suites e migração/replay/reconexão cobertos",
     and "migração v13 para v14" in finance_persistence
     and "extrato limitado 50" in finance_persistence
     and "não inferir defeito" in finance_test)
+
+# V2-09: o mercado nunca chama liquidacao de OS; tudo passa por regras
+# e persistencia sem yield no perfil do proprietario.
+used_rules=text(SHARED/"V2UsedMarketRules.lua")
+used_test=text(TOOLS/"V2UsedMarketRulesTest.luau")
+check("V2-09: ofertas finitas, limite de 1 carro e cooldown por perfil",
+    all(k in used_rules for k in (
+        'Rules.MaxOwned = 1','Rules.MinServiceCount = 3',
+        'Rules.CooldownSeconds = 600','Rules.Offers = {',
+        'function Rules.CanBuy','function Rules.Sanitize',
+        'function Rules.Plan','function Rules.Public')))
+check("V2-09: operacoes validadas no servidor sem controle de saldo do cliente",
+    'function DataService.TradeUsedCar' in data_service
+    and 'V2UsedMarketRules.Plan(profile, operation, itemId' in data_service
+    and 'HttpService:GenerateGUID(false)' in data_service
+    and 'DataService.TakeParts(player, planned.Parts)' in data_service
+    and 'DataService.AddCoins(player, planned.Delta, planned.Reason)' in data_service
+    and 'function WorkshopService.UsedMarketAction' in workshop
+    and 'PlotService.IsInsidePlot' in workshop
+    and 'if not nearShop(player) then return false, SHOP_FAR end' in workshop)
+check("V2-09: remoto limitado, dados privados e painel de gestão existente",
+    '"UsedMarket"' in main_src
+    and 'WorkshopService.UsedMarketAction(player, payload.Operation, payload.Id, payload.Style)' in main_src
+    and 'profileView.UsedMarket = nil' in workshop
+    and 'V2UsedMarketRules.Public(profile, os.time())' in workshop
+    and 'Store.Act("UsedMarket"' in finance_ui
+    and 'HudParts.vehicleThumb(card' in finance_ui)
+check("V2-09: revenda separada das OS e historico financeiro categoria propria",
+    'string.find(r,"^Usados:")' in finance
+    and 'Market="Market"' in finance
+    and 'Rules.Offers[input]' in used_rules
+    and 'Rules.MaxOwned' in used_rules
+    and 'CreditRepairOnce' not in used_rules
+    and 'VehicleService.Spawn' not in used_rules)
+check("V2-09: regressao de abuso, dupla venda e salvamento escrita",
+    '"V2UsedMarketRulesTest"' in runner
+    and (TOOLS/"V2UsedMarketRulesTest.luau").is_file()
+    and 'replay de venda' in used_test
+    and 'salvamento/relogin' in used_test
+    and 'estoque ausente' in used_test)
+
 
 print(f"\nStatic checks: {passed} passed, {len(failures)} failed")
 if failures:

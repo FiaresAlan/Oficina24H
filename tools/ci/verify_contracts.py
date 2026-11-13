@@ -449,10 +449,14 @@ check("equipment tiers persisted in schema v8",
 check("upgrade costs and economy are server-authoritative",
       "function Rules.NextCost" in equipment_rules
       and 'DataService.AddCoins(player, -cost, "Melhoria:' in data_service)
-check("floor pads use server root position and one purchase on entry",
-      "function Pads.Sync" in pad_service and "PointToObjectSpace(root.Position)" in pad_service
-      and "if inside and not entry.WasInside" in pad_service
-      and "entry.WasInside = true" in pad_service)
+check("V2-06: floor pads never charge on physical entry",
+      "function Pads.Interact" in pad_service
+      and "prompt.Triggered:Connect" in pad_service
+      and "Quotes.Step" in pad_service
+      and "entry.Pending=nextPending" in pad_service
+      and "if onPurchase then onPurchase(player,id,plot) end" in pad_service
+      and "entry.WasInside" not in pad_service
+      and "touching(root" not in pad_service)
 check("upgrade server verifies plot ownership",
       "PlotService.GetPlot(player) ~= sourcePlot" in workshop
       and "sourcePlot:GetAttribute(\"OwnerUserId\")" in workshop)
@@ -808,6 +812,40 @@ check("V2-05: teste proprio de waypoint planar registrado no Studio",
     (TOOLS/"V2StaffNavigatorTest.luau").is_file()
     and '"V2StaffNavigatorTest"' in runner
     and "Nav.HorizontalDistance" in text(TOOLS/"V2StaffNavigatorTest.luau"))
+
+# V2-06: compra explícita, sem side effects de caminhar em pads e sem ROI inventado.
+quote = text(SHARED/"V2UpgradePurchaseRules.lua")
+construction = text(CLIENT/"ConstrutoraPanel.client.lua")
+visuals = text(ROOT/"src"/"server"/"V2ExpansionVisuals.lua")
+station_v2 = text(ROOT/"src"/"server"/"StationService.lua")
+check("V2-06: dois atos intencionais para comprar prédio e equipamento",
+    "function Rules.Step" in quote
+    and "Rules.ConfirmSeconds = 14" in quote
+    and "pendingBuildings[player.UserId]" in workshop
+    and "confirm == true" in workshop
+    and "payload.Confirm == true" in server_v2
+    and "SetNoticeHandler" in server_v2
+    and "Quotes.Step(entry.Pending,quote,os.clock())" in pad_service)
+check("V2-06: tarifa, nível e fonte rejeitam replay",
+    "left.Target==right.Target" in quote
+    and "left.Cost==right.Cost" in quote
+    and "left.Source==right.Source" in quote
+    and "PlotService.GetPlot(player)~=plot" in pad_service
+    and "entry.Pending=nextPending" in pad_service)
+check("V2-06: benefícios e confirmação explícitos na UI sem compras acidentais",
+    "Benefits = V2UpgradePurchaseRules.Benefits" in workshop
+    and 'Store.Act("UpgradeWorkshop",{Confirm=confirmed})' in construction
+    and "CONFIRMAR %d moedas" in construction
+    and "AutomaticCanvasSize = Enum.AutomaticSize.Y" in construction
+    and "EXTRA" not in quote)
+check("V2-06: expansão visual conforme os 4 níveis de verdade e sem colisão",
+    "function Visuals.Apply" in visuals
+    and "V2ExpansionVisuals.Apply(plot, root, level)" in station_v2
+    and all(k in visuals for k in ("BoxSign_","ReceptionTier","StockTier","StaffTier","CanCollide",
+      "CanTouch","CanQuery","MaxPieces")))
+check("V2-06: suites Luau para compras e visual no runner",
+    all((TOOLS/(p+".luau")).is_file() and ('"'+p+'"') in runner
+       for p in ("V2UpgradePurchaseRulesTest","V2ExpansionVisualsTest")))
 
 print(f"\nStatic checks: {passed} passed, {len(failures)} failed")
 if failures:

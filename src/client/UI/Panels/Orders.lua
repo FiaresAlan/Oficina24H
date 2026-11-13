@@ -77,6 +77,7 @@ function Orders.new(parent: Instance)
 
 	local inviteJobId: string? = nil
     local previewChoice: { [string]: string } = {} -- somente UI; nunca debita ou muda o perfil
+    local financeView = "cash" -- alterna Caixa/Mercado SEM adicionar aba na HUD
 	local render: () -> ()
 	local tabs: PanelKit.Tabs
 	tabs = PanelKit.tabs(body, {
@@ -647,6 +648,24 @@ function Orders.new(parent: Instance)
 			end
 			refreshLive()
         elseif id == "finance" then
+            -- Com largura compacta, separar as duas seções evita rolar por
+            -- centenas de linhas do extrato antes de encontrar o mercado.
+            local switch=stack(scroll,8,true,-100)
+            local cashButton=PanelKit.button(switch,
+                financeView=="cash" and "CAIXA · ATIVA" or "CAIXA",
+                "dark",Vector2.new(compact and 145 or 220,44),function()
+                    financeView="cash"
+                    render()
+                end)
+            cashButton.LayoutOrder=1
+            local marketButton=PanelKit.button(switch,
+                financeView=="market" and "USADOS · ATIVA" or "USADOS",
+                "dark",Vector2.new(compact and 145 or 220,44),function()
+                    financeView="market"
+                    render()
+                end)
+            marketButton.LayoutOrder=2
+            if financeView=="cash" then
             local finance=snapshot.Finance
             if type(finance)~="table" then
                 financialCard(scroll,"NoFinance",1,"CAIXA AINDA INDISPONÍVEL",{
@@ -734,8 +753,9 @@ function Orders.new(parent: Instance)
                 if #last==0 then table.insert(last,"Sem movimentações recentes.") end
                 financialCard(scroll,"FinanceRecent",6,"ÚLTIMAS MOVIMENTAÇÕES",last)
             end
-            -- V2-09: protótipo opcional de compra/reforma/revenda em
-            -- uma aba de gestão existente: sem botão extra na HUD.
+            end -- fim da seção Caixa; showroom usa o mesmo painel
+            if financeView=="market" then
+            -- V2-09/10: mercado e showroom na segunda seção da aba Caixa.
             local market = snapshot.UsedMarket
             if type(market) == "table" then
                 financialCard(scroll, "UsedIntro",10,"MERCADO DE USADOS · NEGÓCIO SECUNDÁRIO",{
@@ -927,6 +947,7 @@ function Orders.new(parent: Instance)
                     sellExhibit.LayoutOrder=21
                 end
             end
+            end -- fim da seção Mercado
         elseif id == "team" then
             -- V2-05: supervisionar até dois mecânicos sem UI sobreposta ou
             -- campos financeiros/clientes privados.

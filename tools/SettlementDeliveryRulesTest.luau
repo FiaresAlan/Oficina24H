@@ -7,7 +7,8 @@ local function check(name: string, passed: boolean)
 end
 local token = "aaaaaaaa-1111-2222-3333-bbbbbbbbbbbb"
 check("token curto rejeitado", Rules.New("job_1", "x", 10, 11) == nil)
-check("identidade de beneficiário obrigatória", Rules.New("job_1", token, -1, 11) == nil)
+check("identidade de beneficiário obrigatória", Rules.New("job_1", token, 0, 11) == nil)
+check("IDs negativos do teste local Studio são aceitos", Rules.New("job_1", token, -1, -2) ~= nil)
 local s = Rules.New("job_1", token, 10, 11)
 check("entrega nasce pendente", s ~= nil and not Rules.Ready(s))
 check("sessão correta reconhecida", Rules.Matches(s, "job_1", token))

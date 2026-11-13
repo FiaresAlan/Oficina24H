@@ -7,7 +7,9 @@ local SettlementDeliveryRules = {}
 function SettlementDeliveryRules.New(jobId: any, token: any, ownerUserId: any, workerUserId: any): any?
 	if type(jobId) ~= "string" or jobId == "" or type(token) ~= "string" or #token < 16
 		or type(ownerUserId) ~= "number" or type(workerUserId) ~= "number"
-		or ownerUserId < 1 or workerUserId < 1 then return nil end
+		or ownerUserId ~= ownerUserId or workerUserId ~= workerUserId
+		or ownerUserId == 0 or workerUserId == 0
+		or ownerUserId % 1 ~= 0 or workerUserId % 1 ~= 0 then return nil end
 	return {
 		JobId = jobId, Token = token,
 		OwnerUserId = ownerUserId, WorkerUserId = workerUserId,

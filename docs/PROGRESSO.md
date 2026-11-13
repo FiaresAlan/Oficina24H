@@ -740,3 +740,10 @@ Detalhes em `docs/AUDITORIA_GERAL.md`. Resumo:
 - `RepairStatementTest` com 23 casos escritos, runner e CI atualizados.
 - **Limite:** ainda é código versionado, não testado visualmente no Roblox Studio. O preço do histórico de clientes não representa necessariamente o valor do extrato recebido.
 - Checklist [Issue #15](https://github.com/FiaresAlan/Oficina24H/issues/15) acompanha implementação versus testes reais e publicação.
+
+
+## 2026-11-13 — C10/C11: confirmação de entrega financeira condicionada ao DataStore (GitHub-only)
+- **C10:** `SettlementDeliveryRules` exige confirmação de `Save` no dono e executor antes de liberar `RepairDone`. Recibo em memória não é mais classificado como `Completed` durante `Processing`; novo reparo do executor é bloqueado enquanto a liquidação continua pendente. Salvamento de perfil descarregado ou sem Store não retorna sucesso.
+- **C11:** em erro de `UpdateAsync`, o mesmo token de liquidação é usado para novas tentativas de gravar os perfis ainda sem confirmação, **sem** reaplicar peças, saldo, XP ou avaliações. Testes de estado e falha transitória adicionados ao runner; instruções de QA em `docs/TESTE_C10_C11_ENTREGA_FINANCEIRA_2026-11-13.md`.
+- **CI Rojo/contratos:** ver link no checklist mestre; **sem execução em Roblox Studio nesta rodada**.
+- **P0 permanece:** não existe atomicidade entre chaves de DataStore de dono e executor, nem compensação após crash entre gravações. Minijogo timing legado ainda precisa de GUID/recibo durável. Todos os testes reais de rede, interrupção e UI continuam pendentes.

@@ -350,7 +350,7 @@ end
 local function writeProfile(userId: number, release: boolean): (boolean, boolean)
 	local profile = Profiles[userId]
 	if not profile or not Store then
-		return true, false
+		return false, false -- ausência de store/perfil jamais confirma persistência
 	end
 	local key = keyFor(userId)
 	for attempt = 1, MAX_ATTEMPTS do

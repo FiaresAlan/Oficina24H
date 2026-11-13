@@ -6,10 +6,10 @@ local Rules={}
 Rules.Categories={
     Service="Service",Inventory="Inventory",Payroll="Payroll",
     Marketing="Marketing",Equipment="Equipment",Building="Building",
-    Hiring="Hiring",Rewards="Rewards",Other="Other",
+    Hiring="Hiring",Rewards="Rewards",Market="Market",Other="Other",
 }
 Rules.CategoryOrder={"Service","Inventory","Payroll","Marketing",
-    "Equipment","Building","Hiring","Rewards","Other"}
+    "Equipment","Building","Hiring","Rewards","Market","Other"}
 Rules.MaxMoney=1000000000000
 Rules.MaxRecent=50
 Rules.MaxEntries=100000000
@@ -34,6 +34,7 @@ function Rules.Category(reason: any,delta: any): string
     if string.find(r,"^Peças:") or r=="Loja de peças" then return "Inventory" end
     if string.find(r,"^Salário dos funcionários") then return "Payroll" end
     if string.find(r,"^Publicidade:") then return "Marketing" end
+    if string.find(r,"^Usados:") then return "Market" end
     if string.find(r,"^Melhoria:") or string.find(r,"^Compra:") then return "Equipment" end
     if string.find(r,"^Ampliação da oficina:") then return "Building" end
     if string.find(r,"^Contratação de mecânico") then return "Hiring" end

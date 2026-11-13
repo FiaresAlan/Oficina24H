@@ -1292,6 +1292,42 @@ do
     check("V2-05: sem cobranca retroativa na migracao",q.NextPayAt>os.time() and q.Coins==800)
 end
 
+-- V2-06: saldo e nivel da obra persistem na MESMA versao do perfil.
+-- As autorizacoes fisicas de distancia e OS sao exercitadas no WorkshopService
+-- em Studio, nao substituidas por esta simulacao DataStore.
+do
+    local Quote=require(game.ReplicatedStorage.Shared.V2UpgradePurchaseRules)
+    local store=newStore()
+    local A=server(store,"v2-build-A")
+    local player=fakePlayer(2901)
+    A.Load(player)
+    local q=A.Get(player)
+    A.AddCoins(player,2100,"Saldo para obra")
+    local before=q.Coins
+    local offer={Kind="Building",Id="Oficina",Target=1,Cost=1500,Source="Construtora"}
+    local first,stage=Quote.Step(nil,offer,100)
+    check("V2-06: vista previa nao debita moedas",not first and q.Coins==before)
+    local confirmed=Quote.Step(stage,offer,101)
+    if confirmed then
+        A.AddCoins(player,-1500,"Ampliação da oficina: Oficina")
+        A.SetWorkshopLevel(player,1)
+    end
+    check("V2-06: nivel e custo vinculados a um perfil",confirmed
+        and q.Coins==before-1500 and q.WorkshopLevel==1)
+    check("V2-06: confirmacao repetida nao autoriza outro debito",
+        not Quote.Step(nil,offer,102) and q.Coins==before-1500)
+    check("V2-06: obra confirma saldo e nivel em um save",A.Save(player))
+    A.Remove(player)
+    local B=server(store,"v2-build-B")
+    B.Load(player)
+    local loaded=B.Get(player)
+    check("V2-06: reconexao conserva obra e saldo sem nova compra",
+        loaded and loaded.WorkshopLevel==1 and loaded.Coins==before-1500)
+    check("V2-06: alteracao posterior do nivel invalida oferta antiga",
+        not Quote.Step(stage,{Kind="Building",Id="Centro automotivo",
+            Target=2,Cost=6000,Source="Construtora"},102))
+end
+
 for _, c in ipairs(clones) do c:Destroy() end
 table.insert(results, failures == 0 and "TODOS OS TESTES PASSARAM" or (failures .. " TESTE(S) FALHARAM"))
 return table.concat(results, "\n")

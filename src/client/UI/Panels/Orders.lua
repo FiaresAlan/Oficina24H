@@ -315,6 +315,20 @@ function Orders.new(parent: Instance)
 			LayoutOrder = 2,
 		})
 		requirement(info, job, snapshot, 4)
+        if job.Procedure then
+            local proc=job.Procedure
+            HudParts.text(info,string.format("REPARO TÉCNICO · %d/%d etapas · %s",
+                proc.Completed or 0,proc.Total or 0,proc.StepName or ""),
+                19,{Font=Theme.FontSemi,TextColor3=Theme.Accent,
+                    LayoutOrder=4,TextWrapped=true,AutomaticSize=Enum.AutomaticSize.Y,
+                    Size=UDim2.new(1,0,0,0)})
+            if not proc.Ready then
+                HudParts.text(info,"Local: "..(proc.Area or "").." · Ferramenta: "..(proc.Tool or ""),
+                    17,{Font=Theme.FontSemi,TextColor3=Theme.Muted,LayoutOrder=4,
+                        TextWrapped=true,AutomaticSize=Enum.AutomaticSize.Y,
+                        Size=UDim2.new(1,0,0,0)})
+            end
+        end
         if job.Mechanics then
             local mechanics = job.Mechanics
             local panelHint = not mechanics.Ready and mechanics.Next or
@@ -450,6 +464,8 @@ function Orders.new(parent: Instance)
                 tostring(job.Mechanics and job.Mechanics.Hood),
                 tostring(job.Mechanics and job.Mechanics.WheelFL),
                 tostring(job.Mechanics and job.Mechanics.Ready),
+                tostring(job.Procedure and job.Procedure.Completed),
+                tostring(job.Procedure and job.Procedure.StepName),
             }, ":"))
 		end
 		for _, job in ipairs(snapshot.CollabJobs or {}) do

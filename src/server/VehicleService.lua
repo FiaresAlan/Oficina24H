@@ -12,6 +12,7 @@ local InspectionPointRules = require(game:GetService("ReplicatedStorage").Shared
 local RepairPrepRules = require(game:GetService("ReplicatedStorage").Shared.RepairPrepRules)
 local RepairSocketRules = require(game:GetService("ReplicatedStorage").Shared.RepairSocketRules)
 local V2ComponentRules = require(game:GetService("ReplicatedStorage").Shared.V2ComponentRules)
+local V2ServiceProcedureRules = require(game:GetService("ReplicatedStorage").Shared.V2ServiceProcedureRules)
 local V2PilotRules = require(game:GetService("ReplicatedStorage").Shared.V2VehiclePilotRules)
 local AssetSafetyRules = require(game:GetService("ReplicatedStorage").Shared.AssetSafetyRules)
 local PlotService = require(script.Parent.PlotService)
@@ -165,6 +166,7 @@ function VehicleService.ToggleComponent(player: Player, jobId: string, id: strin
     if prompt and prompt:IsA("ProximityPrompt") then
         prompt.ActionText = V2ComponentRules.Action(id, nextState)
     end
+    VehicleService.RefreshProcedure(jobId)
     return true, (nextState == V2ComponentRules.Open(id)) and
         (component.Label .. " aberto(a)/removido(a).") or (component.Label .. " fechado(a)/recolocado(a).")
 end
@@ -343,6 +345,22 @@ local function applyStage(car: Model)
             end
         end
     end
+    -- V2-04: somente etapa física atual, após diagnóstico e no ponto exato.
+    local procedureFolder = car:FindFirstChild("V2ProcedurePoints")
+    if procedureFolder then
+        local currentId = car:GetAttribute("V2ProcedureStepId")
+        for _, point in ipairs(procedureFolder:GetChildren()) do
+            local prompt = point:FindFirstChildWhichIsA("ProximityPrompt")
+            if prompt then
+                local area = point:GetAttribute("Area")
+                local state = point:GetAttribute("RequiredState")
+                local current = type(area)=="string" and car:GetAttribute("V2State_" .. area)
+                prompt.Enabled = parked and stage == "Repair"
+                    and car:GetAttribute("Reparando") ~= true
+                    and point:GetAttribute("StepId") == currentId and current == state
+            end
+        end
+    end
 	local inspectionFolder = car:FindFirstChild("InspectionPoints")
 	if inspectionFolder then
 		local enabled = parked and stage == "Diagnose" and car:GetAttribute("InspectionReady") == true
@@ -351,6 +369,99 @@ local function applyStage(car: Model)
 			if prompt then prompt.Enabled = enabled end
 		end
 	end
+end
+
+-- O servidor cria pontos no veículo ACEITO e DIAGNOSTICADO, nunca no spawn
+-- do cliente: defeito e família permanecem secretos até o diagnóstico.
+function VehicleService.SetServiceProcedure(jobId: string, defectId: string, index: number)
+    local car = byJob[jobId]
+    if not car or type(car:GetAttribute("V2PilotId")) ~= "string" then return end
+    local recipe = V2ServiceProcedureRules.Recipes[defectId]
+    if not recipe then return end
+    local root = car.PrimaryPart
+    if not root then return end
+    local folder = car:FindFirstChild("V2ProcedurePoints")
+    if not folder then
+        folder = Instance.new("Folder")
+        folder.Name = "V2ProcedurePoints"
+        folder.Parent = car
+        for _, step in ipairs(recipe.Steps) do
+            local pivot = V2PilotRules.Resolve(car, "V2Pivot_" .. step.Area)
+            if pivot then
+                local anchor = Instance.new("Part")
+                anchor.Name = "V2Step_" .. step.Id
+                anchor.Size = Vector3.new(0.4,0.4,0.4)
+                anchor.Transparency = 1
+                anchor.Anchored = false
+                anchor.CanCollide,anchor.CanTouch,anchor.CanQuery = false,false,false
+                anchor.Massless = true
+                anchor.CFrame = pivot
+                anchor:SetAttribute("StepId",step.Id)
+                anchor:SetAttribute("Area",step.Area)
+                anchor:SetAttribute("RequiredState",step.State)
+                anchor.Parent = folder
+                local weld = Instance.new("WeldConstraint")
+                weld.Part0,weld.Part1=root,anchor
+                weld.Parent=anchor
+                local prompt = Instance.new("ProximityPrompt")
+                prompt.Name = "Proc_" .. step.Id
+                prompt.ActionText = step.Name
+                prompt.ObjectText = step.Tool
+                prompt.MaxActivationDistance = V2ServiceProcedureRules.MaxDistance
+                prompt.HoldDuration = V2ServiceProcedureRules.HoldDuration
+                prompt.RequiresLineOfSight = false
+                prompt.KeyboardKeyCode = Enum.KeyCode.E
+                prompt.GamepadKeyCode = Enum.KeyCode.ButtonX
+                prompt.Style = Enum.ProximityPromptStyle.Custom
+                prompt.Enabled = false
+                prompt.Parent = anchor
+                prompt.Triggered:Connect(function(player: Player)
+                    if interactionHandler then interactionHandler(player,jobId,prompt.Name) end
+                end)
+            end
+        end
+    end
+    local step = V2ServiceProcedureRules.Current(defectId,index)
+    car:SetAttribute("V2ProcedureFamily",recipe.Family)
+    car:SetAttribute("V2ProcedureArea",step and step.Area or "")
+    car:SetAttribute("V2ProcedureStepId",step and step.Id or "")
+    car:SetAttribute("V2ProcedureIndex",index)
+    car:SetAttribute("V2ProcedureTotal",#recipe.Steps)
+    car:SetAttribute("V2RepairStage",step and "Before" or "Ready")
+    for i, action in ipairs(recipe.Steps) do
+        local point=folder:FindFirstChild("V2Step_"..action.Id)
+        if point then point:SetAttribute("Completed",i<index) end
+    end
+    applyStage(car)
+end
+
+function VehicleService.RefreshProcedure(jobId: string)
+    local car=byJob[jobId]
+    if car then applyStage(car) end
+end
+
+function VehicleService.IsNearProcedureStep(player: Player,jobId: string,stepId: string): boolean
+    local car=byJob[jobId]
+    if not car or car:GetAttribute("Etapa")~="Repair"
+        or car:GetAttribute("Estacionado")~=true
+        or car:GetAttribute("Reparando")==true
+        or car:GetAttribute("V2ProcedureStepId")~=stepId then return false end
+    local folder=car:FindFirstChild("V2ProcedurePoints")
+    local point=folder and folder:FindFirstChild("V2Step_"..stepId)
+    local character=player.Character
+    local hrp=character and character:FindFirstChild("HumanoidRootPart")
+    return point~=nil and point:IsA("BasePart") and hrp~=nil
+        and hrp:IsA("BasePart") and
+        V2ComponentRules.IsNear(point.Position,hrp.Position,V2ServiceProcedureRules.MaxDistance) or false
+end
+
+function VehicleService.MarkProcedureFinished(jobId: string,quality: number)
+    local car=byJob[jobId]
+    if not car then return end
+    car:SetAttribute("V2RepairStage","After")
+    car:SetAttribute("V2FinalQuality",quality)
+    car:SetAttribute("V2ProcedureStepId","")
+    applyStage(car)
 end
 
 -- stage: "Diagnose" | "Repair" | "None". Os prompts só ligam depois que o carro estaciona.
@@ -479,6 +590,10 @@ function VehicleService.SetRepairing(jobId: string, on: boolean)
 		return
 	end
 	car:SetAttribute("Reparando", on)
+    if type(car:GetAttribute("V2ProcedureFamily"))=="string" then
+        car:SetAttribute("V2RepairStage",on and "During" or "Ready")
+        applyStage(car)
+    end
 	local bay = bayOf(car)
 	if bay then
 		task.spawn(StationService.Lift, bay, car.PrimaryPart, on)

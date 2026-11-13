@@ -106,7 +106,7 @@ function OperationRepairGame.new(gui: ScreenGui)
 		pendingAction = nil
 		statusRef = nil
 		if notify then
-			Store.Act("CancelRepair", {})
+			Store.Act("CancelRepair", { JobId = jobId, Token = sessionToken })
 		end
 		Motion.scale(pop, 0.9, Motion.Close)
 		task.delay(0.13, function()
@@ -139,25 +139,39 @@ function OperationRepairGame.new(gui: ScreenGui)
 		if sessionToken == "" then
 			active = false
 			status.Text = "Sessão sem identificador; tente iniciar o reparo novamente."
-			Store.Act("CancelRepair", {})
+			Store.Act("CancelRepair", { JobId = jobId, Token = sessionToken })
 			return
 		end
 
 		local function submit(kind: string, id: string?, value: any, apply: () -> ())
 			if not active or waiting or pendingAction then return end
-			pendingAction = { Apply = apply, JobId = jobId, Token = sessionToken }
+			pendingAction = {
+				Apply = apply, JobId = jobId, Token = sessionToken,
+				Revision = revision,
+			}
 			local requested = pendingAction
-			Store.Act("RepairAction", {
+			local request = {
 				JobId = jobId, Token = sessionToken,
 				Command = { Revision = revision, Kind = kind, Id = id, Value = value },
-			})
-			task.delay(4, function()
-				if pendingAction == requested and active then
-					pendingAction = nil
-					Store.Message:Fire("Sem confirmação do servidor. Reinicie o reparo para evitar inconsistência.", false, "RepairAction")
-					close(true)
-				end
-			end)
+			}
+			-- Retransmitimos a MESMA revisão. O servidor responde à repetição
+			-- sem reaplicar a etapa ou duplicar resultados.
+			local function transmit(attempt: number)
+				if pendingAction ~= requested or not active then return end
+				Store.Act("RepairAction", request)
+				task.delay(attempt == 1 and 2.5 or 3, function()
+					if pendingAction ~= requested or not active then return end
+					if attempt < 3 then
+						status.Text = "Conexão lenta: reconfirmando a etapa (" .. attempt .. "/2)..."
+						transmit(attempt + 1)
+					else
+						pendingAction = nil
+						Store.Message:Fire("Sem resposta do servidor. Reabra o reparo para continuar com segurança.", false, "RepairAction")
+						close(true)
+					end
+				end)
+			end
+			transmit(1)
 		end
 
 		local function update()
@@ -386,9 +400,10 @@ function OperationRepairGame.new(gui: ScreenGui)
 			status.Text = "Verificando reparo com o servidor..."
 			input.Token = sessionToken
 			Store.Act("FinishRepair", { JobId = jobId, Presses = input })
-			task.delay(5, function()
+			task.delay(10, function()
 				if waiting and active and not showingResult then
-					close(false)
+					Store.Message:Fire("O servidor não confirmou a entrega. Consulte a OS para verificar o resultado.", false, "FinishRepair")
+					close(true)
 				end
 			end)
 		end)
@@ -422,7 +437,8 @@ function OperationRepairGame.new(gui: ScreenGui)
 	Store.RepairDone.Event:Connect(showResult)
 	Store.RepairActionAck.Event:Connect(function(payload: any)
 		if type(payload) ~= "table" or not active or payload.JobId ~= jobId
-			or payload.Token ~= sessionToken or not pendingAction then return end
+			or payload.Token ~= sessionToken or not pendingAction
+			or payload.RequestRevision ~= pendingAction.Revision then return end
 		local action = pendingAction
 		pendingAction = nil
 		if payload.Accepted == true and type(payload.Revision) == "number"
@@ -441,7 +457,7 @@ function OperationRepairGame.new(gui: ScreenGui)
 	end)
 	Store.Message.Event:Connect(function(_text: string, success: boolean, action: string)
 		if action == "FinishRepair" and not success and active then
-			close(false)
+			close(true)
 		end
 	end)
 

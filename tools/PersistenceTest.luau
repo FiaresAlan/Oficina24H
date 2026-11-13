@@ -916,6 +916,38 @@ do
 		and not A.HasRepairCredit(worker, "new_paid", token))
 end
 
+-- C23: falha no crédito (arquivo de confirmações lotado) NÃO remove
+-- a claim, mesmo quando a prova do dono foi salva com sucesso.
+do
+	local Paid = require(game.ReplicatedStorage.Shared.WorkerSettlementProofRules)
+	local store = newStore()
+	local A = server(store, "workerPaidC23-claimFull")
+	local owner, worker = fakePlayer(2331), fakePlayer(2332)
+	local token = "c23fffff-1111-2222-3333-eeeeeeeeeeee"
+	A.Load(owner) A.Load(worker)
+	for i = 1, Paid.MaxEntries do
+		local tk = string.format("c23abcde-1111-2222-3333-%012d", i)
+		Paid.Add(A.Get(worker).WorkerSettlementProofs,
+			Paid.Make("paid_" .. i, tk, 3, 1790000000, "Freios", "Hatch"))
+	end
+	check("C23: contrato com claim pode ser persistido antes de crédito",
+		A.StageWorkerClaim(worker, owner.UserId, "job_unpaid", token,
+			70, 190, 35, 90, "Freios", "Hatch", "Freios"))
+	A.Get(worker).PendingClaims[1].At = os.time() - 1200
+	local balance = A.Get(worker).Coins
+	check("C23: somente a parcela do proprietário consta como paga",
+		A.CreditRepairOnce(owner, "job_unpaid", token, 70, "Owner",
+			"Freios", "Hatch", worker.UserId, 190)
+		and A.Save(owner) and A.Save(worker))
+	check("C23: tentativa de resgate com arquivo cheio não remove claim",
+		A.ReconcileWorkerClaims(worker) == 0
+		and #A.Get(worker).PendingClaims == 1
+		and A.Get(worker).Coins == balance
+		and not A.HasRepairCredit(worker, "job_unpaid", token))
+	check("C23: após salvar, a dívida ainda pode ser recuperada no futuro",
+		A.Save(worker) and #store.data["u_2332"].PendingClaims == 1)
+end
+
 for _, c in ipairs(clones) do c:Destroy() end
 table.insert(results, failures == 0 and "TODOS OS TESTES PASSARAM" or (failures .. " TESTE(S) FALHARAM"))
 return table.concat(results, "\n")

@@ -220,6 +220,62 @@ local function setup(model: Model): CarFx?
 	end
 	local parts = ownParts(model, root)
 	local wheels = detectWheels(model, root, parts)
+    if type(model:GetAttribute("V2PilotId")) == "string" then
+        -- Complementa GLBs monobloco que não tenham rodas individuais.
+        -- Visual cliente; o Casco e toda a física continuam no servidor.
+        local L, W, H = dims(model)
+        for _, spec in ipairs({
+            { Id = "WheelFL", Front = true, Side = -1 },
+            { Id = "WheelFR", Front = true, Side = 1 },
+            { Id = "WheelRL", Front = false, Side = -1 },
+            { Id = "WheelRR", Front = false, Side = 1 },
+        }) do
+            local exists = false
+            for _, group in ipairs(wheels) do
+                if group.Front == spec.Front and group.Side == spec.Side then
+                    exists = true
+                    break
+                end
+            end
+            if not exists then
+                local radius = math.clamp(H * 0.21, 0.65, 1.65)
+                local axle = Vector3.new(spec.Side * W * 0.46, radius,
+                    (spec.Front and -1 or 1) * L * 0.34)
+                local tire = Instance.new("Part")
+                tire.Name = "V2Proxy_" .. spec.Id
+                tire.Shape = Enum.PartType.Cylinder
+                tire.Size = Vector3.new(0.82, radius * 2, radius * 2)
+                tire.Color = Color3.fromRGB(26, 28, 31)
+                tire.Material = Enum.Material.SmoothPlastic
+                tire.Anchored = true
+                tire.CanCollide, tire.CanTouch, tire.CanQuery = false, false, false
+                tire.CFrame = root.CFrame * CFrame.new(axle)
+                tire:SetAttribute("V2GeneratedVisual", true)
+                tire.Parent = model
+                local hub = Instance.new("Part")
+                hub.Name = "V2ProxyHub_" .. spec.Id
+                hub.Shape = Enum.PartType.Cylinder
+                hub.Size = Vector3.new(0.11, radius * 1.15, radius * 1.15)
+                hub.Color = Color3.fromRGB(150, 158, 168)
+                hub.Material = Enum.Material.Metal
+                hub.Anchored = true
+                hub.CanCollide, hub.CanTouch, hub.CanQuery = false, false, false
+                hub.CFrame = tire.CFrame * CFrame.new(spec.Side * 0.44, 0, 0)
+                hub:SetAttribute("V2GeneratedVisual", true)
+                hub.Parent = model
+                table.insert(wheels, {
+                    Parts = { tire, hub },
+                    Offsets = { CFrame.identity, CFrame.new(spec.Side * 0.44, 0, 0) },
+                    Axle = axle,
+                    Radius = radius,
+                    Side = spec.Side,
+                    Front = spec.Front,
+                    Spin = 0,
+                    V2Removed = 0,
+                })
+            end
+        end
+    end
 	local hood = detectHood(model, root, parts)
     if not hood and type(model:GetAttribute("V2PilotId")) == "string" then
         -- Asset monobloco: painel articulável client-side até o artista fornecer capô separado.

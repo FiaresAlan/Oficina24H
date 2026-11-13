@@ -694,3 +694,12 @@ Detalhes em `docs/AUDITORIA_GERAL.md`. Resumo:
 - `tools/ci/verify_contracts.py` é verificação estática independente do Studio. **Não substitui `RunAllTests`** nem performance/visual/multiplayer.
 - O GitHub Actions iniciou a verificação na branch de integração; resultado deve ser consultado na própria página antes de marcar aprovado.
 - Checklist [Issue #15](https://github.com/FiaresAlan/Oficina24H/issues/15) permanece fonte de verdade do produto final. A `main` não foi alterada.
+
+## 2026-11-12 — C5: ações incrementais de reparo autorizadas pelo servidor (PR #21)
+
+- `RepairActionRules.lua`: protocolo server-side para os 15 serviços, com revisão crescente, no máximo 64 ações, validação de valores/operações e reconstrução dos resultados a partir do estado confirmado (7 modos).
+- `WorkshopService.lua`: emite token GUID para cada sessão, verifica localização, profissional autorizado, equipamento e estoque a cada comando, e usa exclusivamente `FinalInput` do servidor ao concluir a operação. Token antigo não consome uma sessão nova.
+- `Main.server.lua` e `Store.lua`: remoto `RepairAction` com `RepairActionAck`, sem perda silenciosa pelo rate limit genérico.
+- `OperationRepairGame.lua`: atualiza estado dos controles somente após ACK positivo; se a confirmação se perder, cancela e reinicia em vez de permitir divergência.
+- `RepairActionRulesTest.luau` incluído em `RunAllTests` e requisitos C5 acrescentados ao CI; critérios de QA em `docs/TESTE_C5_REPARO_SERVER_ACTIONS_2026-11-12.md`.
+- **Integração de código na `main` autorizada pelo Product Owner, separadamente da homologação de Studio realizada por outra ferramenta.** Esta fase não foi executada em Roblox Studio nem em celular; ações plausíveis podem continuar automatizadas.

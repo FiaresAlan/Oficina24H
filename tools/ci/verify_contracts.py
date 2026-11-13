@@ -454,7 +454,7 @@ check("V2-06: floor pads never charge on physical entry",
       and "prompt.Triggered:Connect" in pad_service
       and "Quotes.Step" in pad_service
       and "entry.Pending=nextPending" in pad_service
-      and "if onPurchase then onPurchase(player,id,plot) end" in pad_service
+      and "if onPurchase then onPurchase(player,id,plot,target,price) end" in pad_service
       and "entry.WasInside" not in pad_service
       and "touching(root" not in pad_service)
 check("upgrade server verifies plot ownership",

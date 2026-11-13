@@ -541,6 +541,7 @@ function WorkshopService.GetSnapshot(player: Player)
         Ranking = CustomerRules.Rank(ranking),
         Profile = profileView,
         RecentSettlements = DataService.RecentRepairSettlements(player, 12),
+        PendingClaimSummary = DataService.PendingClaimSummary(player),
         HasWorkshop = workshop ~= nil,
         Workshop = (workshop and profile) and upgradeInfoRef(player, profile) or nil,
         Progress = profile and ProgressService.Snapshot(player, profile) or nil,

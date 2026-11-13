@@ -35,6 +35,11 @@ ownerLedger[1].Amount, ownerLedger[1].Role = 80, "Worker"
 check("papel divergente não autoriza", not Rules.Authorized(c, ownerLedger))
 ownerLedger[1].Role, ownerLedger[1].Service = "Owner", "Motor"
 check("serviço divergente não autoriza", not Rules.Authorized(c, ownerLedger))
+check("C15: reivindicação recém-criada não é resgatável", not Rules.Recoverable(c, 1790000000 + 2))
+check("C15: reivindicação antiga permite tentar resgate", Rules.Recoverable(c, 1790000000 + Rules.RecoveryGraceSeconds))
+local summary = Rules.Summary({ c }, 1790000000 + 90000)
+check("C15: contagem agregada", summary.Count == 1 and summary.Overdue == 1 and summary.OldestSeconds == 90000)
+check("C15: resumo não vaza token ou ID", summary.Token == nil and summary.JobId == nil)
 check("remove após salvamento", Rules.Remove(pending, "job_1", token) and #pending == 0)
 check("remoção idempotente", not Rules.Remove(pending, "job_1", token))
 table.insert(lines, fail == 0 and "TODOS OS TESTES PASSARAM" or (fail .. " TESTE(S) FALHARAM"))

@@ -5,6 +5,7 @@ local Ledger = require(script.Parent.SettlementLedgerRules)
 local OwnerProofs = require(script.Parent.OwnerSettlementProofRules)
 local Claims = {}
 Claims.MaxPending = 64
+Claims.RecoveryGraceSeconds = 120 -- não recuperar enquanto o FinishRepair normal ainda pode estar em andamento
 
 local function integer(x: any, low: number, high: number): boolean
 	return type(x) == "number" and x == x and x ~= math.huge and x ~= -math.huge
@@ -80,6 +81,26 @@ end
 
 -- Prova C14 prevalece, incluindo identidade do contratado. Quando há prova
 -- divergente, NÃO recua para o ledger legado de 64 lançamentos.
+function Claims.Recoverable(claim: any, now: any): boolean
+	return Claims.Valid(claim) and type(now) == "number"
+		and now == now and now - claim.At >= Claims.RecoveryGraceSeconds
+end
+
+-- Somente contagens agregadas podem seguir para a HUD; nunca incluir token/JobId.
+function Claims.Summary(raw: any, now: number): any
+	local summary = { Count = 0, Overdue = 0, OldestSeconds = 0 }
+	if type(raw) ~= "table" or type(now) ~= "number" then return summary end
+	for _, c in ipairs(raw) do
+		if Claims.Valid(c) then
+			local age = math.max(0, math.floor(now - c.At))
+			summary.Count += 1
+			if age >= 86400 then summary.Overdue += 1 end
+			summary.OldestSeconds = math.max(summary.OldestSeconds, age)
+		end
+	end
+	return summary
+end
+
 function Claims.Authorized(claim: any, ownerLedger: any, ownerProofs: any?, workerId: any?): boolean
 	if not Claims.Valid(claim) then return false end
 	local proof = OwnerProofs.Find(ownerProofs, claim.JobId, claim.Token)

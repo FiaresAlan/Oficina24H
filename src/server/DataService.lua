@@ -32,6 +32,7 @@ local Saving: { [number]: boolean } = {}
 local Removing: { [number]: boolean } = {} -- saída em andamento (grava e solta a trava); Load e BindToClose esperam
 local Reconciling: { [number]: boolean } = {}
 local ClaimCursor: { [number]: number } = {}
+local LastClaimAlert: { [number]: number } = {}
 local Store: any = nil
 local JobId: string = game.JobId ~= "" and game.JobId or "studio"
 local MemoryMode = false
@@ -523,6 +524,11 @@ function DataService.StageWorkerClaim(worker: Player, ownerUserId: number, jobId
 	return true
 end
 
+function DataService.PendingClaimSummary(player: Player): any
+	local profile = Profiles[player.UserId]
+	return SettlementClaimRules.Summary(profile and profile.PendingClaims, os.time())
+end
+
 function DataService.DiscardWorkerClaim(worker: Player, jobId: any, token: any): boolean
 	local profile = Profiles[worker.UserId]
 	if not profile or not SettlementClaimRules.Remove(profile.PendingClaims, jobId, token) then return false end
@@ -549,6 +555,9 @@ function DataService.ReconcileWorkerClaims(worker: Player): number
 		local claim = pending[index]
 		if claim and SettlementClaimRules.Valid(claim) then
 			visited += 1
+			-- A reivindicação é escrita antes do reparo terminar. Nunca deixar
+			-- a rotina de resgate competir com o crédito normal do mesmo token.
+			if not SettlementClaimRules.Recoverable(claim, os.time()) then continue end
 			local already = DataService.HasRepairCredit(worker, claim.JobId, claim.Token)
 			local verified = already
 			if not already then
@@ -584,6 +593,13 @@ function DataService.ReconcileWorkerClaims(worker: Player): number
 		end
 	end
 	ClaimCursor[userId] = total > 0 and ((start + visited - 1) % total) + 1 or 1
+	local summary = SettlementClaimRules.Summary(profile.PendingClaims, os.time())
+	local alerted = LastClaimAlert[userId] or 0
+	if summary.Overdue > 0 and os.time() - alerted >= 86400 then
+		LastClaimAlert[userId] = os.time()
+		warn("[DataService] Reivindicações antigas não resolvidas:", userId,
+			"quantidade", summary.Overdue, "idade máxima (h)", math.floor(summary.OldestSeconds / 3600))
+	end
 	Reconciling[userId] = nil
 	return recovered
 end
@@ -863,6 +879,7 @@ function DataService.Remove(player: Player)
 		Profiles[userId] = nil
 		Dirty[userId] = nil
 		ClaimCursor[userId] = nil
+		LastClaimAlert[userId] = nil
 	end
 	Removing[userId] = nil
 end

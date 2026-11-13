@@ -362,6 +362,7 @@ function Orders.new(parent: Instance)
 		table.insert(parts, HttpService:JSONEncode({ snapshot.Profile.Parts, snapshot.Profile.Equipment, snapshot.SkillLevels }))
 		table.insert(parts, tostring(#(snapshot.Profile.OrderHistory or {})))
 		table.insert(parts, HttpService:JSONEncode(snapshot.RecentSettlements or {}))
+		table.insert(parts, HttpService:JSONEncode(snapshot.PendingClaimSummary or {}))
 		return table.concat(parts, "|")
 	end
 
@@ -454,6 +455,15 @@ function Orders.new(parent: Instance)
 			end
 		else
 			local statement = RepairStatementRules.Build(snapshot.RecentSettlements)
+			local pending = snapshot.PendingClaimSummary or {}
+			if (pending.Count or 0) > 0 then
+				HudParts.text(scroll,
+					string.format("%d pagamento(s) em verificação%s",
+						pending.Count, (pending.Overdue or 0) > 0 and " · há pendência com mais de 24h" or ""),
+					20, { Font = Theme.FontSemi, TextColor3 = rgb(255, 190, 85),
+						TextWrapped = true, AutomaticSize = Enum.AutomaticSize.Y,
+						Size = UDim2.new(1, 0, 0, 0), LayoutOrder = 0 })
+			end
 			if statement.Count > 0 then
 				HudParts.text(scroll, "EXTRATO DE REPAROS · ÚLTIMOS " .. statement.Count .. " CRÉDITOS", 25, {
 					Font = Theme.FontTitle, TextColor3 = Theme.Accent, LayoutOrder = 0,

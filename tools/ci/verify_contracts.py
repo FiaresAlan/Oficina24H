@@ -205,6 +205,30 @@ check("claim reconciliation runs on load and autosave",
 check("claim tests registered",
       '"SettlementClaimRulesTest"' in runner and (TOOLS / "SettlementClaimRulesTest.luau").is_file())
 
+# C14/C15: a prova do dono tem retenção independente e o resgate só roda
+# após janela de segurança; resumos de pendências não expõem tokens.
+proof = text(SHARED / "OwnerSettlementProofRules.lua")
+check("archive compact proofs for 1024 collaboration payments",
+      "Proofs.MaxEntries = 1024" in proof and "function Proofs.Sanitize" in proof)
+check("owner archive is private and saved with the profile",
+      "OwnerSettlementProofs = {}" in data_service
+      and "OwnerSettlementProofRules.Sanitize(data.OwnerSettlementProofs)" in data_service
+      and "profileView.OwnerSettlementProofs = nil" in workshop)
+check("owner credit creates archive bound to worker",
+      '"Owner", service.DisplayName, job.VehicleName, player.UserId, actorPay)' in workshop)
+check("recovery verifies owner proof",
+      "ownerRaw.OwnerSettlementProofs, userId)" in data_service
+      and "OwnerProofs.Authorizes(proof, claim, workerId)" in claim)
+check("claim grace prevents in-flight double payment",
+      "Claims.RecoveryGraceSeconds = 120" in claim
+      and "SettlementClaimRules.Recoverable(claim, os.time())" in data_service)
+check("pending claims only expose aggregate counts",
+      "function Claims.Summary" in claim
+      and "PendingClaimSummary = DataService.PendingClaimSummary(player)" in workshop
+      and "snapshot.PendingClaimSummary" in orders)
+check("archive tests registered",
+      '"OwnerSettlementProofRulesTest"' in runner
+      and (TOOLS / "OwnerSettlementProofRulesTest.luau").is_file())
 check("readme links project checklist", "issues/15" in text(ROOT / "README.md"))
 
 print(f"\nStatic checks: {passed} passed, {len(failures)} failed")

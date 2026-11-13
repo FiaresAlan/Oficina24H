@@ -805,3 +805,5 @@ Detalhes em `docs/AUDITORIA_GERAL.md`. Resumo:
 - **Limpeza segura:** a conclusão dos dois perfis inicia remoção da claim do contratado, salva a conta do trabalhador e só então remove a prova correspondente da conta do dono. Em falha de Save, mantém prova.
 - **Regressões escritas:** `OwnerSettlementProofRulesTest`, `PersistenceTest` (falha do DataStore, idempotência, reconexão, 1024 provas) e `verify_contracts.py`. Detalhes em `docs/TESTE_C21_PROVAS_REPASSE_2026-11-13.md`.
 - **Limitações:** não há atomicidade entre duas chaves, proofs/claims antigos de trabalhadores offline podem ocupar espaço e o Studio ainda não foi executado. A V2 continua somente documental.
+
+- **Revisão C21 após CI:** `DataService.SettleRepairOwnerOnce` liquida crédito do dono + estoque sem yield após `Save` da claim, com rollback caso o arquivo tenha sido preenchido por outra OS durante a espera. Worker recebe apenas após sucesso do dono, com crédito/recibo/XP aplicados na retentativa antes de confirmar entrega. Regressão adicional em `PersistenceTest` e verificação CI.

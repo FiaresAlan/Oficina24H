@@ -1059,6 +1059,11 @@ local function persistDelivery(entry: any): boolean
                     return false
                 end
             end
+            -- O crédito pode ter sido criado APÓS a montagem inicial do
+            -- recibo, no caminho de retry. Anexá-lo antes do Save do worker.
+            if not DataService.GetRepairReceipt(entry.Worker, entry.JobId, entry.Token) then
+                DataService.AttachRepairReceipt(entry.Worker, entry.JobId, entry.Token, entry.Receipt)
+            end
             if not entry.WorkerXpApplied then
                 DataService.AddSkillXP(entry.Worker, entry.Spec, entry.XP)
                 entry.WorkerXpApplied = true

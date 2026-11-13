@@ -237,7 +237,8 @@ check("C21: owner shares and parts settle with rollback after the claim Save yie
 check("C21: worker credit and XP confirmed before worker account save",
       'if not DataService.HasRepairCredit(entry.Worker, entry.JobId, entry.Token)' in workshop
       and 'DataService.AddSkillXP(entry.Worker, entry.Spec, entry.XP)' in workshop
-      and 'entry.WorkerXpApplied = workerCredited' in workshop)
+      and 'entry.WorkerXpApplied = workerCredited' in workshop
+      and 'DataService.AttachRepairReceipt(entry.Worker, entry.JobId, entry.Token, entry.Receipt)' in workshop)
 check("C21: owner proof released only after worker claim cleanup saved",
       "DataService.DiscardWorkerClaim(entry.Worker, entry.JobId, entry.Token)" in workshop
       and "if not DataService.Save(entry.Worker) then" in workshop

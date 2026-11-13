@@ -13,6 +13,7 @@ A lista privada `OwnerSettlementProofs` retinha até 1024 provas. Ao adicionar a
 5. `OwnerSettlementProofRulesTest` agora cobre arquivo cheio, preservação da prova mais antiga, recusa de substituição, validação do trabalhador ao remover e reuso do espaço após a confirmação.
 6. `PersistenceTest` simula falha do `UpdateAsync` por 4 tentativas, permanência da prova durante falha de remoção da claim, limpeza ordenada, reconexão, saldo único, ledger idempotente e bloqueio de novas provas com arquivo cheio.
 7. `tools/ci/verify_contracts.py` exige o encadeamento de segurança de capacidade e limpeza do comprovante após `Save(worker)`.
+8. **Revisão de concorrência da própria C21:** o salvamento prévio da claim pode ceder controle ao servidor enquanto outros reparos ocupam as últimas posições. Por isso `DataService.SettleRepairOwnerOnce` agora valida/consome peças e credita a parcela do dono no mesmo perfil sem yield, devolvendo as peças se não conseguir registrar prova. O proprietário é creditado antes do contratado; o executor pode recuperar seu crédito e XP, se necessário, após a prova do dono persistir. O retry anexa também o recibo privado do mecânico antes de salvar. A mensagem de sucesso depende dos dois perfis.
 
 ## Critério de segurança
 - Uma prova **não pode desaparecer apenas por haver muitas transações posteriores**.
@@ -26,6 +27,8 @@ A lista privada `OwnerSettlementProofs` retinha até 1024 provas. Ao adicionar a
 - Interromper o `Save` do contratado após o crédito do dono: prova permanece, e B recupera a parcela na próxima sessão após a janela de segurança, sem novo pagamento de A.
 - Simular atraso de dados, 2 servidores com reconexão e logout durante a limpeza das claims; reconciliação não deve perder nem duplicar créditos.
 - Com 1024 provas **ainda não confirmadas**, nova colaboração deve falhar ANTES de gastar peças ou pagar, com mensagem explicativa; atividades comuns continuam.
+- Dois mecânicos colaboradores completando ordens diferentes ao mesmo tempo, com 1023 provas já armazenadas: somente um novo repasse pode registrar prova; o outro não pode retirar estoque nem ficar com a conta do dono parcialmente paga. Retestar com o contratado entrando e saindo durante o `Save`.
+- Injetar falha de `CreditRepairOnce(worker)` depois de salvar a parcela do dono: o caminho de retry deve anexar recibo e XP uma vez, sem enviar `RepairDone` até o salvamento ser confirmado.
 - Conferir DataStore budget/tempo de salvamento e performance em servidor real, além de `RunAllTests` e `StudioPlaceAudit`.
 
 ## Limitações que continuam abertas (não afirmar atomicidade)

@@ -7,7 +7,7 @@ local suites = {
 	"RepairPrepTest", "RepairSocketTest", "RepairPartVisualTest", "HudLayoutTest", "CompactHudTest",
 	"ServiceFocusTest", "RepairOperationsTest", "WorkshopProceduresTest", "RepairActionRulesTest", "RepairReceiptTest", "SettlementLedgerTest", "SettlementDeliveryRulesTest", "SettlementClaimRulesTest", "SettlementClaimAuditRulesTest", "OwnerSettlementProofRulesTest", "OwnerProofSweepRulesTest", "WorkerSettlementProofRulesTest", "WorkerProofArchiveRulesTest", "RepairStatementTest", "CollaborationRulesTest",
 	"RepairSessionTest", "LocationTest", "RivalRulesTest", "PlotTest", "PersistenceTest",
-	"ProgressTest", "EquipmentUpgradeTest", "StaffAssignmentTest", "V2FoundationTest", "V2PilotRigTest", "V2ManagementSummaryTest", "V2ReceptionRulesTest", "V2SupplyRulesTest", "V2PilotRigBuilderTest", "StudioPlaceAudit",
+	"ProgressTest", "EquipmentUpgradeTest", "StaffAssignmentTest", "V2FoundationTest", "V2PilotRigTest", "V2ManagementSummaryTest", "V2ReceptionRulesTest", "V2SupplyRulesTest", "V2PilotRigBuilderTest", "V2VisualBudgetTest", "StudioPlaceAudit",
 }
 local output = {}
 local totalPass, totalFail, totalWarn = 0, 0, 0

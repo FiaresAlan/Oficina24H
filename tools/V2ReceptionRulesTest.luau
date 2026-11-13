@@ -7,6 +7,8 @@ check("validacao numerica sem exploits",R.ValidPriority(1) and not R.ValidPriori
 check("desconto calculado da base",R.PriceAfterDiscount(100,10)==90 and R.PriceAfterDiscount(100,0)==100)
 local a,b=R.GeneralPriceGuide(1)
 check("faixa geral de preco nao envolve defeito oculto",a>0 and b>=a)
+local defaultLow,defaultHigh=R.GeneralPriceGuide(nil)
+check("perfil sem multiplicador usa preco neutro",defaultLow>0 and defaultHigh>=defaultLow)
 local j={Status="Available",OwnerUserId=12,Priority=1,WaitSeconds=30,ScheduledUntil=200}
 check("agendamento visivel",R.Stage(j,{},100)=="Agendado")
 check("agendamento vencido retorna fila",R.Stage(j,{},201)=="Aguardando cliente")

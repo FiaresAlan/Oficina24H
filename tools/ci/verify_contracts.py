@@ -589,6 +589,23 @@ check("V2: testes de novos contratos integrados",
     all(f'"{name}"' in runner and (TOOLS / (name + ".luau")).is_file()
        for name in ("V2ReceptionRulesTest", "V2SupplyRulesTest", "V2PilotRigBuilderTest")))
 
+check("V2-01: LOD leve e teste visual registrados",
+    (CLIENT / "V2PilotLOD.client.lua").is_file()
+    and "LocalTransparencyModifier" in text(CLIENT / "V2PilotLOD.client.lua")
+    and "function Rules.Show" in text(SHARED / "V2VisualBudgetRules.lua")
+    and "function Rules.Apply" in text(SHARED / "V2PilotArtProfiles.lua")
+    and (TOOLS / "V2AuthorPilotRigs.luau").is_file()
+    and (TOOLS / "V2VisualBudgetTest.luau").is_file()
+    and '"V2VisualBudgetTest"' in runner)
+check("V2-02: descontos exibidos e vagas livres consideram bay real",
+    "DiscountPercent = job.DiscountPercent or 0" in workshop
+    and "VehicleService.GetFreeBayCount" in workshop
+    and "FreeBays = freeBays" in v2_management)
+check("V2-02: wishlist so limpa em pagamento confirmado",
+    "function DataService.FulfillSupplyRequest" in data_service
+    and "DataService.FulfillSupplyRequest(player, partId, quantity)" in workshop
+    and "V2SupplyRules.OnPurchase(profile.SupplyRequests" in data_service)
+
 print(f"\nStatic checks: {passed} passed, {len(failures)} failed")
 if failures:
     raise SystemExit(1)

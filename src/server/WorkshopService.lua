@@ -493,6 +493,7 @@ function WorkshopService.GetSnapshot(player: Player)
                     Priority = job.Priority or 0,
                     ScheduledUntil = job.ScheduledUntil or 0,
                     ScheduleUsed = job.ScheduleUsed == true,
+                    DiscountPercent = job.DiscountPercent or 0,
                     Diagnosed = job.Diagnosed,
                     Repairing = employeeReserved(job)
                         or (Repairs[job.OwnerUserId] ~= nil and Repairs[job.OwnerUserId].JobId == job.Id)
@@ -592,6 +593,7 @@ function WorkshopService.GetSnapshot(player: Player)
             HasWorkshop = workshop ~= nil,
             Profile = profileView,
             Jobs = jobs,
+            FreeBays = workshop and PlotService.GetPlot(player) and VehicleService.GetFreeBayCount(PlotService.GetPlot(player)) or nil,
         }),
     }
 end

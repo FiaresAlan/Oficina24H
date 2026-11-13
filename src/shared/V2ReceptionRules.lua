@@ -40,7 +40,8 @@ function Rules.GeneralPriceGuide(multiplier: any): (number, number)
         low = math.min(low, service.Reward)
         high = math.max(high, service.Reward)
     end
-    local rate = math.clamp(number(multiplier), 0.7, 1.5)
+    local rate = math.clamp(type(multiplier) == "number" and multiplier == multiplier
+        and multiplier ~= math.huge and multiplier ~= -math.huge and multiplier or 1, 0.7, 1.5)
     return math.floor(low * rate), math.ceil(high * rate * 2)
 end
 

@@ -17,7 +17,7 @@ function Rules.Attach(model: Model, vehicleName: string): (boolean, number)
     local pilotId = names[vehicleName]
     if not pilotId then return false, 0 end
     local root = model.PrimaryPart
-    if not root then return false, 0 end
+    if not root or not root:IsDescendantOf(model) then return false, 0 end
     local width = safeDimension(model:GetAttribute("Largura"), 8, 4, 14)
     local length = safeDimension(model:GetAttribute("Comprimento"), 16, 8, 32)
     local height = safeDimension(model:GetAttribute("Altura"), 4, 2, 9)

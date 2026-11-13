@@ -41,6 +41,11 @@ function Rules.Build(snapshot: any): any
             end
         end
     end
+    local freeBays = math.max(0, bays - busy)
+    if type(s.FreeBays) == "number" and s.FreeBays == s.FreeBays
+        and s.FreeBays % 1 == 0 and s.FreeBays >= 0 and s.FreeBays <= bays then
+        freeBays = s.FreeBays -- fonte real: bays reservados também por carros chegando/saindo
+    end
     local action = "Acompanhe as ordens de serviço"
     if not s.HasWorkshop then action = "Registre a oficina para começar"
     elseif urgent > 0 then action = "Clientes aguardando há muito tempo"
@@ -54,7 +59,7 @@ function Rules.Build(snapshot: any): any
         for _, n in pairs(profile.Parts) do stockUnits += nonnegative(n) end
     end
     return {
-        Bays = bays, FreeBays = math.max(0, bays - busy), Waiting = waiting, Working = busy,
+        Bays = bays, FreeBays = freeBays, Waiting = waiting, Working = busy,
         Urgent = urgent, Employees = nonnegative(profile.Employees), Coins = nonnegative(profile.Coins),
         RecentGross = gross, RecentCount = count, DiagnosedEstimateGross = estimated,
         DiagnosedPartsEstimate = estimatedParts,

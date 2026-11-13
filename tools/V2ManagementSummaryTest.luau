@@ -8,6 +8,10 @@ local s={HasWorkshop=true,Profile={WorkshopLevel=1,Coins=150,Employees=1,
  {Status="InProgress",Diagnosed=true,Requirement={Reward=120}}}}
 local a=R.Build(s)
 test("capacidade do predio",a.Bays==2 and a.FreeBays==1)
+s.FreeBays=0
+local occupied=R.Build(s)
+test("capacidade respeita vaga realmente reservada",occupied.FreeBays==0)
+s.FreeBays=nil
 test("fila/risco/ocupacao",a.Waiting==2 and a.Working==1 and a.Urgent==1)
 test("dados financeiros e equipe",a.Coins==150 and a.Employees==1 and a.RecentGross==145)
 test("nao inventa lucro",a.NetProfitAvailable==false and a.DiagnosedEstimateGross==120)

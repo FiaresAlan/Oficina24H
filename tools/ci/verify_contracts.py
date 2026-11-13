@@ -104,6 +104,31 @@ check("cliente envia token ao cancelar", 'Store.Act("CancelRepair", { JobId = jo
 check("regressões de rede registradas", (TOOLS / "RepairActionRulesTest.luau").is_file()
       and (TOOLS / "RepairSessionTest.luau").is_file())
 
+# C7: recuperar resultado é uma leitura privada, nunca uma segunda liquidação.
+receipt_rules = text(SHARED / "RepairReceiptRules.lua")
+check("receipt bounded by time and per-user count",
+      "RepairReceiptRules.TtlSeconds" in receipt_rules and "RepairReceiptRules.MaxPerPlayer" in receipt_rules)
+check("receipt returns defensive copy", "return clonePayload(entry.Payload)" in receipt_rules)
+check("receipt tests in runner", '"RepairReceiptTest"' in runner
+      and (TOOLS / "RepairReceiptTest.luau").is_file())
+check("server stores settled receipt before notifying",
+      "RepairReceiptRules.Remember(receipts, jobId, session.Token, receiptPayload" in workshop
+      and workshop.index("RepairReceiptRules.Remember(receipts, jobId, session.Token, receiptPayload")
+      < workshop.index('eventSender(player, "RepairDone", receiptPayload)'))
+check("server duplicate FinishRepair returns receipt without settlement",
+      "Entrega já concluída. Comprovante recuperado." in workshop)
+check("server read-only outcome query",
+      "function WorkshopService.CheckRepairOutcome" in workshop
+      and "RepairReceiptRules.Lookup(RepairReceipts[userId]" in workshop)
+check("server queries do not call FinishRepair",
+      'action == "CheckRepairResult"' in main and '"RepairOutcome"' in main)
+check("client consumes private repair outcome", "Store.RepairOutcome.Event:Connect" in ui
+      and "Store.RepairOutcome:Fire(payload)" in store)
+check("client checks receipt before resending a finish",
+      'Store.Act("CheckRepairResult"' in ui
+      and 'payload.Status == "Completed"' in ui and 'payload.Status == "Active"' in ui)
+check("client result correlated with job and token",
+      "payload.JobId ~= jobId or payload.Token ~= sessionToken" in ui)
 check("readme links project checklist", "issues/15" in text(ROOT / "README.md"))
 
 print(f"\nStatic checks: {passed} passed, {len(failures)} failed")

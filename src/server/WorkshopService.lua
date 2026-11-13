@@ -908,7 +908,12 @@ function WorkshopService.RepairAction(player: Player, jobId: string, token: any,
         VehicleService.SetRepairing(jobId, false)
         return false, "Sessão expirada. Inicie novamente.", 0
     end
-    -- Limite curto para ajustes touch, mas não aceita rajadas de remotes automáticos.
+    -- Resposta idempotente ao mesmo comando após ACK perdido. Não altera progresso,
+    -- não incrementa qualidade e não perde uma ação por limitação de frequência.
+    if RepairActionRules.IsReplay(session.Progress, command) then
+        return true, "", session.Progress.Revision
+    end
+    -- Limite curto para novos ajustes touch; retransmissões não gastam este intervalo.
     if session.LastActionAt and now - session.LastActionAt < 0.07 then
         return false, "Aguarde a confirmação do ajuste anterior.", session.Progress.Revision
     end
@@ -922,8 +927,11 @@ function WorkshopService.RepairAction(player: Player, jobId: string, token: any,
     return false, reason, session.Progress.Revision
 end
 
-function WorkshopService.CancelRepair(player: Player)
+function WorkshopService.CancelRepair(player: Player, jobId: any?, token: any?)
     local session = Repairs[player.UserId]
+    if not RepairSessionRules.CanCancel(session, jobId, token) then
+        return false, "Cancelamento antigo ou de outra sessão ignorado."
+    end
     if session then
         VehicleService.SetRepairing(session.JobId, false)
     end

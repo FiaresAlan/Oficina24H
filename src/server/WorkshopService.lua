@@ -64,7 +64,7 @@ local nextJobId = 0
 local nextInviteId = 0
 local ratingNotifier: ((Player, any) -> ())? = nil -- definido por Main (envia o evento "Rated" ao cliente)
 local eventSender: ((Player, string, any) -> ())? = nil -- definido por Main (RepairStart / RepairDone)
-local Repairs: { [number]: { JobId: string, Plan: any, StartedAt: number } } = {} -- sessões do minijogo, por jogador
+local Repairs: { [number]: { JobId: string, Plan: any, StartedAt: number, Progress: any?, Token: string?, LastActionAt: number? } } = {} -- sessões do minijogo, por jogador
 -- Funcionários por dono: NPCs, ordens em que estão trabalhando e próximo pagamento de salário.
 local Staff: { [number]: { Npcs: { Model }, Busy: { [string]: boolean }, NextPay: number } } = {}
 local RepairAssist: { [number]: boolean } = {} -- preferência de acessibilidade (Reduzir movimento), por jogador
@@ -937,6 +937,12 @@ function WorkshopService.FinishRepair(player: Player, jobId: string, presses: an
     if not session or session.JobId ~= jobId then
         return false, "Nenhum reparo em andamento."
     end
+    -- Um pacote atrasado de uma sessão anterior não pode cancelar a sessão atual.
+    if session.Plan.Kind == "Operations"
+        and (type(presses) ~= "table" or type(presses.Token) ~= "string"
+            or presses.Token ~= session.Token) then
+        return false, "Identificador de sessão inválido."
+    end
     Repairs[player.UserId] = nil -- sessão de uso único: reenviar não paga duas vezes
     local now = os.clock()
     if not RepairSessionRules.IsActive(session, now, RepairRules.MaxSessionSeconds) then
@@ -961,10 +967,6 @@ function WorkshopService.FinishRepair(player: Player, jobId: string, presses: an
     }
     local result
     if session.Plan.Kind == "Operations" then
-        if type(presses) ~= "table" or type(presses.Token) ~= "string" or presses.Token ~= session.Token then
-            VehicleService.SetRepairing(jobId, false)
-            return false, "Identificador de sessão inválido: inicie novamente o procedimento."
-        end
         local verifiedInput, reason = RepairActionRules.FinalInput(session.Plan, session.Progress)
         if not verifiedInput then
             VehicleService.SetRepairing(jobId, false)

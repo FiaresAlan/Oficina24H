@@ -29,7 +29,17 @@ function Rules.MergeMissing(current: any, missing: any): ({ [string]: number }, 
     local nextList = Rules.Sanitize(current)
     if type(missing) ~= "table" then return nextList, 0 end
     local added = 0
-    for partId, count in pairs(missing) do
+    -- Ordem fixa: se o limite de categorias for atingido, o resultado deve
+    -- ser igual após reconnect/replay (pairs() não garante ordem).
+    local ids = {}
+    for partId in pairs(missing) do
+        if type(partId) == "string" and Catalog.Parts[partId] then
+            table.insert(ids, partId)
+        end
+    end
+    table.sort(ids)
+    for _, partId in ipairs(ids) do
+        local count = missing[partId]
         if Catalog.Parts[partId] and type(count) == "number" and count == count
             and count ~= math.huge and count ~= -math.huge and count > 0
             and count % 1 == 0 and count <= Rules.MaxQuantity then

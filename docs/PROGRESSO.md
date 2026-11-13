@@ -703,3 +703,13 @@ Detalhes em `docs/AUDITORIA_GERAL.md`. Resumo:
 - `OperationRepairGame.lua`: atualiza estado dos controles somente após ACK positivo; se a confirmação se perder, cancela e reinicia em vez de permitir divergência.
 - `RepairActionRulesTest.luau` incluído em `RunAllTests` e requisitos C5 acrescentados ao CI; critérios de QA em `docs/TESTE_C5_REPARO_SERVER_ACTIONS_2026-11-12.md`.
 - **Integração de código na `main` autorizada pelo Product Owner, separadamente da homologação de Studio realizada por outra ferramenta.** Esta fase não foi executada em Roblox Studio nem em celular; ações plausíveis podem continuar automatizadas.
+
+## 2026-11-12 — C6: idempotência de ACK e resiliência a oscilações de rede
+
+- **Diagnóstico:** um `RepairAction` confirmado no servidor podia perder o ACK e levar a interface a cancelar toda a sessão. Além disso, um ACK atrasado de revisão anterior podia confundir a ação seguinte e `CancelRepair` não tinha token, arriscando cancelar a sessão recém-iniciada.
+- **Implementado:** `RepairActionRules.IsReplay` reconhece a retransmissão idêntica da última ação confirmada sem executá-la novamente. `WorkshopService` revalida acesso/distância antes de confirmar replay, e `Main.server` responde com `RequestRevision`.
+- **UX:** `OperationRepairGame` realiza até três transmissões do **mesmo comando** (0s, 2,5s, 5,5s); só atualiza controles após ACK correlacionado, avisa em rede lenta e cancela se não houver resposta. Timeout de entrega aumentado para 10s com mensagem de situação incerta.
+- **Segurança:** `CancelRepair` exige `JobId` e GUID nas sessões dos 15 procedimentos; a operação de timing legada permanece compatível. Cancelamentos antigos não afetam o trabalho mais recente.
+- **Regressões:** novos cenários em `RepairActionRulesTest` e `RepairSessionTest` e invariantes de transporte incorporados ao `tools/ci/verify_contracts.py`.
+- **Roteiro de homologação:** `docs/TESTE_C6_REDE_REPARO_2026-11-12.md` (latência, ACK perdido, cancelamento antigo, multiplayer, mobile).
+- **Limite:** desenvolvimento de código e revisões estáticas; **nenhuma simulação real de rede em Studio executada por esta sessão**. A fase só deve ser considerada homologada após Play/2 jogadores/device.

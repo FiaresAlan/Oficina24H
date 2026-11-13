@@ -23,6 +23,7 @@ local DiagnosisEvidence = require(ReplicatedStorage.Shared.DiagnosisEvidence)
 local WorkshopLevels = require(ReplicatedStorage.Shared.WorkshopLevels)
 local EquipmentUpgradeRules = require(ReplicatedStorage.Shared.EquipmentUpgradeRules)
 local StaffAssignmentRules = require(ReplicatedStorage.Shared.StaffAssignmentRules)
+local V2StaffRules = require(ReplicatedStorage.Shared.V2StaffRules)
 local LocationRules = require(ReplicatedStorage.Shared.LocationRules)
 local V2ReceptionRules = require(ReplicatedStorage.Shared.V2ReceptionRules)
 local V2ComponentRules = require(ReplicatedStorage.Shared.V2ComponentRules)
@@ -40,6 +41,7 @@ local StationService = require(script.Parent.StationService)
 local CustomerNpcService = require(script.Parent.CustomerNpcService)
 local RivalService = require(script.Parent.RivalService)
 local NpcKit = require(script.Parent.NpcKit)
+local V2StaffNavigator = require(script.Parent.V2StaffNavigator)
 local ProgressService = require(script.Parent.ProgressService)
 local ContractService = require(script.Parent.ContractService)
 local ContractRules = require(ReplicatedStorage.Shared.ContractRules)
@@ -84,6 +86,7 @@ local SettlingRepairs: { [number]: any } = {} -- barreira de confirmação e ret
 local NpcPendingSaves: { [string]: boolean } = {} -- conclusão NPC: regrava sem reaplicar crédito
 -- Funcionários por dono: NPCs, ordens em que estão trabalhando e próximo pagamento de salário.
 local Staff: { [number]: { Npcs: { Model }, Busy: { [string]: boolean }, NextPay: number } } = {}
+local staffSnapshotRef: ((Player) -> any)? = nil
 -- Uma ordem reservada para NPC não pode simultaneamente ser abandonada,
 -- terceirizada ou iniciada manualmente. Reserva é por JobId e proprietário.
 local function employeeReserved(job: any): boolean
@@ -606,6 +609,7 @@ function WorkshopService.GetSnapshot(player: Player)
         Jobs = jobs,
         CollabJobs = collabJobs,
         SkillLevels = skillLevels,
+        Staff = staffSnapshotRef and staffSnapshotRef(player) or nil,
         Management = V2ManagementSummaryRules.Build({
             HasWorkshop = workshop ~= nil,
             Profile = profileView,
@@ -2171,6 +2175,23 @@ local function staffSpot(plot: Instance, index: number): Vector3?
     return (root * CFrame.new(L.X0 + 8 + index * 2.5, 0.4, 28)).Position -- corredor entre box e sala dos fundos
 end
 
+local function cancelStaffNpc(entry: any, npc: Model)
+    local jobId=npc:GetAttribute("V2JobId")
+    if type(jobId)=="string" and StaffAssignmentRules.IsReserved(entry.Busy,jobId) then
+        StaffAssignmentRules.Release(entry.Busy,jobId)
+        local job=Jobs[jobId]
+        if job and job.Status=="InProgress" then
+            VehicleService.SetRepairing(jobId,false)
+            VehicleService.SetStage(jobId,"Repair")
+            job.EmployeeRetryAt=os.time()+30
+            job.EmployeeAssignedSlot=nil
+        end
+    end
+    npc:SetAttribute("V2JobId",nil)
+    npc:SetAttribute("Trabalhando",nil)
+    npc:Destroy()
+end
+
 local function syncStaff(player: Player)
     local profile = DataService.Get(player)
     local plot = PlotService.GetPlot(player)
@@ -2188,7 +2209,7 @@ local function syncStaff(player: Player)
     while #entry.Npcs > want do
         local npc = table.remove(entry.Npcs)
         if npc then
-            npc:Destroy()
+            cancelStaffNpc(entry,npc)
         end
     end
     while #entry.Npcs < want and plot do
@@ -2199,6 +2220,9 @@ local function syncStaff(player: Player)
             break
         end
         npc:SetAttribute("Funcionario", true)
+        npc:SetAttribute("V2Slot", index)
+        npc:SetAttribute("V2WorkState", "Descansando")
+        npc:SetAttribute("RepairProgress", 0)
         local spot = staffSpot(plot, index)
         npc.Parent = plot
         if spot then
@@ -2209,6 +2233,90 @@ local function syncStaff(player: Player)
         NpcKit.NameTag(npc, "Mecânico " .. name, false)
         table.insert(entry.Npcs, npc)
     end
+end
+
+staffSnapshotRef = function(player: Player): any
+    local profile=DataService.Get(player)
+    if not profile then return nil end
+    local entry=Staff[player.UserId]
+    local rows={}
+    for index=1,math.min(profile.Employees or 0,Config.MaxEmployees) do
+        local p=profile.StaffSlots and profile.StaffSlots[index] or V2StaffRules.DefaultSlot()
+        local npc=entry and entry.Npcs[index]
+        local queued=0
+        for _,job in pairs(Jobs) do
+            if job.OwnerUserId==player.UserId and job.Status=="InProgress"
+                and job.EmployeeAssignedSlot==index then queued+=1 end
+        end
+        table.insert(rows,{
+            Slot=index,Name=npc and npc:GetAttribute("Cliente") or ("Mecânico "..index),
+            Mode=p.Mode,Focus=p.Focus,Completed=p.Completed,Gross=p.Gross,
+            AverageQuality=(p.Completed>0) and math.floor(p.QualitySum/p.Completed+0.5) or 0,
+            AverageSeconds=(p.Completed>0) and math.floor(p.TotalSeconds/p.Completed+0.5) or 0,
+            Recent=p.Recent,
+            Status=npc and npc:GetAttribute("V2WorkState") or "Modelo indisponível",
+            JobId=npc and npc:GetAttribute("V2JobId") or nil,
+            Progress=npc and (npc:GetAttribute("RepairProgress") or 0) or 0,
+            Queued=queued,
+        })
+    end
+    return {
+        Employees=profile.Employees,Workers=rows,
+        SalaryEach=Config.EmployeeSalary,
+        PayEvery=Config.PaydaySeconds,
+        DueSeconds=math.max(0,(profile.NextPayAt or 0)-os.time()),
+        PaidCount=(profile.StaffPayroll and profile.StaffPayroll.PaidCount) or 0,
+        TotalPaid=(profile.StaffPayroll and profile.StaffPayroll.TotalPaid) or 0,
+    }
+end
+
+local function nearStaffConsole(player: Player): boolean
+    local plot=PlotService.GetPlot(player)
+    return plot~=nil and StationService.IsNear(player,plot,"Orders")
+end
+
+function WorkshopService.SetStaffPolicy(player: Player,index: any,key: any,value: any): (boolean,string)
+    if not getWorkshop(player) or not nearStaffConsole(player) then
+        return false,"Acesse a TV de ordens da sua oficina."
+    end
+    return DataService.UpdateStaffPolicy(player,index,key,value)
+end
+
+function WorkshopService.AssignStaffJob(player: Player,jobId: any,index: any): (boolean,string)
+    local profile=DataService.Get(player)
+    local job=type(jobId)=="string" and Jobs[jobId] or nil
+    if not profile or not getWorkshop(player) or not nearStaffConsole(player) then
+        return false,"Acesse a TV de ordens da sua oficina."
+    end
+    if type(index)~="number" or index%1~=0 or index<1
+        or index>(profile.Employees or 0) then return false,"Funcionário não contratado." end
+    if not job or job.OwnerUserId~=player.UserId or job.Status~="InProgress"
+        or job.CollaboratorUserId or employeeReserved(job)
+        or (Repairs[player.UserId] and Repairs[player.UserId].JobId==jobId)
+        or not VehicleService.IsParked(jobId) then
+        return false,"Esta ordem não pode ser delegada ao funcionário agora."
+    end
+    local defect=Catalog.Defects[job.DefectId]
+    local policy=profile.StaffSlots and profile.StaffSlots[index]
+    if not defect or not V2StaffRules.CanAssign(policy,defect.Specialization) then
+        return false,"A escala ou especialização deste mecânico não permite a ordem."
+    end
+    job.EmployeeAssignedSlot=index
+    job.EmployeeRetryAt=0
+    return true,"OS colocada na fila prioritária do mecânico "..index.."."
+end
+
+function WorkshopService.ClearStaffJob(player: Player,jobId: any): (boolean,string)
+    local job=type(jobId)=="string" and Jobs[jobId] or nil
+    if not getWorkshop(player) or not nearStaffConsole(player) then
+        return false,"Acesse a TV de ordens da sua oficina."
+    end
+    if not job or job.OwnerUserId~=player.UserId or employeeReserved(job)
+        or type(job.EmployeeAssignedSlot)~="number" then
+        return false,"Atribuição inexistente ou já em execução."
+    end
+    job.EmployeeAssignedSlot=nil
+    return true,"Atribuição manual cancelada, sem custo."
 end
 
 function WorkshopService.HireEmployee(player: Player)
@@ -2241,7 +2349,17 @@ function WorkshopService.FireEmployee(player: Player)
     if not profile or (profile.Employees or 0) <= 0 then
         return false, "Você não tem funcionários."
     end
+    local entry=Staff[player.UserId]
+    local last=entry and entry.Npcs[profile.Employees]
+    if last and (last:GetAttribute("Trabalhando")==true or last:GetAttribute("V2JobId")~=nil) then
+        return false,"Este mecânico está executando uma OS. Aguarde terminar antes de demitir."
+    end
     DataService.SetEmployees(player, profile.Employees - 1)
+    for _,job in pairs(Jobs) do
+        if job.OwnerUserId==player.UserId and job.EmployeeAssignedSlot>profile.Employees then
+            job.EmployeeAssignedSlot=nil
+        end
+    end
     syncStaff(player)
     return true, "Mecânico demitido."
 end

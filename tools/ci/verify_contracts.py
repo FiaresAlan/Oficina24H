@@ -147,6 +147,24 @@ check("server attempts save before notification",
       workshop.find("DataService.Save(workshopOwner)") < workshop.find('eventSender(player, "RepairDone", receiptPayload)'))
 check("ledger test is registered", '"SettlementLedgerTest"' in runner
       and (TOOLS / "SettlementLedgerTest.luau").is_file())
+# C9: financial statement in Orders shows credited values, without exposing tokens.
+statement = text(SHARED / "RepairStatementRules.lua")
+orders = text(CLIENT / "UI" / "Panels" / "Orders.lua")
+check("profile snapshot does not replicate ledger tokens",
+      "profileView.RepairLedger = nil" in workshop)
+check("snapshot returns sanitized last settlements",
+      "RecentSettlements = DataService.RecentRepairSettlements(player, 12)" in workshop)
+check("statement categorizes own and worker income",
+      "WorkerEarnings = worker" in statement and "OwnerEarnings = own" in statement)
+check("UI uses statement module for completed orders",
+      "RepairStatementRules.Build(snapshot.RecentSettlements)" in orders)
+check("UI separates paid receipts and customer history",
+      "EXTRATO DE REPAROS" in orders and "HISTÓRICO DOS CLIENTES" in orders)
+check("UI adapts receipt row to mobile compact",
+      "stack(info, 8, not compact, 2)" in orders)
+check("statement test connected to runner",
+      '"RepairStatementTest"' in runner and (TOOLS / "RepairStatementTest.luau").is_file())
+
 check("readme links project checklist", "issues/15" in text(ROOT / "README.md"))
 
 print(f"\nStatic checks: {passed} passed, {len(failures)} failed")

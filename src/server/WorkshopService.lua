@@ -528,9 +528,14 @@ function WorkshopService.GetSnapshot(player: Player)
     for _, entry in ipairs(RivalService.RankEntries()) do
         table.insert(ranking, entry)
     end
+    -- O perfil vivo contém chaves de liquidação: nunca replicar o ledger bruto
+    -- com tokens da sessão para a UI. Mostrar somente dados financeiros saneados.
+    local profileView = profile and table.clone(profile) or nil
+    if profileView then profileView.RepairLedger = nil end
     return {
         Ranking = CustomerRules.Rank(ranking),
-        Profile = profile,
+        Profile = profileView,
+        RecentSettlements = DataService.RecentRepairSettlements(player, 12),
         HasWorkshop = workshop ~= nil,
         Workshop = (workshop and profile) and upgradeInfoRef(player, profile) or nil,
         Progress = profile and ProgressService.Snapshot(player, profile) or nil,

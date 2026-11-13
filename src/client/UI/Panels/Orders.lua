@@ -14,6 +14,7 @@ local HudParts = require(script.Parent.Parent.HudParts)
 local PanelKit = require(script.Parent.Parent.PanelKit)
 local Stations = require(script.Parent.Parent.Stations)
 local ServiceFocusRules = require(ReplicatedStorage.Shared.ServiceFocusRules)
+local RepairStatementRules = require(ReplicatedStorage.Shared.RepairStatementRules)
 
 local t = Kit.t
 local Orders = {}
@@ -360,6 +361,7 @@ function Orders.new(parent: Instance)
 		end
 		table.insert(parts, HttpService:JSONEncode({ snapshot.Profile.Parts, snapshot.Profile.Equipment, snapshot.SkillLevels }))
 		table.insert(parts, tostring(#(snapshot.Profile.OrderHistory or {})))
+		table.insert(parts, HttpService:JSONEncode(snapshot.RecentSettlements or {}))
 		return table.concat(parts, "|")
 	end
 
@@ -451,13 +453,64 @@ function Orders.new(parent: Instance)
 				empty.Size = UDim2.new(1, -10, 0, 250)
 			end
 		else
-			if #history == 0 then
+			local statement = RepairStatementRules.Build(snapshot.RecentSettlements)
+			if statement.Count > 0 then
+				HudParts.text(scroll, "EXTRATO DE REPAROS · ÚLTIMOS " .. statement.Count .. " CRÉDITOS", 25, {
+					Font = Theme.FontTitle, TextColor3 = Theme.Accent, LayoutOrder = 0,
+				})
+				local totals = stack(scroll, 4, false, 1)
+				HudParts.text(totals, "TOTAL CREDITADO  +" .. tostring(statement.Total) .. " MOEDAS", 27, {
+					Font = Theme.FontTitle, TextColor3 = rgb(255, 200, 70), LayoutOrder = 1,
+				})
+				HudParts.text(totals, string.format("Sua oficina: +%d   ·   Como contratado: +%d",
+					statement.OwnerEarnings, statement.WorkerEarnings), 20, {
+					Font = Theme.FontSemi, TextColor3 = Theme.Muted,
+					TextWrapped = true, AutomaticSize = Enum.AutomaticSize.Y,
+					Size = UDim2.new(1, 0, 0, 0), LayoutOrder = 2,
+				})
+				if statement.AverageQuality then
+					HudParts.text(totals, "Qualidade média dos recibos: " .. statement.AverageQuality .. "%", 19, {
+						Font = Theme.FontSemi, TextColor3 = Theme.Muted, LayoutOrder = 3,
+					})
+				end
+				for index, receipt in ipairs(statement.Rows) do
+					local _, content = card(scroll, index + 1,
+						receipt.Role == "Worker" and rgb(115, 160, 250) or rgb(75, 215, 128),
+						"Receipt_" .. index)
+					local info = stack(content, 4, false, 1)
+					HudParts.text(info, (receipt.Service ~= "" and receipt.Service or "Serviço realizado")
+						.. " · " .. (receipt.Vehicle ~= "" and receipt.Vehicle or "Veículo"), 22, {
+						Font = Theme.FontTitle, TextWrapped = true, LayoutOrder = 1,
+						AutomaticSize = Enum.AutomaticSize.Y, Size = UDim2.new(1, 0, 0, 0),
+					})
+					local line = stack(info, 8, not compact, 2)
+					HudParts.text(line, "+" .. receipt.Amount .. " moedas", 23, {
+						Font = Theme.FontTitle, TextColor3 = rgb(255, 200, 70), LayoutOrder = 1,
+					})
+					HudParts.text(line, receipt.Role == "Worker" and "Contratado" or "Minha oficina", 19, {
+						Font = Theme.FontSemi, TextColor3 = Theme.Muted, LayoutOrder = 2,
+					})
+					if receipt.Quality then
+						HudParts.text(line, receipt.Quality .. "% qualidade", 19, {
+							Font = Theme.FontSemi, TextColor3 = Theme.Muted, LayoutOrder = 3,
+						})
+					end
+					HudParts.text(info, ago(receipt.At), 18, {
+						Font = Theme.FontSemi, TextColor3 = Theme.Muted, LayoutOrder = 3,
+					})
+				end
+			end
+			if #history == 0 and statement.Count == 0 then
 				local empty = PanelKit.emptyState(scroll, "pn_car_empty", t("or_done_empty"), t("or_done_empty_sub"))
 				empty.Size = UDim2.new(1, -10, 0, 280)
+			elseif #history > 0 then
+				HudParts.text(scroll, "HISTÓRICO DOS CLIENTES", 24, {
+					Font = Theme.FontTitle, TextColor3 = Theme.Muted, LayoutOrder = 100,
+				})
 			end
 			for index = #history, 1, -1 do
 				local entry = history[index]
-				local _, content = card(scroll, #history - index + 1, rgb(70, 225, 105))
+				local _, content = card(scroll, #history - index + 101, rgb(70, 225, 105))
 				local layout = Instance.new("UIListLayout")
 				layout.Padding = UDim.new(0, 14)
 				layout.FillDirection = Enum.FillDirection.Horizontal

@@ -468,6 +468,11 @@ function OperationRepairGame.new(gui: ScreenGui)
 		label(content, string.format("Execução %d · Habilidade %+d · Equipamento %+d · Peça %+d · Diagnóstico %+d",
 			tonumber(b.Execution) or 0, tonumber(b.Skill) or 0, tonumber(b.Equipment) or 0,
 			tonumber(b.Part) or 0, tonumber(b.Diagnosis) or 0), 180, 56, 20)
+        local mistakes = math.max(0,math.floor(tonumber(payload.Miss) or 0))
+        local advice = mistakes > 0
+            and string.format("Atenção: %d decisão(ões) imprecisa(s) afetaram a qualidade e a recompensa.",mistakes)
+            or "Verificação final: execução sem erros detectados."
+        label(content,advice,232,30,17)
 		button(content, "CONTINUAR", 340, 262, 250, 48, function() close(false) end)
 		task.delay(9, function()
 			if showingResult then close(false) end

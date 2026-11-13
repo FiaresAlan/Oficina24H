@@ -148,7 +148,7 @@ check("client result correlated with job and token",
 ledger = text(SHARED / "SettlementLedgerRules.lua")
 data_service = text(ROOT / "src" / "server" / "DataService.lua")
 check("ledger bounded and sanitized", "SettlementLedgerRules.MaxEntries" in ledger and "function SettlementLedgerRules.Sanitize" in ledger)
-check("ledger persists in profile schema v10", "local SCHEMA_VERSION = 10" in data_service
+check("ledger persists in profile schema v11", "local SCHEMA_VERSION = 11" in data_service
       and "RepairLedger = {}" in data_service
       and "SettlementLedgerRules.Sanitize(data.RepairLedger)" in data_service)
 check("ledger credit idempotency", "function DataService.CreditRepairOnce" in data_service
@@ -197,8 +197,11 @@ check("statement test connected to runner",
 # C12/C13: pending worker claims are persisted before money/parts and verified
 # using the owner's durable ledger before an idempotent recovery credit.
 claim = text(SHARED / "SettlementClaimRules.lua")
-check("claim bounded sanitized and verified against owner's ledger",
-      "Claims.MaxPending = 64" in claim and "function Claims.Authorized" in claim)
+check("C25: claim recovery requires worker-bound owner proof, never legacy ledger alone",
+      "Claims.MaxPending = 64" in claim
+      and "function Claims.EvidenceStatus" in claim
+      and 'return "LegacyUnverified"' in claim
+      and "Claims.EvidenceStatus(claim, ownerLedger, ownerProofs, workerId) == \"Verified\"" in claim)
 check("schema v6 keeps private pending claims",
       "PendingClaims = {}" in data_service
       and "SettlementClaimRules.Sanitize(data.PendingClaims)" in data_service
@@ -207,13 +210,27 @@ check("server persists worker claim before consuming inventory",
       'DataService.StageWorkerClaim(player, workshopOwner.UserId,' in workshop
       and workshop.index("DataService.StageWorkerClaim(player, workshopOwner.UserId,")
       < workshop.index('DataService.SettleRepairOwnerOnce(workshopOwner, jobId, session.Token'))
-check("recovery requires saved owner evidence",
-      "SettlementClaimRules.Authorized(claim, ownerRaw.RepairLedger," in data_service
+check("C25: recovery checks exact owner proof and identifies ambiguous legacy cases",
+      "SettlementClaimRules.EvidenceStatus(claim," in data_service
+      and 'verified = evidenceStatus == "Verified"' in data_service
       and "Store:GetAsync(keyFor(claim.OwnerUserId))" in data_service)
 check("claim recovery persisted before clearing",
       "if DataService.HasRepairCredit(worker, claim.JobId, claim.Token)" in data_service
       and "and DataService.Save(worker) then" in data_service
       and "SettlementClaimRules.Remove(profile.PendingClaims, claim.JobId, claim.Token)" in data_service)
+audit = text(SHARED / "SettlementClaimAuditRules.lua")
+check("C25: audit persisted privately without creating or dropping credits",
+      "function Audit.Mark" in audit and "function Audit.Sanitize" in audit
+      and "SettlementClaimAuditRules.Mark(profile.PendingClaimAudits," in data_service
+      and "SettlementClaimAuditRules.Remove(profile.PendingClaimAudits, claim.JobId, claim.Token)" in data_service
+      and "data.PendingClaimAudits = SettlementClaimAuditRules.Sanitize(" in data_service
+      and "profileView.PendingClaimAudits = nil" in workshop)
+check("C25: claim audit only exposes counters to HUD",
+      "summary.NeedsReview = audit.Count" in data_service
+      and "summary.LegacyUnverified = audit.LegacyUnverified" in data_service)
+check("C25: auditoria suite registered",
+      '"SettlementClaimAuditRulesTest"' in runner
+      and (TOOLS / "SettlementClaimAuditRulesTest.luau").is_file())
 check("claim reconciliation runs on load and autosave",
       "task.spawn(DataService.ReconcileWorkerClaims, player)" in data_service)
 check("claim tests registered",
@@ -285,8 +302,8 @@ check("C23: worker paid confirmation archive validates and never silently rotate
       "Paid.MaxEntries = 2048" in paid and "function Paid.FromLedger" in paid
       and "function Paid.CanAdd" in paid and "function Paid.Matches" in paid
       and "while #raw > Paid.MaxEntries" not in paid)
-check("C23: worker confirmation stored with coins and ledger in schema v10",
-      "local SCHEMA_VERSION = 10" in data_service
+check("C23: worker confirmation stored with coins and ledger in schema v11",
+      "local SCHEMA_VERSION = 11" in data_service
       and "WorkerSettlementProofs = {}" in data_service
       and "WorkerSettlementProofRules.FromLedger" in data_service
       and "WorkerSettlementProofRules.Add(profile.WorkerSettlementProofs, workerProof)" in data_service
@@ -319,8 +336,8 @@ check("C24: verify durable owner data, with limited reads and two worker saves",
       and "WorkerProofArchiveRules.MinIntervalSeconds" in data_service
       and "Archive.MaxReadsPerPass = 4" in archive
       and "WorkerPaidTombstoneRules.Compact(proofs, profile.WorkerPaidTombstones," in data_service)
-check("C24: schema v10 private tombstones and scheduled reconciliation",
-      "local SCHEMA_VERSION = 10" in data_service
+check("C24: schema v11 preserves private tombstones and schedules reconciliation",
+      "local SCHEMA_VERSION = 11" in data_service
       and "WorkerPaidTombstones = {}" in data_service
       and "WorkerPaidTombstoneRules.Sanitize(data.WorkerPaidTombstones)" in data_service
       and "data.RepairLedger, data.WorkerPaidTombstones)" in data_service

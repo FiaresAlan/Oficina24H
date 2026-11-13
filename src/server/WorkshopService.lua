@@ -548,6 +548,7 @@ function WorkshopService.GetSnapshot(player: Player)
     if profileView then
         profileView.RepairLedger = nil
         profileView.PendingClaims = nil -- tokens e referências financeiras nunca chegam ao cliente
+        profileView.PendingClaimAudits = nil -- C25: casos privados de auditoria não são replicados
         profileView.OwnerSettlementProofs = nil -- arquivo de provas não replicado
         profileView.WorkerSettlementProofs = nil -- quitações privadas C23: não expor tokens
         profileView.WorkerPaidTombstones = nil -- C24: identificadores financeiros privados

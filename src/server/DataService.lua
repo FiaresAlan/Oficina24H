@@ -14,6 +14,7 @@ local Catalog = require(ReplicatedStorage.Shared.Catalog)
 local CustomerRules = require(ReplicatedStorage.Shared.CustomerRules)
 local SettlementLedgerRules = require(ReplicatedStorage.Shared.SettlementLedgerRules)
 local SettlementClaimRules = require(ReplicatedStorage.Shared.SettlementClaimRules)
+local SettlementClaimAuditRules = require(ReplicatedStorage.Shared.SettlementClaimAuditRules)
 local OwnerSettlementProofRules = require(ReplicatedStorage.Shared.OwnerSettlementProofRules)
 local OwnerProofSweepRules = require(ReplicatedStorage.Shared.OwnerProofSweepRules)
 local WorkerSettlementProofRules = require(ReplicatedStorage.Shared.WorkerSettlementProofRules)
@@ -23,7 +24,7 @@ local EquipmentUpgradeRules = require(ReplicatedStorage.Shared.EquipmentUpgradeR
 
 local DataService = {}
 
-local SCHEMA_VERSION = 10 -- 10: compactação verificada de quitações com tombstones
+local SCHEMA_VERSION = 11 -- 11: auditoria persistida das claims legadas sem prova vinculada
 local MAX_ATTEMPTS = 4
 local LOCK_TIMEOUT = 360 -- s; maior que 2 autosaves, para um servidor que caiu não prender o jogador para sempre
 local LOCK_WAIT_STEP = 3
@@ -102,7 +103,8 @@ local function makeDefaultData(): any
 		RepairLedger = {}, -- C8: extrato limitado de crédito/recibo por JobId+token
 		WorkerSettlementProofs = {}, -- C23: quitações detalhadas além do extrato de 64
 		WorkerPaidTombstones = {}, -- C24: identificadores de pagamentos encerrados
-		PendingClaims = {}, -- C12: provas pendentes do mecânico, privadas, nunca replicadas
+		PendingClaims = {}, -- C12: reivindicações financeiras privadas do mecânico
+		PendingClaimAudits = {}, -- C25: classificação privada de claims não confirmadas
 		OwnerSettlementProofs = {}, -- C14: comprovantes compactos de repasse
 		Onboarding = { Done = false }, -- guia do 1º atendimento (servidor decide; salvo por jogador)
 		Bag = {}, -- peças na mochila do jogador (o resto fica na prateleira da oficina = Parts)
@@ -220,6 +222,8 @@ local function reconcile(data: any): any
 	data.WorkerSettlementProofs = WorkerSettlementProofRules.FromLedger(
 		data.WorkerSettlementProofs, data.RepairLedger, data.WorkerPaidTombstones)
 	data.PendingClaims = SettlementClaimRules.Sanitize(data.PendingClaims)
+	data.PendingClaimAudits = SettlementClaimAuditRules.Sanitize(
+		data.PendingClaimAudits, data.PendingClaims)
 	data.OwnerSettlementProofs = OwnerSettlementProofRules.Sanitize(data.OwnerSettlementProofs)
 	if type(data.Parts) ~= "table" then
 		data.Parts = {}
@@ -592,12 +596,19 @@ end
 
 function DataService.PendingClaimSummary(player: Player): any
 	local profile = Profiles[player.UserId]
-	return SettlementClaimRules.Summary(profile and profile.PendingClaims, os.time())
+	local summary = SettlementClaimRules.Summary(profile and profile.PendingClaims, os.time())
+	local audit = SettlementClaimAuditRules.Summary(profile and profile.PendingClaimAudits)
+	-- Apenas contagens na HUD, nunca JobId/token ou identidade do proprietário.
+	summary.NeedsReview = audit.Count
+	summary.LegacyUnverified = audit.LegacyUnverified
+	summary.Conflicts = audit.Conflict
+	return summary
 end
 
 function DataService.DiscardWorkerClaim(worker: Player, jobId: any, token: any): boolean
 	local profile = Profiles[worker.UserId]
 	if not profile or not SettlementClaimRules.Remove(profile.PendingClaims, jobId, token) then return false end
+	SettlementClaimAuditRules.Remove(profile.PendingClaimAudits, jobId, token)
 	Dirty[worker.UserId] = true
 	return true
 end
@@ -626,15 +637,23 @@ function DataService.ReconcileWorkerClaims(worker: Player): number
 			if not SettlementClaimRules.Recoverable(claim, os.time()) then continue end
 			local already = DataService.HasRepairCredit(worker, claim.JobId, claim.Token)
 			local verified = already
+			local evidenceStatus = "Missing"
 			if not already then
 				local ok, ownerRaw = pcall(function()
 					return Store:GetAsync(keyFor(claim.OwnerUserId))
 				end)
 				if ok and type(ownerRaw) == "table" then
-					verified = SettlementClaimRules.Authorized(claim, ownerRaw.RepairLedger,
-						ownerRaw.OwnerSettlementProofs, userId)
+					evidenceStatus = SettlementClaimRules.EvidenceStatus(claim,
+						ownerRaw.RepairLedger, ownerRaw.OwnerSettlementProofs, userId)
+					verified = evidenceStatus == "Verified"
 				elseif not ok then
-					warn("[DataService] Falha ao consultar prova de pagamento:", userId, claim.JobId)
+					evidenceStatus = "ReadError"
+				end
+				if not verified and Profiles[userId] == profile then
+					if SettlementClaimAuditRules.Mark(profile.PendingClaimAudits,
+						claim, evidenceStatus, os.time()) then
+						Dirty[userId] = true
+					end
 				end
 			end
 			if Profiles[userId] ~= profile or worker.Parent ~= Players then break end
@@ -654,6 +673,7 @@ function DataService.ReconcileWorkerClaims(worker: Player): number
 				if DataService.HasRepairCredit(worker, claim.JobId, claim.Token)
 					and DataService.Save(worker) then
 					SettlementClaimRules.Remove(profile.PendingClaims, claim.JobId, claim.Token)
+					SettlementClaimAuditRules.Remove(profile.PendingClaimAudits, claim.JobId, claim.Token)
 					Dirty[userId] = true
 				end
 			end
@@ -664,8 +684,11 @@ function DataService.ReconcileWorkerClaims(worker: Player): number
 	local alerted = LastClaimAlert[userId] or 0
 	if summary.Overdue > 0 and os.time() - alerted >= 86400 then
 		LastClaimAlert[userId] = os.time()
+		local audit = SettlementClaimAuditRules.Summary(profile.PendingClaimAudits)
 		warn("[DataService] Reivindicações antigas não resolvidas:", userId,
-			"quantidade", summary.Overdue, "idade máxima (h)", math.floor(summary.OldestSeconds / 3600))
+			"quantidade", summary.Overdue, "idade máxima (h)", math.floor(summary.OldestSeconds / 3600),
+			"legacy_sem_vinculo", audit.LegacyUnverified,
+			"provas_conflitantes", audit.Conflict)
 	end
 	Reconciling[userId] = nil
 	return recovered

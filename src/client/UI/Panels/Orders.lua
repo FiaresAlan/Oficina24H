@@ -81,6 +81,7 @@ function Orders.new(parent: Instance)
 		{ Id = "open", Label = t("or_tab_open"), Icon = "pn_o_clock" },
 		{ Id = "progress", Label = t("or_tab_progress"), Icon = "pn_o_wrench" },
         { Id = "team", Label = "Equipe", Icon = "pn_p_people" },
+        { Id = "finance", Label = "Caixa", Icon = "pn_t_clock" },
 		{ Id = "done", Label = t("or_tab_done"), Icon = "pn_o_check" },
 	}, function()
 		render()
@@ -452,6 +453,38 @@ function Orders.new(parent: Instance)
 	local HttpService = game:GetService("HttpService")
 	local lastSignature = ""
 	-- Só reconstrói quando algo que o painel mostra mudou (o tempo de espera é animado à parte): evita perder cliques.
+
+    -- V2-08: relatório financeiro é leitura do snapshot do SERVIDOR.
+    -- Nada neste painel debita, credita ou autoriza um valor financeiro.
+    local function financialCard(scroll: ScrollingFrame,name: string,order: number,
+        title: string,lines: {any}): Frame
+        local panel=PanelKit.card(scroll,name)
+        panel.LayoutOrder=order
+        panel.AutomaticSize=Enum.AutomaticSize.Y
+        panel.Size=UDim2.new(1,-10,0,0)
+        local padding=Instance.new("UIPadding")
+        padding.PaddingTop=UDim.new(0,12)
+        padding.PaddingBottom=UDim.new(0,12)
+        padding.PaddingLeft=UDim.new(0,16)
+        padding.PaddingRight=UDim.new(0,16)
+        padding.Parent=panel
+        local layout=Instance.new("UIListLayout")
+        layout.Padding=UDim.new(0,6)
+        layout.SortOrder=Enum.SortOrder.LayoutOrder
+        layout.Parent=panel
+        HudParts.text(panel,title,23,{Font=Theme.FontTitle,TextColor3=Theme.Accent,
+            LayoutOrder=0,TextWrapped=true,AutomaticSize=Enum.AutomaticSize.Y,
+            Size=UDim2.new(1,0,0,0)})
+        for i,line in ipairs(lines) do
+            local str=type(line)=="table" and line.Text or tostring(line)
+            local color=type(line)=="table" and line.Color or Theme.Text
+            HudParts.text(panel,str,18,{Font=Theme.FontSemi,TextColor3=color or Theme.Text,
+                LayoutOrder=i,TextWrapped=true,AutomaticSize=Enum.AutomaticSize.Y,
+                Size=UDim2.new(1,0,0,0)})
+        end
+        return panel
+    end
+
 	local function signature(snapshot: any): string
 		local parts = { tabs.Current(), tostring(inviteJobId), tostring(snapshot.HasWorkshop) }
 		for _, job in ipairs(snapshot.Jobs) do
@@ -490,6 +523,12 @@ function Orders.new(parent: Instance)
             },":"))
         end
 		table.insert(parts, HttpService:JSONEncode(snapshot.PendingClaimSummary or {}))
+        local finance=snapshot.Finance or {}
+        table.insert(parts,table.concat({
+            tostring(finance.CashIn),tostring(finance.CashOut),
+            tostring(finance.TransactionsCount),tostring(finance.NextPayAt),
+            tostring(finance.Warning),
+        },":"))
 		return table.concat(parts, "|")
 	end
 
@@ -554,8 +593,9 @@ function Orders.new(parent: Instance)
                     Size = UDim2.new(1, -28, 0, 28), TextWrapped = true,
                 })
             HudParts.text(cardV2, string.format(
-                "Caixa: %d · Histórico bruto (%d OS): %d · Líquido: V2-08",
-                    summary.Coins, summary.RecentCount, summary.RecentGross),
+                "Caixa: %d · Histórico bruto (%d OS): %d · Fluxo operacional: %d",
+                    summary.Coins, summary.RecentCount, summary.RecentGross,
+                    snapshot.Finance and snapshot.Finance.OperatingCash or 0),
                 compact and 16 or 18, {
                     Font = Theme.FontSemi, TextColor3 = Theme.Muted,
                     Position = UDim2.fromOffset(14, 42),
@@ -603,6 +643,75 @@ function Orders.new(parent: Instance)
 				empty.Size = UDim2.new(1, -10, 0, 250)
 			end
 			refreshLive()
+        elseif id == "finance" then
+            local finance=snapshot.Finance
+            if type(finance)~="table" then
+                financialCard(scroll,"NoFinance",1,"CAIXA AINDA INDISPONÍVEL",{
+                    "Abra a oficina ou atualize o extrato. O histórico financeiro fica no servidor.",
+                })
+            else
+                local coverage=finance.LegacyWindow
+                    and "HISTÓRICO PARCIAL · migração dos últimos registros disponíveis"
+                    or "DESDE A ABERTURA DO LIVRO DE CAIXA"
+                financialCard(scroll,"FinanceCash",1,"FLUXO DE CAIXA · "..coverage,{
+                    string.format("Saldo: %d · entradas: +%d · saídas: -%d",
+                        finance.Cash or 0,finance.CashIn or 0,finance.CashOut or 0),
+                    {Text=string.format("Variação de caixa: %+d · %d movimentações",
+                        finance.CashDelta or 0,finance.TransactionsCount or 0),
+                        Color=(finance.CashDelta or 0)>=0 and Theme.Accent or rgb(255,128,100)},
+                    string.format("Entradas de OS: %d · despesas operacionais pagas: %d",
+                        finance.ServiceReceipts or 0,finance.OperatingOut or 0),
+                    {Text=string.format("Fluxo operacional de caixa: %+d",
+                        finance.OperatingCash or 0),
+                        Color=(finance.OperatingCash or 0)>=0 and Theme.Accent or rgb(255,128,100)},
+                    "Não é lucro contábil: compras de peças entram quando pagas. Estoque consumido não é descontado novamente.",
+                    "Bônus, equipamentos e ampliação são mostrados separadamente.",
+                })
+                financialCard(scroll,"FinanceReserve",2,"RESERVA, ESTOQUE E RISCO",{
+                    {Text=finance.Warning~="" and finance.Warning or "Sem alerta financeiro no período.",
+                        Color=finance.Warning~="" and rgb(255,167,85) or Theme.Accent},
+                    string.format("Próxima folha: %d · caixa após reservá-la: %+d",
+                        finance.NextPayroll or 0,finance.AvailableAfterPayroll or 0),
+                    string.format("Valor REFERENCIAL do estoque e mochila: %d moedas",
+                        finance.StockReferenceValue or 0),
+                    "O custo referencial é uma tabela de peças, não custo médio de aquisição de lotes antigos.",
+                })
+                local categoryNames={
+                    Service="Serviços recebidos",Inventory="Compra de peças",
+                    Payroll="Salários",Marketing="Publicidade",
+                    Equipment="Equipamentos e melhorias",Building="Expansões",
+                    Hiring="Contratações",Rewards="Bônus e premiações",Other="Outros",
+                }
+                local categoryOrder={"Service","Inventory","Payroll","Marketing",
+                    "Equipment","Building","Hiring","Rewards","Other"}
+                local lines={}
+                for _,name in ipairs(categoryOrder) do
+                    local x=finance.Groups and finance.Groups[name]
+                    if x and ((x.In or 0)>0 or (x.Out or 0)>0) then
+                        table.insert(lines,string.format("%s · entradas %d · saídas %d",
+                            categoryNames[name] or name,x.In or 0,x.Out or 0))
+                    end
+                end
+                if #lines==0 then table.insert(lines,"Nenhuma movimentação categorizada neste período.") end
+                financialCard(scroll,"FinanceCategories",3,"ORIGEM DAS MOVIMENTAÇÕES",lines)
+                local quotes={}
+                for _,q in ipairs(finance.Quotes or {}) do
+                    table.insert(quotes,string.format("%s · preço-base %d · peça ref. %d · contribuição-base %+d",
+                        q.Name,q.BasePrice,q.PartsReferenceCost,q.BeforeLabor))
+                end
+                table.insert(quotes,"Estimativas ANTES de salários, bonificações, variação de qualidade e outros custos.")
+                financialCard(scroll,"FinanceQuotes",4,"PREÇOS DOS 15 SERVIÇOS · REFERÊNCIA",quotes)
+                local last={}
+                local entries=finance.Recent or {}
+                for i=#entries,math.max(1,#entries-15),-1 do
+                    local e=entries[i]
+                    table.insert(last,{Text=string.format("%+d · %s · %s",
+                        e.Amount,e.Reason,ago(e.At or 0)),
+                        Color=e.Amount>=0 and Theme.Accent or rgb(255,150,120)})
+                end
+                if #last==0 then table.insert(last,"Sem movimentações recentes.") end
+                financialCard(scroll,"FinanceRecent",5,"ÚLTIMAS MOVIMENTAÇÕES",last)
+            end
         elseif id == "team" then
             -- V2-05: supervisionar até dois mecânicos sem UI sobreposta ou
             -- campos financeiros/clientes privados.

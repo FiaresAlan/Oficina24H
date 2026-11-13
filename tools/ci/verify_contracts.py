@@ -854,6 +854,58 @@ check("V2-06: compra de maquina revalida nivel/preco no mesmo perfil debitado",
     and "expectedTarget ~= current + 1" in data_service
     and "expectedCost ~= cost" in data_service)
 
+# V2-07: simulação cliente de baixo custo; não criar tráfego server-sided nem duplicar cliente V1.
+world_rules=text(SHARED/"V2NeighborhoodRules.lua")
+ambient_client=text(CLIENT/"V2NeighborhoodAmbient.client.lua")
+ambient_publish=text(ROOT/"src"/"server"/"V2NeighborhoodAssets.lua")
+world_test=text(TOOLS/"V2NeighborhoodRulesTest.luau")
+world_audit=text(TOOLS/"V2NeighborhoodPlaceAudit.luau")
+check("V2-07: rotas da cidade em calçadas/faixas e limites mobile/PC",
+    all(k in world_rules for k in (
+        "Rules.Routes={", "ped_n_center", "ped_s_center", "veh_side_a",
+        "Rules.MaxPedestrians=6", "Rules.MaxVehicles=3", "Rules.MaxActive=9",
+        "function Rules.Budget", "function Rules.Select", "function Rules.Distance",
+        "function Rules.Validate", "Rules.DeliverySeconds=14")))
+check("V2-07: pool global de malhas e culling com fps/players",
+    all(k in ambient_client for k in (
+        "local live:", "local pool:", "Rules.Budget(UserInputService.TouchEnabled,fps",
+        "Rules.Select(focus,budget)", "local function totalPooled",
+        "totalPooled()<Rules.MaxPooled", "local function release",
+        "if dis>range+42", "Workspace:Raycast", "Camera",
+    )) and "CanCollide=false" in ambient_client and "CanTouch=false" in ambient_client
+    and "CanQuery=false" in ambient_client)
+check("V2-07: usa veículos 3D existentes e publica só avatares autorizados",
+    all(k in ambient_client for k in (
+        "VehiclePreviews", "V2PedestrianPreviews", "Animations.Walk",
+        '"Veiculo_Hatch_MG3"', '"Veiculo_Sedan_Civic"',
+        "vehicleConflict(point)", "V2AmbientOnly"))
+    and all(k in ambient_publish for k in (
+        "Service.MaxTemplates=3", "AssetSafetyRules.StripScripts",
+        "ServerStorage:FindFirstChild", "Clientes",
+        "node.CanCollide=false", "node.CanTouch=false"))
+    and "V2NeighborhoodAssets.Publish()" in server_v2)
+check("V2-07: entrega visual só após compra real, nunca altera saldo",
+    '"V2NeighborhoodCourier"' in workshop
+    and 'if delivered>0 and eventSender then' in workshop
+    and 'DataService.FulfillSupplyRequest' in workshop
+    and 'if eventSender then' in workshop
+    and '"V2NeighborhoodCourier"' in ambient_client
+    and "deliveryUntil=now+Rules.DeliverySeconds" in ambient_client
+    and not any(k in ambient_client for k in (
+        "DataService.AddCoins", "DataService.AddParts", "FireServer")))
+check("V2-07: não modifica os reais veículos/atendimentos e limpa na saída",
+    all(k in ambient_client for k in (
+        "V2NeighborhoodAmbient", "model:PivotTo", "model.Parent=nil",
+        "ambient:Destroy()", "player.AncestryChanged",
+        '"Vehicles","Arrivals","RivalVehicles"', "vehicleConflict"))
+    and not any(k in ambient_client for k in (
+        "VehicleService.Spawn", "CustomerArrivalService.Arrive", "SetNetworkOwner")))
+check("V2-07: suite de rotas e auditoria Studio registradas",
+    all((TOOLS/(name+".luau")).is_file() and ('"'+name+'"') in runner
+        for name in ("V2NeighborhoodRulesTest","V2NeighborhoodPlaceAudit"))
+    and "nenhuma rota repetida" in world_test and "fps baixo" in world_test
+    and "WARN" in world_audit and "Map.Ground" in world_audit)
+
 print(f"\nStatic checks: {passed} passed, {len(failures)} failed")
 if failures:
     raise SystemExit(1)

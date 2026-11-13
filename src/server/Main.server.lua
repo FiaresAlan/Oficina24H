@@ -228,10 +228,10 @@ actionEvent.OnServerEvent:Connect(function(player: Player, action: any, payload:
     if action == "RepairAction" then
         local success, message, revision = false, "Comando inválido.", 0
         if type(payload.JobId) == "string" and type(payload.Command) == "table" then
-            success, message, revision = WorkshopService.RepairAction(player, payload.JobId, payload.Command)
+            success, message, revision = WorkshopService.RepairAction(player, payload.JobId, payload.Token, payload.Command)
         end
         actionEvent:FireClient(player, "RepairActionAck", {
-            JobId = payload.JobId, Accepted = success, Message = message,
+            JobId = payload.JobId, Token = payload.Token, Accepted = success, Message = message,
             Revision = revision,
         })
         return

@@ -131,6 +131,18 @@ P0 = prioridade para o núcleo de lançamento. P1 = opcional condicionado a viab
 **Aceite:** consertar um motor tem sensação distinta de trocar um pneu.
 
 ## V2-05 — Mecânicos NPC realmente úteis
+
+**Engenharia V2-05 implementada na PR #27, sem homologação Studio:** [fluxo de funcionários, escala, dinheiro e matriz de QA](V2_FASE_05_FUNCIONARIOS.md).
+
+- [x] [C] Caminhada controlada com recálculo limitado e falha segura sem teleporte pelo cliente, estoque, box e descanso.
+- [x] [C] Gerência física com modo automático/manual/pausado, especialização, atribuição/cancelamento de fila e ordem determinística por prioridade.
+- [x] [C] Supervisão de produtividade, qualidade média, duração, histórico individual, folha e vencimentos, com dados saneados.
+- [x] [C] NPC só usa estoque e gera pagamento por SettlementNpcRepairOnce, registra resultado após liquidação e preserva provas financeiras da V1.
+- [x] [C] Migração aditiva v12→v13, folha salarial sem replay do mesmo vencimento, demissão segura e recuperação de rotas/abandono.
+- [x] [A] Suítes de escala, múltiplas OS e persistência escritas, mais auditoria não destrutiva dos personagens; CI e Rojo verificam os contratos.
+- [ ] [S] Studio: animações/caminhadas, 0/1/2 empregados, 1/2/3 OS, fluxo financeiro e performance real.
+
+
 - [ ] [C] Melhorar pathfinding e recomputação; NPC caminha entre estoque, box, cliente e descanso.
 - [ ] [C] Gerente escolhe OS, prioridade e especialização do funcionário; fila evita disputa pelo mesmo carro.
 - [ ] [C] Mostrar produtividade, qualidade, salário, tempo e histórico de trabalho.

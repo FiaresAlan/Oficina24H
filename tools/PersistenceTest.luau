@@ -334,6 +334,50 @@ do
 	check("avaliações: lista corrompida é limpa", #cp.RecentRatings == 2 and cp.RecentRatings[1].Stars == 4 and cp.RecentRatings[1].Service == "" and cp.RecentRatings[2].Service == "Ok")
 end
 
+-- C8. Crédito e recibo persistem juntos no perfil após saída/reconexão.
+do
+	local store = newStore()
+	local A = server(store, "settlementA")
+	local p = fakePlayer(901)
+	local owner = fakePlayer(902)
+	A.Load(p)
+	A.Load(owner)
+	local token = "aaaaaaaa-1111-2222-3333-bbbbbbbbbbbb"
+	local start = A.Get(p).Coins
+	check("ledger inicia vazio", type(A.Get(p).RepairLedger) == "table" and #A.Get(p).RepairLedger == 0)
+	check("primeira liquidação credita", A.CreditRepairOnce(p, "job_1", token, 275, "Worker", "Freios", "Hatch"))
+	check("saldo do executor atualizado", A.Get(p).Coins == start + 275)
+	check("replay não credita pela segunda vez",
+		not A.CreditRepairOnce(p, "job_1", token, 275, "Worker", "Freios", "Hatch"))
+	check("saldo sem segunda cobrança", A.Get(p).Coins == start + 275)
+	check("outra conta pode receber sua parte",
+		A.CreditRepairOnce(owner, "job_1", token, 80, "Owner", "Freios", "Hatch"))
+	check("partes das duas contas isoladas", A.Get(owner).Coins == 330 and A.Get(p).Coins == start + 275)
+	check("marcador de crédito presente", A.HasRepairCredit(p, "job_1", token))
+	check("sem crédito de token errado", not A.HasRepairCredit(p, "job_1", "cccccccc-1111-2222-3333-dddddddddddd"))
+	local receipt = { JobId = "job_1", Token = token, Price = 275, Quality = 95,
+		Tip = 0, XP = 45, Stars = 5, Breakdown = { Execution = 90 } }
+	check("comprovante anexado", A.AttachRepairReceipt(p, "job_1", token, receipt))
+	check("comprovante não duplica", not A.AttachRepairReceipt(p, "job_1", token, receipt))
+	check("comprovante recuperado no perfil", A.GetRepairReceipt(p, "job_1", token).Price == 275)
+	check("outro beneficiário não vê recibo do executor", A.GetRepairReceipt(owner, "job_1", token) == nil)
+	local ownerReceipt = { JobId = "job_1", Token = token, Price = 80, Quality = 95, Stars = 5 }
+	check("dono anexa seu recibo", A.AttachRepairReceipt(owner, "job_1", token, ownerReceipt))
+	check("salvamento do executor aprovado", A.Save(p))
+	check("salvamento do dono aprovado", A.Save(owner))
+	A.Remove(p) A.Remove(owner)
+	local B = server(store, "settlementB")
+	B.Load(p) B.Load(owner)
+	check("recarga mantém saldo executor", B.Get(p).Coins == start + 275)
+	check("recarga mantém crédito proprietário", B.Get(owner).Coins == 330)
+	check("recarga mantém chave de idempotência", B.HasRepairCredit(p, "job_1", token))
+	check("recarga nega crédito duplicado", not B.CreditRepairOnce(p, "job_1", token, 275, "Worker", "Freios", "Hatch"))
+	check("recarga mantém recibo", B.GetRepairReceipt(p, "job_1", token).Quality == 95)
+	check("dono vê somente o seu comprovante", B.GetRepairReceipt(owner, "job_1", token).Price == 80)
+	check("lista do executor omite token", B.RecentRepairSettlements(p, 3)[1].Token == nil)
+	check("lista de operações mostra valor e papel", B.RecentRepairSettlements(p, 3)[1].Amount == 275 and B.RecentRepairSettlements(p, 3)[1].Role == "Worker")
+end
+
 for _, c in ipairs(clones) do c:Destroy() end
 table.insert(results, failures == 0 and "TODOS OS TESTES PASSARAM" or (failures .. " TESTE(S) FALHARAM"))
 return table.concat(results, "\n")

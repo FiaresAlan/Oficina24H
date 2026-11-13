@@ -12,6 +12,8 @@ Simulador social de oficina mecânica para Roblox: o jogador atende clientes, di
 
 **[CHECKLIST MESTRE — 14 fases, status e PRs (Issue #15)](https://github.com/FiaresAlan/Oficina24H/issues/15)**
 
+**[Guia único de assets V1 — o que baixar e onde colocar](docs/GUIA_UNICO_ASSETS_V1.md)** — inventário exato dos 21 carros, 11 equipamentos, NPCs, cenário, sons e HUD; baixar somente o que faltar no Studio e conferir licenças.
+
 **[Integração de engenharia na main](https://github.com/FiaresAlan/Oficina24H/tree/main)** — o PR #20 e as etapas C5–C9 foram integrados; C10–C11 reforçam a confirmação de pagamentos. **Ainda exige validação no Studio antes de publicação.**
 
 **[Build/CI de código](https://github.com/FiaresAlan/Oficina24H/actions/workflows/code-health.yml)** — valida mapeamento dos 15 defeitos e executa build Rojo a cada atualização. **CI verde não equivale a jogo testado no Studio.**

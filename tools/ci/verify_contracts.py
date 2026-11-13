@@ -274,6 +274,10 @@ check("new suites registered",
       '"EquipmentUpgradeTest"' in runner and '"StaffAssignmentTest"' in runner
       and (TOOLS / "EquipmentUpgradeTest.luau").is_file()
       and (TOOLS / "StaffAssignmentTest.luau").is_file())
+check("V1 asset guide exists and covers Roblox storage paths",
+      (ROOT / "docs" / "GUIA_UNICO_ASSETS_V1.md").is_file()
+      and "ServerStorage.Assets.Veiculos" in text(ROOT / "docs" / "GUIA_UNICO_ASSETS_V1.md")
+      and "StudioPlaceAudit" in text(ROOT / "docs" / "GUIA_UNICO_ASSETS_V1.md"))
 check("readme links project checklist", "issues/15" in text(ROOT / "README.md"))
 
 print(f"\nStatic checks: {passed} passed, {len(failures)} failed")

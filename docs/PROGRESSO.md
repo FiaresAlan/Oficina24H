@@ -781,3 +781,10 @@ Detalhes em `docs/AUDITORIA_GERAL.md`. Resumo:
 - **Documentação:** docs/DIRECAO_JOGO_V2_2026-11-13.md, docs/CHECK_LIST_MESTRE_V2.md, docs/PESQUISA_MERCADO_V2_2026-11-13.md, docs/AUDITORIA_V2_BASE_CODIGO_2026-11-13.md e docs/PROPOSTA_TEST_DRIVE_V2_FUTURO.md.
 - **Acompanhamento V2:** [Issue #26](https://github.com/FiaresAlan/Oficina24H/issues/26), separada do histórico V1 [Issue #15](https://github.com/FiaresAlan/Oficina24H/issues/15).
 - **Próxima ação:** obter autorização explícita para V2-00. Não iniciar implementação de gameplay nem afirmar teste Studio realizado nesta rodada.
+
+
+## 2026-11-13 — V1 C18/C19: minijogo timing com sessão financeira segura e guia único de assets
+- **C18:** plano timing ganha GUID no servidor, cancelamento/finalização exigem JobId/token, `RepairGame` associa resposta à sessão e consulta comprovante após falha/latência. Fluxo timing passou a usar `CreditRepairOnce`, `AttachRepairReceipt` e `SettlementDeliveryRules`, não há mais pagamento direto sem ledger durável neste modo.
+- **C19 — inventário de assets:** `docs/GUIA_UNICO_ASSETS_V1.md` concentra exatamente o catálogo atual de 21 carros, 11 equipamentos, NPCs, 24 peças da cidade e props, com origem/IDs e a localização sob `ServerStorage.Assets`. Se o place original já tem os assets, não baixar de novo. Pacotes Shuriken e 3DAssets são gratuitos; arquivos de terceiros não devem ser redistribuídos nem colocados no GitHub quando proibido.
+- **Verificações:** `RepairSessionTest` e `RepairTest` ampliados; contratos estáticos do CI e Rojo. Consulte `docs/TESTE_C18_TIMING_TOKEN_2026-11-13.md`. **Luau/Studio real ainda não executados**.
+- **V1 ainda aberta:** integridade financeira multi-conta, arte/rigs/áudio/licenças, testes dos 15 serviços, dispositivos, NPCs, assets do place, performance e beta. Código de V2 não iniciado.

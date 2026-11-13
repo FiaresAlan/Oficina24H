@@ -496,13 +496,14 @@ function Orders.new(parent: Instance)
 
 		if id == "open" then
             -- V2-02: visão gerencial apenas de leitura, sem exibir margem inventada.
-            local summary = V2ManagementSummaryRules.Build(snapshot)
+            local summary = type(snapshot.Management) == "table" and snapshot.Management
+                or V2ManagementSummaryRules.Build(snapshot)
             local cardV2 = PanelKit.card(scroll, "V2ManagementOverview")
             cardV2.Size = UDim2.new(1, -10, 0, compact and 128 or 114)
             cardV2.LayoutOrder = -10
             HudParts.text(cardV2,
-                string.format("OPERAÇÃO · %d aguardando · %d/%d boxes · %d mecânico(s)",
-                    summary.Waiting, summary.Working, summary.Bays, summary.Employees),
+                string.format("OPERAÇÃO · %d aguardando · %d box(es) livre(s) de %d · %d mecânico(s)",
+                    summary.Waiting, summary.FreeBays, summary.Bays, summary.Employees),
                 compact and 18 or 21, {
                     Font = Theme.FontSemi, TextColor3 = Theme.Accent,
                     Position = UDim2.fromOffset(14, 12),

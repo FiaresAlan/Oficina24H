@@ -77,7 +77,7 @@ do
 	check("novo: perfil criado com moedas iniciais", prof and prof.Coins == 250, prof and prof.Coins)
 	check("novo: kit básico presente", prof and prof.Equipment.BasicToolset == true)
 	check("C16: kit inicia no nível 1", A.GetEquipmentLevel(p, "BasicToolset") == 1)
-	check("C25: perfil novo já nasce no schema v11", prof.SchemaVersion == 11)
+	check("C25: perfil novo já nasce no schema v12", prof.SchemaVersion == 12 and type(prof.SupplyRequests) == "table")
 	check("novo: trava de sessão gravada", store.data["u_1"] and store.data["u_1"].Session and store.data["u_1"].Session.JobId == "A")
 end
 
@@ -189,7 +189,7 @@ do
 	A.Load(p)
 	local prof = A.Get(p)
 	check("migração: dados antigos preservados", prof and prof.Coins == 999 and prof.SkillXP.Tires == 150)
-	check("migração: campos novos criados", prof and prof.Equipment.BasicToolset and type(prof.Transactions) == "table" and prof.SchemaVersion == 11 and type(prof.Daily) == "table" and type(prof.League) == "table" and prof.League.Points == 0 and prof.WorkshopLevel ~= nil)
+	check("migração: campos novos criados", prof and prof.Equipment.BasicToolset and type(prof.Transactions) == "table" and prof.SchemaVersion == 12 and type(prof.Daily) == "table" and type(prof.League) == "table" and prof.League.Points == 0 and prof.WorkshopLevel ~= nil)
 	check("migração: outras habilidades zeradas", prof and prof.SkillXP.Engine == 0)
 end
 
@@ -430,7 +430,7 @@ do
 	store.data["u_1101"].PendingClaims[1].At -= 900 -- simula novo servidor sem aplicar parcela do contratado
 	local B = server(store, "claimB")
 	B.Load(worker)
-	check("C25: migração do schema v11", B.Get(worker).SchemaVersion == 11)
+	check("C25: migração do schema v12", B.Get(worker).SchemaVersion == 12)
 	local recovered = B.ReconcileWorkerClaims(worker)
 	check("C13: parcela ausente recuperada", recovered == 1
 		or B.HasRepairCredit(worker, "job_77", token))
@@ -622,7 +622,7 @@ do
 	local A = server(store, "claimCorruptA")
 	local p = fakePlayer(1301)
 	A.Load(p)
-	check("C25: schema v5 migra até v11", A.Get(p).SchemaVersion == 11)
+	check("C25: schema v5 migra até v12", A.Get(p).SchemaVersion == 12)
 	check("C13: sanitize de reivindicações corrompidas", #A.Get(p).PendingClaims == 0)
 	check("C13: mantém saldo antigo", A.Get(p).Coins == 300)
 end
@@ -835,7 +835,7 @@ do
 	check("C23: dados novos iniciam arquivo de quitação vazio",
 		type(A.Get(worker).WorkerSettlementProofs) == "table"
 		and #A.Get(worker).WorkerSettlementProofs == 0
-		and A.Get(worker).SchemaVersion == 11)
+		and A.Get(worker).SchemaVersion == 12)
 	check("C23: dono registra prova", A.CreditRepairOnce(owner, "job_old", token,
 		90, "Owner", "Freios", "Hatch", worker.UserId, 200))
 	A.Get(owner).OwnerSettlementProofs[1].At = os.time() - 1200
@@ -886,8 +886,8 @@ do
 	local A = server(store, "workerPaidC23-migration")
 	local player = fakePlayer(2310)
 	A.Load(player)
-	check("C25: migração v8->v11 conserva crédito antigo visível",
-		A.Get(player).SchemaVersion == 11
+	check("C25: migração v8->v12 conserva crédito antigo visível",
+		A.Get(player).SchemaVersion == 12
 		and A.HasRepairCredit(player, "legacy_paid", tk)
 		and #A.Get(player).WorkerSettlementProofs == 1)
 	check("C23: save conserva marcador migrado", A.Save(player)

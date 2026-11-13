@@ -45,6 +45,7 @@ local CustomerNpcService = require(script.Parent.CustomerNpcService)
 local RivalService = require(script.Parent.RivalService)
 local NpcKit = require(script.Parent.NpcKit)
 local V2StaffNavigator = require(script.Parent.V2StaffNavigator)
+local V2UsedMarketDisplay = require(script.Parent.V2UsedMarketDisplay)
 local ProgressService = require(script.Parent.ProgressService)
 local ContractService = require(script.Parent.ContractService)
 local ContractRules = require(ReplicatedStorage.Shared.ContractRules)
@@ -81,6 +82,7 @@ local nextJobId = 0
 local nextInviteId = 0
 local ratingNotifier: ((Player, any) -> ())? = nil -- definido por Main (envia o evento "Rated" ao cliente)
 local eventSender: ((Player, string, any) -> ())? = nil -- definido por Main (RepairStart / RepairDone)
+local syncUsedMarketDisplay: (Player) -> () -- definido abaixo
 local Repairs: { [number]: { JobId: string, Plan: any, StartedAt: number, Progress: any?, Token: string?, LastActionAt: number? } } = {} -- sessões do minijogo, por jogador
 -- Comprovantes são privados do executor: últimos oito por jogador durante 15 minutos.
 -- Só guardamos um resultado DEPOIS de aplicar consumo, dinheiro, XP e avaliação.
@@ -474,6 +476,9 @@ function WorkshopService.ClaimWorkshop(player: Player)
         refreshPlotDisplays()
     end)
     updatePriceBoard(player)
+    task.defer(function()
+        if player.Parent == Players then syncUsedMarketDisplay(player) end
+    end)
     return true, "Oficina registrada."
 end
 
@@ -1570,7 +1575,22 @@ function WorkshopService.UsedMarketAction(player: Player, operation: any,
             return false, "Volte à sua oficina para restaurar ou vender o veículo."
         end
     end
-    return DataService.TradeUsedCar(player, operation, itemId, style)
+    local ok, message = DataService.TradeUsedCar(player, operation, itemId, style)
+    if ok then syncUsedMarketDisplay(player) end
+    return ok, message
+end
+
+-- Atualiza vitrine com uma só cópia local do carro; prompts passam pela
+-- mesma validação de lote e transação que os botões do painel.
+syncUsedMarketDisplay = function(player: Player)
+    local profile = DataService.Get(player)
+    if not profile then return end
+    V2UsedMarketDisplay.Sync(player, profile, function(actor: Player, operation: string, uid: string)
+        local ok, message = WorkshopService.UsedMarketAction(actor, operation, uid)
+        if eventSender then
+            eventSender(actor, "Notice", {Message=message,Success=ok})
+        end
+    end)
 end
 
 -- Loja de peças: compra em quantidade (1..MaxPartPurchase); o saldo e o estoque são decididos aqui.
@@ -1991,6 +2011,7 @@ end
 -- C26: dono saiu, a OS NÃO pode voltar a "Available" sem oficina/carros.
 -- Todos os jobs do dono são removidos; eventos de reparo do contratado são cancelados.
 function WorkshopService.PlayerLeft(userId: number)
+    V2UsedMarketDisplay.Clear(userId)
     local ownSession = Repairs[userId]
     if ownSession then
         VehicleService.SetRepairing(ownSession.JobId, false)

@@ -56,3 +56,8 @@ O prédio, boxes reais, elevadores, estações físicas e capacidade de funcion�
 A V2 fica na PR #27, fora da main durante a homologação do Claude. Antes de merge: reconciliar \`Main.server.lua\`, \`WorkshopService.lua\`, \`StationService.lua\`, \`ConstrutoraPanel.client.lua\`, \`EquipmentUpgradePads.lua\` e o pipeline de testes com qualquer correção da V1, rodar CI e repetir Studio.
 
 **V2-07** será o bairro com pedestres e tráfego ambiental sob pooling/limites de desempenho.
+
+
+### Cotejo adicional do pagamento da máquina
+
+A confirmação da melhoria transmite o **nível-alvo e custo cotados** até `DataService.UpgradeOwnedEquipment`. A própria operação sobre o perfil compara os dois valores com o nível/preço atuais antes de debitar. Uma cotação antiga, tentativa de pular níveis ou replay é recusada; os testes de `PersistenceTest.luau` incluem saldo intacto em caso de divergência, compra da cotação correta, reconexão e prevenção de nível extra sem outra cotação.

@@ -197,9 +197,10 @@ P0 = prioridade para o núcleo de lançamento. P1 = opcional condicionado a viab
 - [x] [C] Fluxo compra → inspecionar → desmontar → restaurar consumindo peças e pagamento → pintura opcional → venda ou venda como sucata; previews 3D dos modelos existentes no painel.
 - [x] [C] Idempotência de revenda, limite de capacidade e anti-replay; custos do mercado segregados em categoria financeira própria, sem crédito/XP/reputação de OS.
 - [x] [C] Schema v15 aditivo, teste de reconexão e persistência de veículo/caixa, regressões Luau e contratos de CI escritos.
-- [ ] [A] Confirmar execução verde de contratos estáticos e build Rojo no commit final V2-09.
+- [x] [A] [Contratos estáticos e build Rojo verificados](https://github.com/FiaresAlan/Oficina24H/actions/runs/43527260118) no código V2-09, commit `6fec467`. Alterações documentais posteriores mantêm o mesmo código.
 - [ ] [S] Validar localização física e interfaces reais, três modelos, multiplayer, mobile/gamepad, relog, cooldown e economia no Studio.
-- [ ] [C] Interação 3D com desmontagem em peças e showroom de revenda (**não implementada**; avaliar integração V2-10 em vez de anunciar como concluída).
+- [x] [C] Carro em vitrine física não colidível do lote, modelo 3D sanitizado/fallback, prompts de inspeção/restauração/venda, mudança visual e cleanup da sessão.
+- [ ] [C] Desmontagem de rodas/peças e showroom imersivo com ferramentas reais (**não implementados**; avaliar aprofundamento na V2-10).
 - [ ] DECISÃO: expandir, simplificar ou retirar após playtest que compare o tempo e o ganho por OS.
 
 **Pendência herdada da V2-08:** graus Econômico/Padrão/Premium por lotes FIFO ainda precisam de controle de custos, consumo, migração e rollback. Não apresentar como implementados.

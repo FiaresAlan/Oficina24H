@@ -615,6 +615,44 @@ check("V2-02: pedido cancelavel sem custo via autorizacao servidor",
     and '"ClearSupplyRequests"' in server
     and 'Store.Act("ClearSupplyRequests"' in text(CLIENT / "UI" / "Panels" / "Shop.lua"))
 
+# V2-03: interações físicas são prompts de servidor, sem RemoteEvent novo.
+v2_components = text(SHARED / "V2ComponentRules.lua")
+v2_vehicle = text(ROOT / "src" / "server" / "VehicleService.lua")
+v2_visual = text(CLIENT / "VehicleFx.client.lua")
+v2_articulations = text(CLIENT / "V2ArticulationFx.client.lua")
+check("V2-03: oito articulacoes e regras de seguranca",
+    all(x in v2_components for x in (
+      '"Hood"', '"DoorLeft"', '"DoorRight"', '"Trunk"',
+      '"WheelFL"', '"WheelFR"', '"WheelRL"', '"WheelRR"',
+      "function Rules.Next", "function Rules.ReadyToRepair", "function Rules.IsNear",
+      "function Rules.MayDrive")))
+check("V2-03: prompts ligados a pivot e distancia verificada no servidor",
+    all(x in v2_vehicle for x in (
+      "addComponentPrompts", "V2PilotRules.Resolve", "V2ComponentRules.IsNear",
+      "V2ComponentRules.Next", "V2ComponentPoints", "prompt.Triggered:Connect",
+      'root, anchor', "resetComponents(car)")))
+check("V2-03: fluxo de reparo e permissao do mecanico responsavel",
+    all(x in workshop for x in (
+      "function WorkshopService.ToggleVehicleComponent", "V2ComponentRules.FromPrompt",
+      "V2ComponentRules.ReadyToRepair", "CollaborationRules.IsAuthorized",
+      "VehicleService.ToggleComponent", "WheelSupportReady",
+      "employeeReserved(job)"))
+    and "V2_" in text(CLIENT / "UI" / "HUD.lua"))
+check("V2-03: animações de rodas e capo por estado servidor",
+    all(x in v2_visual for x in (
+      "V2State_", '"Detached"', '"Open"', "V2ProxyHood",
+      "V2Proxy_", "V2Removed", "V2GeneratedVisual")))
+check("V2-03: portas/porta-malas com malha nativa e fallback sem colisao",
+    all(x in v2_articulations for x in (
+      "V2MovingComponent", "V2ArticulationProxy_", "V2State_",
+      "CanCollide", "CanQuery", "CanTouch", "ReducedMotionEnabled",
+      "MAX_DISTANCE")))
+check("V2-03: auditoria de Studio e regras puras no runner",
+    (TOOLS / "V2ComponentRulesTest.luau").is_file()
+    and (TOOLS / "V2ComponentPlaceAudit.luau").is_file()
+    and '"V2ComponentRulesTest"' in runner
+    and '"V2ComponentPlaceAudit"' in runner)
+
 print(f"\nStatic checks: {passed} passed, {len(failures)} failed")
 if failures:
     raise SystemExit(1)

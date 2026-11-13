@@ -1851,7 +1851,10 @@ function WorkshopService.DoProcedureStep(player: Player,jobId: string,stepId: an
     if not nextIndex then return false,message end
     local step=V2ServiceProcedureRules.Current(job.DefectId,index)
     job.V2ProcedureIndex=nextIndex
-    if step and step.GrantsSupport then job.V2SupportPlaced=true end
+    if step and step.GrantsSupport then
+        job.V2SupportPlaced=true
+        VehicleService.SetSupport(jobId,true)
+    end
     VehicleService.SetServiceProcedure(jobId,job.DefectId,nextIndex)
     local _,currentPilot=VehicleService.ComponentStates(jobId)
     if V2ServiceProcedureRules.Ready(job.DefectId,nextIndex,currentPilot) then

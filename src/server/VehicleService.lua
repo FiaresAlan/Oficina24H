@@ -516,6 +516,12 @@ function VehicleService.SetRepairPrepProgress(jobId: string, defectId: string, s
         end
     end
 	car:SetAttribute("PrepComplete", RepairPrepRules.Ready(defectId, stepIndex))
+    -- Se o carro possui rig V2, o suporte da roda eleva fisicamente
+    -- a plataforma antes de a roda ser desmontada, não só no minijogo.
+    if car:GetAttribute("V2PilotId") and defectId=="FlatTire"
+        and RepairPrepRules.IsDone(defectId,stepIndex,"JackSupport") then
+        VehicleService.SetSupport(jobId,true)
+    end
 	-- A abertura do capô é um gesto persistente de preparação, não uma recompensa em dinheiro.
 	if required and stepIndex > 1 and (defectId == "WeakBattery" or defectId == "Overheating") then
 		car:SetAttribute("PrepHoodOpen", true)
@@ -585,6 +591,18 @@ local function bayOf(car: Model): BasePart?
 	return nil
 end
 
+-- V2-04: apoio real no elevador antes de desmontar rodas.
+-- O carro permanece elevado durante tentativas canceladas, até sair do box.
+function VehicleService.SetSupport(jobId: string,on: boolean)
+    local car=byJob[jobId]
+    if not car or car:GetAttribute("Estacionado")~=true or
+        car:GetAttribute("V2PilotId")==nil then return end
+    local bay=bayOf(car)
+    if not bay then return end
+    car:SetAttribute("V2SupportPlaced",on)
+    task.spawn(StationService.Lift,bay,car.PrimaryPart,on)
+end
+
 -- Reparo em andamento: o carro sobe no elevador do box e o cliente vê o trabalho (pneu sai, capô abre, faíscas...).
 function VehicleService.SetRepairing(jobId: string, on: boolean)
 	local car = byJob[jobId]
@@ -597,9 +615,9 @@ function VehicleService.SetRepairing(jobId: string, on: boolean)
         applyStage(car)
     end
 	local bay = bayOf(car)
-	if bay then
-		task.spawn(StationService.Lift, bay, car.PrimaryPart, on)
-	end
+    if bay and (on or car:GetAttribute("V2SupportPlaced")~=true) then
+        task.spawn(StationService.Lift,bay,car.PrimaryPart,on)
+    end
 end
 
 -- Distância do personagem até o veículo ESTACIONADO (usada também pelas ações vindas da UI).

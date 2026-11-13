@@ -1,6 +1,6 @@
 --!strict
 -- V2-00: somente leitura. Nao altera perfil, nao faz migracao e nao substitui QA.
-local Rules = { MinSchema = 11 }
+local Rules = { MinSchema = 12 }
 local function finiteNonnegative(value: any): boolean
     return type(value) == "number" and value == value and value ~= math.huge
         and value ~= -math.huge and value >= 0
@@ -19,7 +19,7 @@ function Rules.Profile(profile: any): {string}
         or profile.WorkshopLevel % 1 ~= 0 then
         table.insert(errors, "WorkshopLevel invalido")
     end
-    for _, key in ipairs({"Parts", "Equipment", "EquipmentLevels", "OrderHistory",
+    for _, key in ipairs({"Parts", "SupplyRequests", "Equipment", "EquipmentLevels", "OrderHistory",
         "RepairLedger", "PendingClaims", "PendingClaimAudits", "OwnerSettlementProofs",
         "WorkerSettlementProofs", "WorkerPaidTombstones"}) do
         if type(profile[key]) ~= "table" then table.insert(errors, key .. " ausente") end

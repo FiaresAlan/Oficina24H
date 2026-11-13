@@ -25,6 +25,7 @@ local EquipmentUpgradeRules = require(ReplicatedStorage.Shared.EquipmentUpgradeR
 local StaffAssignmentRules = require(ReplicatedStorage.Shared.StaffAssignmentRules)
 local LocationRules = require(ReplicatedStorage.Shared.LocationRules)
 local V2ReceptionRules = require(ReplicatedStorage.Shared.V2ReceptionRules)
+local V2ManagementSummaryRules = require(ReplicatedStorage.Shared.V2ManagementSummaryRules)
 
 local WorkshopService = {}
 
@@ -578,6 +579,11 @@ function WorkshopService.GetSnapshot(player: Player)
         Jobs = jobs,
         CollabJobs = collabJobs,
         SkillLevels = skillLevels,
+        Management = V2ManagementSummaryRules.Build({
+            HasWorkshop = workshop ~= nil,
+            Profile = profileView,
+            Jobs = jobs,
+        }),
     }
 end
 

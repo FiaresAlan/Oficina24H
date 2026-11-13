@@ -537,7 +537,7 @@ v2_compatibility = text(SHARED / "V2CompatibilityRules.lua")
 v2_pilots = text(SHARED / "V2VehiclePilotRules.lua")
 v2_management = text(SHARED / "V2ManagementSummaryRules.lua")
 check("V2-00 preflight sem alterar schema ou perfis",
-      "function Rules.Profile" in v2_compatibility and "MinSchema = 11" in v2_compatibility
+      "function Rules.Profile" in v2_compatibility and "MinSchema = 12" in v2_compatibility
       and "function Rules.Snapshot" in v2_compatibility)
 check("V2-00 nao replica segredos", all(k in v2_compatibility for k in
       ("RepairLedger", "PendingClaims", "WorkerPaidTombstones", "OwnerSettlementProofs")))
@@ -552,6 +552,42 @@ check("V2-02 resumo nao inventa lucro", "NetProfitAvailable = false" in v2_manag
 check("V2-00/01/02 suites Luau registradas",
       all(f'"{name}"' in runner and (TOOLS / (name + ".luau")).is_file()
           for name in ("V2FoundationTest", "V2PilotRigTest", "V2ManagementSummaryTest")))
+
+# V2-00/01/02: contratos reais de fila, migracao e rig gerado em clones.
+v2_reception = text(SHARED / "V2ReceptionRules.lua")
+v2_supply = text(SHARED / "V2SupplyRules.lua")
+data_service = text(ROOT / "src" / "server" / "DataService.lua")
+workshop = text(ROOT / "src" / "server" / "WorkshopService.lua")
+server = text(ROOT / "src" / "server" / "Main.server.lua")
+arrival = text(ROOT / "src" / "server" / "CustomerArrivalService.lua")
+ui_orders = text(CLIENT / "UI" / "Panels" / "Orders.lua")
+check("V2-00: migracao aditiva schema v12 com lista persistente",
+    "SCHEMA_VERSION = 12" in data_service and "V2SupplyRules.Sanitize" in data_service
+    and "SupplyRequests = {}" in data_service and "SupplyRequests" in v2_compatibility)
+check("V2-02: compra no estoque desconta lista sem debitar pedido",
+    "V2SupplyRules.OnPurchase" in data_service
+    and "function DataService.RequestSupply" in data_service
+    and "function Rules.OnPurchase" in v2_supply)
+check("V2-02: prioridade e agenda validadas no servidor, nao no cliente",
+    all(x in workshop for x in ("function WorkshopService.SetJobPriority",
+       "function WorkshopService.ScheduleJob", "function WorkshopService.DiscountJob",
+       "function WorkshopService.RequestJobSupplies", "nearReception(player)",
+       "ScheduleUsed", "V2ReceptionRules.BuildVisible"))
+    and all(x in v2_reception for x in ("ValidPriority", "ValidAppointment", "ValidDiscount", "MissingParts")))
+check("V2-02: remotes V2 registrados e ligados",
+    all(x in server for x in ('"SetJobPriority"', '"ScheduleJob"',
+        '"DiscountJob"', '"RequestJobSupplies"')))
+check("V2-01: pivots apenas nos clones de carros pilotados",
+    "V2PilotRigBuilder.Attach(car, job.VehicleName)" in arrival
+    and "function Rules.Attach" in text(SHARED / "V2PilotRigBuilder.lua"))
+check("V2-02: recepcao fisica, painel, sinais de cliente e desconto",
+    '"RecepcaoBalcao"' in text(ROOT / "src" / "server" / "StationService.lua")
+    and all(x in ui_orders for x in ('Store.Act("SetJobPriority"',
+      'Store.Act("ScheduleJob"', 'Store.Act("DiscountJob"', 'Store.Act("RequestJobSupplies"',
+      'V2ReceptionRules.QueueLess')))
+check("V2: testes de novos contratos integrados",
+    all(f'"{name}"' in runner and (TOOLS / (name + ".luau")).is_file()
+       for name in ("V2ReceptionRulesTest", "V2SupplyRulesTest", "V2PilotRigBuilderTest")))
 
 print(f"\nStatic checks: {passed} passed, {len(failures)} failed")
 if failures:

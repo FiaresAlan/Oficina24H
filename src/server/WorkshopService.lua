@@ -1840,7 +1840,7 @@ function WorkshopService.DoProcedureStep(player: Player,jobId: string,stepId: an
     local ctx: V2ServiceProcedureRules.Context={
         Parked=VehicleService.IsParked(jobId),
         Authorized=true,Diagnosed=job.Diagnosed,JobActive=job.Status=="InProgress",
-        RepairBusy=(Repairs[player.UserId]~=nil and Repairs[player.UserId].JobId==jobId),
+        RepairBusy=Repairs[player.UserId]~=nil or SettlingRepairs[player.UserId]~=nil,
         NpcBusy=employeeReserved(job),
         EquipmentReady=workshop~=nil and ownsEquipment(workshop,defect.RequiredEquipment),
         PartsReady=DataService.HasParts(owner,defect.Parts),
@@ -1880,7 +1880,7 @@ function WorkshopService.ToggleVehicleComponent(player: Player, jobId: string, i
         Assigned = assigned,
         InProgress = job.Status == "InProgress",
         Diagnosed = job.Diagnosed == true,
-        Repairing = (Repairs[player.UserId] ~= nil and Repairs[player.UserId].JobId == jobId),
+        Repairing = Repairs[player.UserId] ~= nil or SettlingRepairs[player.UserId]~=nil,
         WorkerBusy = employeeReserved(job),
         WheelSupportReady = supportReady,
         WheelSupportRequired = V2ServiceProcedureRules.HasWheelProcedure(job.DefectId),

@@ -669,6 +669,49 @@ check("V2-03: mecânica visível após diagnóstico e saída segura",
     and "resetComponents(car)" in v2_vehicle
     and "job.Mechanics" in ui_orders)
 
+# V2-04: 15 sequências físicas dirigidas por servidor e proteção financeira intacta.
+v2_procs = text(SHARED / "V2ServiceProcedureRules.lua")
+v2_procs_test = text(TOOLS / "V2ServiceProcedureRulesTest.luau")
+v2_procfx = text(CLIENT / "V2ProcedureFx.client.lua")
+operation_game = text(CLIENT / "UI" / "OperationRepairGame.lua")
+check("V2-04: 15 receitas mapeadas a todo catalogo de defeitos",
+    all(k in v2_procs for k in (
+      "FlatTire","WornTire","WeakBattery","LooseSuspension","EngineMisfire",
+      "ElectricalFault","Dent","BodyDamage","PaintJob","WheelImbalance",
+      "Misalignment","BrakeWear","BrokenArm","EngineOverhaul","Overheating"))
+    and 'count~=15' in v2_procs and "function Rules.ValidateCatalog" in v2_procs)
+check("V2-04: executor autorizado e sequencia fisica verificada",
+    all(k in workshop for k in (
+      "function WorkshopService.DoProcedureStep", "V2ServiceProcedureRules.Advance",
+      "VehicleService.IsNearProcedureStep", "DataService.HasParts(owner",
+      "ownsEquipment(workshop", "V2ServiceProcedureRules.Ready", "job.V2ProcedureIndex"))
+    and "function Rules.Advance" in v2_procs
+    and "ctx.Authorized" in v2_procs and "step.UsesPart" in v2_procs)
+check("V2-04: prompts so apos diagnostico em pivôs da V2-03",
+    all(k in v2_vehicle for k in (
+      "function VehicleService.SetServiceProcedure", "V2PilotRules.Resolve",
+      "V2ProcedurePoints", "Proc_", "function VehicleService.IsNearProcedureStep",
+      "function VehicleService.MarkProcedureFinished"))
+    and "VehicleService.SetServiceProcedure(job.Id,job.DefectId,job.V2ProcedureIndex)" in workshop)
+check("V2-04: sem pagamentos antecipados e credito pela V1",
+    "job.Status = \"Completed\"" in workshop
+    and "VehicleService.MarkProcedureFinished(job.Id,result.Quality)" in workshop
+    and "DataService.HasRepairCredit" in workshop and "RepairActionRules.FinalInput" in workshop)
+check("V2-04: erro e recomeço confirmados no servidor",
+    'submit("Reset",nil,nil' in operation_game
+    and 'Store.Act("CancelRepair"' in operation_game
+    and "REFAZER SEM COBRAR" in operation_game
+    and 'mode == "Battery" or mode == "Sequence"' in text(SHARED / "RepairActionRules.lua"))
+check("V2-04: feedback visual apos diagnostico e jogo acessivel",
+    "V2RepairStage" in v2_procfx and "V2ProcedureStepId" in v2_procfx
+    and "V2ProcedureFamily" in v2_procfx and "RANGE = 120" in v2_procfx
+    and 'job.Procedure' in ui_orders
+    and 'string.sub(p.Name,1,5)=="Proc_"' in text(CLIENT / "UI" / "HUD.lua"))
+check("V2-04: teste adversarial por serviço no runner",
+    (TOOLS / "V2ServiceProcedureRulesTest.luau").is_file()
+    and "test(\"15 receitas completas" in v2_procs_test
+    and '"V2ServiceProcedureRulesTest"' in runner)
+
 print(f"\nStatic checks: {passed} passed, {len(failures)} failed")
 if failures:
     raise SystemExit(1)

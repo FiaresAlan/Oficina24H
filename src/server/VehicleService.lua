@@ -321,7 +321,9 @@ local function applyStage(car: Model)
 	end
 	if repair and repair:IsA("ProximityPrompt") then
 		repair.Enabled = parked and stage == "Repair"
-			and (car:GetAttribute("PrepRequired") ~= true or car:GetAttribute("PrepComplete") == true)
+            and (car:GetAttribute("PrepRequired") ~= true or car:GetAttribute("PrepComplete") == true)
+            and (car:GetAttribute("V2ProcedureStepId") == nil or
+                car:GetAttribute("V2ProcedureStepId") == "")
 	end
 	local prepFolder = car:FindFirstChild("RepairPrepPoints")
 	if prepFolder then

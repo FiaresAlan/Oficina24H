@@ -1850,11 +1850,13 @@ function WorkshopService.DoProcedureStep(player: Player,jobId: string,stepId: an
     local nextIndex,message=V2ServiceProcedureRules.Advance(job.DefectId,index,stepId,ctx)
     if not nextIndex then return false,message end
     local step=V2ServiceProcedureRules.Current(job.DefectId,index)
-    job.V2ProcedureIndex=nextIndex
     if step and step.GrantsSupport then
+        if not VehicleService.SetSupport(jobId,true) then
+            return false,"Este box não possui elevador funcional para apoiar a suspensão."
+        end
         job.V2SupportPlaced=true
-        VehicleService.SetSupport(jobId,true)
     end
+    job.V2ProcedureIndex=nextIndex
     VehicleService.SetServiceProcedure(jobId,job.DefectId,nextIndex)
     local _,currentPilot=VehicleService.ComponentStates(jobId)
     if V2ServiceProcedureRules.Ready(job.DefectId,nextIndex,currentPilot) then
@@ -1878,6 +1880,10 @@ function WorkshopService.ToggleVehicleComponent(player: Player, jobId: string, i
     local _, pilotId = VehicleService.ComponentStates(jobId)
     if not pilotId then return false, "Este carro não possui articulações V2." end
     local supportReady = RepairPrepRules.IsDone(job.DefectId, job.PreparationStep, "JackSupport") or job.V2SupportPlaced==true
+    if V2ServiceProcedureRules.HasWheelProcedure(job.DefectId) and supportReady
+        and not VehicleService.SupportIsStable(jobId) then
+        return false,"Aguarde o elevador estabilizar antes de retirar ou recolocar a roda."
+    end
     local ctx: V2ComponentRules.Context = {
         Parked = VehicleService.IsParked(jobId),
         Assigned = assigned,

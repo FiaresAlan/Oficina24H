@@ -593,14 +593,27 @@ end
 
 -- V2-04: apoio real no elevador antes de desmontar rodas.
 -- O carro permanece elevado durante tentativas canceladas, até sair do box.
-function VehicleService.SetSupport(jobId: string,on: boolean)
+function VehicleService.SetSupport(jobId: string,on: boolean): boolean
     local car=byJob[jobId]
     if not car or car:GetAttribute("Estacionado")~=true or
-        car:GetAttribute("V2PilotId")==nil then return end
+        car:GetAttribute("V2PilotId")==nil then return false end
     local bay=bayOf(car)
-    if not bay then return end
+    if not bay or not bay:FindFirstChild("Elevador") then return false end
+    if on and car:GetAttribute("V2SupportPlaced")~=true then
+        car:SetAttribute("V2SupportReadyAt",os.clock()+2.55)
+    end
     car:SetAttribute("V2SupportPlaced",on)
     task.spawn(StationService.Lift,bay,car.PrimaryPart,on)
+    return true
+end
+
+function VehicleService.SupportIsStable(jobId: string): boolean
+    local car=byJob[jobId]
+    if not car or car:GetAttribute("V2SupportPlaced")~=true then return false end
+    local readyAt=car:GetAttribute("V2SupportReadyAt")
+    if type(readyAt)~="number" or os.clock()<readyAt then return false end
+    local bay=bayOf(car)
+    return bay~=nil and StationService.IsLifted(bay)
 end
 
 -- Reparo em andamento: o carro sobe no elevador do box e o cliente vê o trabalho (pneu sai, capô abre, faíscas...).

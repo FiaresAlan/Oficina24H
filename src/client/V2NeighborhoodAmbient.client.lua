@@ -143,6 +143,12 @@ local function acquire(kind: string,seed: number): Actor?
     return actor
 end
 
+local function totalPooled(): number
+    local total=0
+    for _,reserve in pairs(pool) do total+=#reserve end
+    return total
+end
+
 local function release(id: string,untilAt: number?)
     local actor=live[id]
     if not actor then return end
@@ -151,7 +157,7 @@ local function release(id: string,untilAt: number?)
     if actor.Track then pcall(function() actor.Track:Stop(0.12) end) end
     actor.Model.Parent=nil
     local reserve=pool[actor.Kind]
-    if reserve and #reserve<Rules.MaxPooled then
+    if reserve and totalPooled()<Rules.MaxPooled then
         table.insert(reserve,actor)
     else
         actor.Model:Destroy()

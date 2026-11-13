@@ -2356,7 +2356,8 @@ function WorkshopService.FireEmployee(player: Player)
     end
     DataService.SetEmployees(player, profile.Employees - 1)
     for _,job in pairs(Jobs) do
-        if job.OwnerUserId==player.UserId and job.EmployeeAssignedSlot>profile.Employees then
+        if job.OwnerUserId==player.UserId and type(job.EmployeeAssignedSlot)=="number"
+            and job.EmployeeAssignedSlot>profile.Employees then
             job.EmployeeAssignedSlot=nil
         end
     end
@@ -2364,23 +2365,11 @@ function WorkshopService.FireEmployee(player: Player)
     return true, "Mecânico demitido."
 end
 
--- Tentativa de rota calculada pela navmesh; caso a cena ainda não permita
--- navegação (asset faltante), usa o destino direto com fallback do NpcKit.
-local function walkEmployee(npc: Model, target: Vector3, animator: any)
-    if not npc.Parent or not npc.PrimaryPart then return end
-    local points = { target }
-    local ok, path = pcall(function()
-        local route = PathfindingService:CreatePath({ AgentRadius = 2, AgentHeight = 5, AgentCanJump = false })
-        route:ComputeAsync(npc.PrimaryPart.Position, target)
-        return route
-    end)
-    if ok and path.Status == Enum.PathStatus.Success then
-        points = {}
-        for _, waypoint in ipairs(path:GetWaypoints()) do
-            table.insert(points, waypoint.Position)
-        end
-    end
-    NpcKit.WalkPath(npc, points, animator)
+-- Caminhada autoritativa com recálculo limitado. NUNCA teletransporta o NPC.
+local function walkEmployee(npc: Model, target: Vector3, animator: any,
+    valid: (() -> boolean)?): boolean
+    return V2StaffNavigator.Travel(npc,target,animator,
+        valid or function() return npc.Parent~=nil end)
 end
 
 -- Ferramenta visível presa à mão durante o serviço (R15 e R6).
@@ -2410,12 +2399,32 @@ local function employeeWork(owner: Player, job: any, npc: Model)
     local defect = Catalog.Defects[job.DefectId]
     local service = Catalog.Services[job.ServiceId]
     local workshop = getWorkshop(owner)
+    local animator=NpcKit.Animate(npc)
+    local index=tonumber(npc:GetAttribute("V2Slot")) or 1
+    local function valid(): boolean
+        return owner.Parent==Players and Jobs[job.Id]==job and job.Status=="InProgress"
+            and Staff[owner.UserId]==entry and npc.Parent~=nil
+            and table.find(entry.Npcs,npc)~=nil
+            and StaffAssignmentRules.IsReserved(entry.Busy,job.Id)
+    end
     local function release(message: string?)
         StaffAssignmentRules.Release(entry.Busy, job.Id)
+        if npc.Parent then
+            npc:SetAttribute("V2JobId",nil)
+            npc:SetAttribute("V2WorkState","Descansando")
+            npc:SetAttribute("RepairProgress",0)
+        end
+        if job.Status=="InProgress" then
+            VehicleService.SetRepairing(job.Id,false)
+            VehicleService.SetStage(job.Id,"Repair")
+        end
         local plot = PlotService.GetPlot(owner)
-        local spot = plot and staffSpot(plot, table.find(entry.Npcs, npc) or 1)
+        local spot = plot and staffSpot(plot, index)
         if npc.Parent and spot then
-            walkEmployee(npc, spot, NpcKit.Animate(npc))
+            walkEmployee(npc,spot,animator,function()
+                return npc.Parent~=nil and owner.Parent==Players
+                    and Staff[owner.UserId]==entry and table.find(entry.Npcs,npc)~=nil
+            end)
             if npc.Parent then NpcKit.ServerOwned(npc) end
         end
         if message and eventSender then
@@ -2432,22 +2441,41 @@ local function employeeWork(owner: Player, job: any, npc: Model)
         release("Seu mecânico precisa de peças para " .. service.DisplayName .. ". Compre na Loja de Autopeças.")
         return
     end
-    -- vai até o carro
-    local car = workspace:FindFirstChild("Vehicles") and workspace.Vehicles:FindFirstChild(job.Id)
-    local carRoot = car and car:IsA("Model") and car.PrimaryPart
-    if carRoot then
-        local spot = carRoot.CFrame * Vector3.new(0, 0, -((tonumber(car:GetAttribute("Comprimento")) or 18) / 2 + 2))
-        local plot = PlotService.GetPlot(owner)
-        local frame = plot and StationService.FrameOf(plot)
-        local groundY = frame and frame.Position.Y + 0.4 or (carRoot.Position.Y - 2.8)
-        local target = Vector3.new(spot.X, groundY, spot.Z)
-        walkEmployee(npc, target, NpcKit.Animate(npc))
-        if npc.Parent then
-            NpcKit.ServerOwned(npc)
-            NpcKit.Say(npc, "Revisando " .. service.DisplayName, 6)
-        end
+    -- Trajeto crível: corredor -> peças da sala do fundo -> box do veículo -> descanso.
+    -- Erro de caminho não autoriza pagamento nem teleporte através de paredes.
+    local plot=PlotService.GetPlot(owner)
+    local frame=plot and StationService.FrameOf(plot)
+    local car=workspace:FindFirstChild("Vehicles") and workspace.Vehicles:FindFirstChild(job.Id)
+    local carRoot=car and car:IsA("Model") and car.PrimaryPart
+    if not frame or not plot or not carRoot then
+        job.EmployeeRetryAt=os.time()+30
+        release("Carro/rota da oficina indisponível; atribuição reagendada.")
+        return
     end
-    if not npc.Parent then release(nil); return end
+    local level=WorkshopLevels.Levels[StationService.LevelOf(plot)] or WorkshopLevels.Levels[0]
+    local shelf=frame*CFrame.new(level.X0+5,0.4,WorkshopLevels.EquipmentZ-1)
+    npc:SetAttribute("V2WorkState","Buscando peças")
+    if not walkEmployee(npc,shelf.Position,animator,valid) then
+        job.EmployeeRetryAt=os.time()+30
+        release("O mecânico não encontrou caminho até o estoque. Reveja obstáculos do salão.")
+        return
+    end
+    if not valid() then release(nil);return end
+    NpcKit.Say(npc,"Separando peças e ferramentas",3)
+    task.wait(0.7)
+    if not valid() then release(nil);return end
+    npc:SetAttribute("V2WorkState","Indo ao box")
+    local spot=carRoot.CFrame*Vector3.new(0,0,-((tonumber(car:GetAttribute("Comprimento")) or 18)/2+2))
+    local target=Vector3.new(spot.X,frame.Position.Y+0.4,spot.Z)
+    if not walkEmployee(npc,target,animator,valid) then
+        job.EmployeeRetryAt=os.time()+30
+        release("O mecânico não conseguiu chegar ao carro; a OS continua disponível.")
+        return
+    end
+    if not valid() then release(nil);return end
+    NpcKit.ServerOwned(npc)
+    NpcKit.Say(npc,"Revisando "..service.DisplayName,5)
+    npc:SetAttribute("V2WorkState","Trabalhando")
     job.Diagnosed = true
     -- Se o NPC não puder terminar, os sockets de preparo precisam existir para o jogador retomar.
     job.PreparationStep = job.PreparationStep or 1
@@ -2460,7 +2488,7 @@ local function employeeWork(owner: Player, job: any, npc: Model)
     local wrench, joint = workWrench(npc)
     local started = os.clock()
     local lastStage = -1
-    while npc.Parent and job.Status == "InProgress" and os.clock() - started < workSeconds do
+    while valid() and os.clock() - started < workSeconds do
         local elapsed = os.clock() - started
         local percent = math.clamp(math.floor(100 * elapsed / workSeconds), 0, 100)
         npc:SetAttribute("RepairProgress", percent)
@@ -2477,9 +2505,9 @@ local function employeeWork(owner: Player, job: any, npc: Model)
         task.wait(0.3)
     end
     if wrench then wrench:Destroy() end
-    npc:SetAttribute("RepairProgress", nil)
+    if npc.Parent then npc:SetAttribute("RepairProgress",0) end
     local current = Jobs[job.Id]
-    if current ~= job or job.Status ~= "InProgress" or owner.Parent ~= Players
+    if current ~= job or not valid() or job.Status ~= "InProgress" or owner.Parent ~= Players
         or not npc.Parent or not table.find(entry.Npcs, npc) or Staff[owner.UserId] ~= entry
         or not StaffAssignmentRules.IsReserved(entry.Busy, job.Id)
         or job.CollaboratorUserId ~= nil
@@ -2501,6 +2529,7 @@ local function employeeWork(owner: Player, job: any, npc: Model)
         return
     end
     job.Status = "Completed" -- nenhuma reexecução de pagamento/peças depois deste ponto
+    npc:SetAttribute("V2WorkState","Concluído")
     VehicleService.SetRepairing(job.Id, false)
     VehicleService.Flash(job.Id, Color3.fromRGB(90, 220, 130))
     VehicleService.Despawn(job.Id)
@@ -2509,6 +2538,7 @@ local function employeeWork(owner: Player, job: any, npc: Model)
     DataService.AttachRepairReceipt(owner, job.Id, token, {
         JobId = job.Id, Token = token, Price = price, Quality = quality, Stars = stars,
     })
+    DataService.RecordStaffJob(owner,index,job.Id,service.DisplayName,price,quality,workSeconds)
     WorkshopService.UpdateSkin(owner)
     release(nil)
     confirmNpcSave(owner, job.Id, token, string.format(

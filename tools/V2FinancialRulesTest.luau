@@ -54,7 +54,7 @@ for _,q in ipairs(quotes) do
     test("cotação sem ganho fictício "..q.Id,q.BeforeLabor==q.BasePrice-q.PartsReferenceCost
         and q.BasePrice>=0)
 end
-local warning=R.Snapshot(R.New(0,0),{Coins=8,Employees=1,Transactions={}},100,25)
+local warning=R.Snapshot(R.New(8,0),{Coins=8,Employees=1,Transactions={}},100,25)
 test("caixa insuficiente não é mascarado",warning.Warning:find("INSUFICIENTE")~=nil)
 test("saldo não negativo e fonte só no perfil",warning.Cash==8)
 local discrepancy=R.Snapshot(b,{Coins=999,Employees=0,Transactions={}},200,0)

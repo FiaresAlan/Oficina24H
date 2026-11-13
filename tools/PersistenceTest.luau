@@ -77,7 +77,7 @@ do
 	check("novo: perfil criado com moedas iniciais", prof and prof.Coins == 250, prof and prof.Coins)
 	check("novo: kit básico presente", prof and prof.Equipment.BasicToolset == true)
 	check("C16: kit inicia no nível 1", A.GetEquipmentLevel(p, "BasicToolset") == 1)
-	check("C24: perfil novo já nasce no schema v10", prof.SchemaVersion == 10)
+	check("C25: perfil novo já nasce no schema v11", prof.SchemaVersion == 11)
 	check("novo: trava de sessão gravada", store.data["u_1"] and store.data["u_1"].Session and store.data["u_1"].Session.JobId == "A")
 end
 
@@ -189,7 +189,7 @@ do
 	A.Load(p)
 	local prof = A.Get(p)
 	check("migração: dados antigos preservados", prof and prof.Coins == 999 and prof.SkillXP.Tires == 150)
-	check("migração: campos novos criados", prof and prof.Equipment.BasicToolset and type(prof.Transactions) == "table" and prof.SchemaVersion == 9 and type(prof.Daily) == "table" and type(prof.League) == "table" and prof.League.Points == 0 and prof.WorkshopLevel ~= nil)
+	check("migração: campos novos criados", prof and prof.Equipment.BasicToolset and type(prof.Transactions) == "table" and prof.SchemaVersion == 11 and type(prof.Daily) == "table" and type(prof.League) == "table" and prof.League.Points == 0 and prof.WorkshopLevel ~= nil)
 	check("migração: outras habilidades zeradas", prof and prof.SkillXP.Engine == 0)
 end
 
@@ -430,7 +430,7 @@ do
 	store.data["u_1101"].PendingClaims[1].At -= 900 -- simula novo servidor sem aplicar parcela do contratado
 	local B = server(store, "claimB")
 	B.Load(worker)
-	check("C24: migração do schema v10", B.Get(worker).SchemaVersion == 10)
+	check("C25: migração do schema v11", B.Get(worker).SchemaVersion == 11)
 	local recovered = B.ReconcileWorkerClaims(worker)
 	check("C13: parcela ausente recuperada", recovered == 1
 		or B.HasRepairCredit(worker, "job_77", token))
@@ -476,8 +476,9 @@ do
 		B.StageWorkerClaim(worker, 1202, "job_89", token2, 80, 220, 32, 88,
 			"Freios", "Hatch", "Freios") and B.Save(worker))
 	B.Get(worker).PendingClaims[2].At -= 900
-	check("C13: dono paga próxima OS", A.CreditRepairOnce(owner, "job_89", token2,
-		80, "Owner", "Freios", "Hatch") and A.Save(owner))
+	check("C25: dono paga próxima OS com prova identificando mecânico",
+		A.CreditRepairOnce(owner, "job_89", token2, 80, "Owner",
+			"Freios", "Hatch", worker.UserId, 220) and A.Save(owner))
 	store.failGetNext = 2 -- duas claims pendentes; ambas precisam falhar neste ciclo
 	B.ReconcileWorkerClaims(worker)
 	check("C13: falha de leitura não inventa receita", not B.HasRepairCredit(worker, "job_89", token2))
@@ -621,7 +622,7 @@ do
 	local A = server(store, "claimCorruptA")
 	local p = fakePlayer(1301)
 	A.Load(p)
-	check("C24: schema v5 migra até v10", A.Get(p).SchemaVersion == 10)
+	check("C25: schema v5 migra até v11", A.Get(p).SchemaVersion == 11)
 	check("C13: sanitize de reivindicações corrompidas", #A.Get(p).PendingClaims == 0)
 	check("C13: mantém saldo antigo", A.Get(p).Coins == 300)
 end
@@ -834,7 +835,7 @@ do
 	check("C23: dados novos iniciam arquivo de quitação vazio",
 		type(A.Get(worker).WorkerSettlementProofs) == "table"
 		and #A.Get(worker).WorkerSettlementProofs == 0
-		and A.Get(worker).SchemaVersion == 9)
+		and A.Get(worker).SchemaVersion == 11)
 	check("C23: dono registra prova", A.CreditRepairOnce(owner, "job_old", token,
 		90, "Owner", "Freios", "Hatch", worker.UserId, 200))
 	A.Get(owner).OwnerSettlementProofs[1].At = os.time() - 1200
@@ -885,8 +886,8 @@ do
 	local A = server(store, "workerPaidC23-migration")
 	local player = fakePlayer(2310)
 	A.Load(player)
-	check("C24: migração v8->v10 conserva crédito antigo visível",
-		A.Get(player).SchemaVersion == 10
+	check("C25: migração v8->v11 conserva crédito antigo visível",
+		A.Get(player).SchemaVersion == 11
 		and A.HasRepairCredit(player, "legacy_paid", tk)
 		and #A.Get(player).WorkerSettlementProofs == 1)
 	check("C23: save conserva marcador migrado", A.Save(player)
@@ -1062,6 +1063,106 @@ do
 		A.ReconcileWorkerProofs(worker) == 0
 		and #A.Get(worker).WorkerSettlementProofs == 1
 		and #A.Get(worker).WorkerPaidTombstones == Tombs.MaxEntries)
+end
+
+-- C25: claim antiga com extrato do dono mas SEM identificação do
+-- trabalhador não pode conceder crédito por suposição, e mantém auditoria
+-- privada persistente para investigação posterior.
+do
+	local store = newStore()
+	local A = server(store, "auditLegacy25-A")
+	local worker, owner = fakePlayer(2501), fakePlayer(2502)
+	local token = "c25aaaaa-1111-2222-3333-bbbbbbbbbbbb"
+	A.Load(worker) A.Load(owner)
+	check("C25: claim persistida antes do dono", A.StageWorkerClaim(worker,
+		owner.UserId, "job_2501", token, 75, 125, 20, 91,
+		"Freios", "Hatch", "Tires"))
+	A.Get(worker).PendingClaims[1].At = os.time() - 1300
+	check("C25: dono registra somente ledger antigo, sem proof de destinatário",
+		A.CreditRepairOnce(owner, "job_2501", token,
+			75, "Owner", "Freios", "Hatch")
+		and #A.Get(owner).OwnerSettlementProofs == 0
+		and A.Save(owner) and A.Save(worker))
+	local originalBalance = A.Get(worker).Coins
+	check("C25: não paga a claim baseada somente no ledger legado",
+		A.ReconcileWorkerClaims(worker) == 0
+		and A.Get(worker).Coins == originalBalance
+		and #A.Get(worker).PendingClaims == 1
+		and not A.HasRepairCredit(worker, "job_2501", token))
+	check("C25: motivo legada não vinculada fica anotado privadamente",
+		#A.Get(worker).PendingClaimAudits == 1
+		and A.Get(worker).PendingClaimAudits[1].Status == "LegacyUnverified")
+	local summary = A.PendingClaimSummary(worker)
+	check("C25: resumo apenas de contagens, sem dados de ordem",
+		summary.NeedsReview == 1 and summary.LegacyUnverified == 1
+		and summary.Token == nil and summary.JobId == nil
+		and summary.OwnerUserId == nil)
+	check("C25: auditoria privada persiste com a claim", A.Save(worker)
+		and #store.data["u_2501"].PendingClaimAudits == 1
+		and #store.data["u_2501"].PendingClaims == 1)
+	A.Remove(worker) A.Remove(owner)
+	local B = server(store, "auditLegacy25-B")
+	B.Load(worker)
+	check("C25: reentrada preserva auditoria sem crédito inventado",
+		#B.Get(worker).PendingClaimAudits == 1
+		and B.Get(worker).PendingClaimAudits[1].Status == "LegacyUnverified"
+		and B.Get(worker).Coins == originalBalance)
+	check("C25: segunda tentativa preserva claim legada para revisão",
+		B.ReconcileWorkerClaims(worker) == 0
+		and #B.Get(worker).PendingClaims == 1
+		and B.Get(worker).Coins == originalBalance)
+	check("C25: cancelamento explícito interno remove auditoria vinculada",
+		B.DiscardWorkerClaim(worker, "job_2501", token)
+		and #B.Get(worker).PendingClaimAudits == 0)
+end
+
+-- C25: se existir prova do dono atribuída a OUTRO trabalhador,
+-- o ledger coincidente não pode autorizar a claim existente.
+do
+	local store = newStore()
+	local A = server(store, "auditConflict25")
+	local worker, owner = fakePlayer(2511), fakePlayer(2512)
+	local token = "c25bbbb-1111-2222-3333-cccccccccccc"
+	A.Load(worker) A.Load(owner)
+	check("C25: claim do beneficiário A registrada",
+		A.StageWorkerClaim(worker, owner.UserId, "job_wrong_worker",
+			token, 60, 140, 25, 88, "Freios", "Hatch", "Tires"))
+	A.Get(worker).PendingClaims[1].At = os.time() - 1300
+	check("C25: prova do dono identifica beneficiário B, não A",
+		A.CreditRepairOnce(owner, "job_wrong_worker", token, 60,
+			"Owner", "Freios", "Hatch", 999999, 140)
+		and A.Save(owner) and A.Save(worker))
+	local balance = A.Get(worker).Coins
+	check("C25: trabalhador errado não recebe automático",
+		A.ReconcileWorkerClaims(worker) == 0
+		and A.Get(worker).Coins == balance
+		and #A.Get(worker).PendingClaims == 1)
+	check("C25: conflito documentado para auditoria",
+		#A.Get(worker).PendingClaimAudits == 1
+		and A.Get(worker).PendingClaimAudits[1].Status == "Conflict"
+		and A.PendingClaimSummary(worker).Conflicts == 1)
+end
+
+-- C25: erro transitório de GetAsync não pode converter reivindicação
+-- não comprovada em crédito; marca motivo e permite retentativa segura.
+do
+	local store = newStore()
+	local A = server(store, "auditRead25")
+	local worker, owner = fakePlayer(2521), fakePlayer(2522)
+	local token = "c25cccc-1111-2222-3333-dddddddddddd"
+	A.Load(worker) A.Load(owner)
+	A.StageWorkerClaim(worker, owner.UserId, "job_unread", token,
+		60, 140, 25, 88, "Freios", "Hatch", "Tires")
+	A.Get(worker).PendingClaims[1].At = os.time() - 1300
+	A.Save(worker)
+	store.failGetNext = 1
+	check("C25: falha de leitura mantém claim sem pagar",
+		A.ReconcileWorkerClaims(worker) == 0
+		and A.Get(worker).PendingClaimAudits[1].Status == "ReadError"
+		and #A.Get(worker).PendingClaims == 1)
+	check("C25: leitura recuperada muda estado para Missing sem pagar",
+		A.ReconcileWorkerClaims(worker) == 0
+		and A.Get(worker).PendingClaimAudits[1].Status == "Missing")
 end
 
 for _, c in ipairs(clones) do c:Destroy() end

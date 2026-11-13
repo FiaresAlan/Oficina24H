@@ -4,13 +4,19 @@ Simulador social de oficina mecânica para Roblox: o jogador atende clientes, di
 
 ## Acompanhamento do projeto
 
+**[CHECKLIST MESTRE V2 — Direção híbrida, prioridades e fases futuras (Issue #26)](https://github.com/FiaresAlan/Oficina24H/issues/26)**
+
+**[Direção oficial do jogo V2](docs/DIRECAO_JOGO_V2_2026-11-13.md)** · **[Checklist completo V2](docs/CHECK_LIST_MESTRE_V2.md)** · **[Pesquisa de mercado V2](docs/PESQUISA_MERCADO_V2_2026-11-13.md)** · **[Auditoria do código C1–C17](docs/AUDITORIA_V2_BASE_CODIGO_2026-11-13.md)** · **[Test-drive futuro (especificação)](docs/PROPOSTA_TEST_DRIVE_V2_FUTURO.md)**
+
+**Status da V2:** direção aprovada, apenas documentos. **Nenhuma nova mecânica V2 implementada.** A V1 (Issue #15) continua sendo o histórico das fases A1–C17, não uma garantia de QA no Studio. A implementação das fases V2 depende de nova autorização do proprietário.
+
 **[CHECKLIST MESTRE — 14 fases, status e PRs (Issue #15)](https://github.com/FiaresAlan/Oficina24H/issues/15)**
 
 **[Integração de engenharia na main](https://github.com/FiaresAlan/Oficina24H/tree/main)** — o PR #20 e as etapas C5–C9 foram integrados; C10–C11 reforçam a confirmação de pagamentos. **Ainda exige validação no Studio antes de publicação.**
 
 **[Build/CI de código](https://github.com/FiaresAlan/Oficina24H/actions/workflows/code-health.yml)** — valida mapeamento dos 15 defeitos e executa build Rojo a cada atualização. **CI verde não equivale a jogo testado no Studio.**
 
-A Issue #15 é o painel único de check-ins. Lá estão as caixas `[x]` para código e documentação registrados e `[ ]` para execução de testes, validação no Studio e merge. O arquivo `docs/PROGRESSO.md` permanece como histórico detalhado.
+A Issue #15 é o histórico técnico V1; a Issue #26 acompanha apenas a implementação futura da V2. Lá estão as caixas `[x]` para código e documentação registrados e `[ ]` para execução de testes, validação no Studio e merge. O arquivo `docs/PROGRESSO.md` permanece como histórico detalhado.
 
 **Status de desenvolvimento (A1–C17):** regras, HUD, diagnóstico e procedimentos de **15 serviços**, recibos, recuperação de créditos de contratados, arquivo privado de provas, monitoramento de pendências, upgrades físicos de ferramentas e mecânicos NPC com deslocamento estão na `main`. O pipeline automatizado executa contratos estáticos e build Rojo. **As suítes Luau da sequência recente ainda não foram executadas no Studio**, e testes de perfis reais, dois jogadores, latência, telas e assets permanecem pendentes. O MVP antigo não homologa as alterações atuais. A publicação exige arte, som, licenças, desempenho e QA reais.
 

@@ -1,3 +1,5 @@
+> **Plano histórico.** As fases futuras passam a ser planejadas em [CHECK_LIST_MESTRE_V2.md](CHECK_LIST_MESTRE_V2.md), com acompanhamento em [Issue #26](https://github.com/FiaresAlan/Oficina24H/issues/26). C1–C17 permanecem rastreadas pela Issue #15. Nenhuma fase de gameplay V2 foi iniciada.
+
 # Plano de desenvolvimento — Oficina 24H
 
 Atualizado em 2026-11-05 (sessão autônoma, sem o usuário presente). Estado detalhado e histórico: `PROGRESSO.md`.

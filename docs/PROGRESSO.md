@@ -771,3 +771,13 @@ Detalhes em `docs/AUDITORIA_GERAL.md`. Resumo:
 - **C17:** funcionário liberado na oficina de 2 boxes; usa pathfinding/animação ao caminhar, chave procedural e mensagens durante o reparo; assume ordem única após 25s de preferência do dono, mantendo regras de peças/salários. Módulo `StaffAssignmentRules` centraliza a política.
 - **Testes escritos:** `EquipmentUpgradeTest`, `StaffAssignmentTest`, atualizações de `PersistenceTest`, `CatalogTest` e contratos estáticos. Detalhes: `docs/TESTE_C16_C17_UPGRADES_EQUIPE_2026-11-13.md`.
 - **CI:** ver Issue #15. **Nenhuma execução Roblox Studio nesta rodada**; verificar preço do pad, posição, 2 jogadores, NPC com assets/anim e regras após reconexão.
+
+
+## 2026-11-13 — V2 documental: direção híbrida aprovada e plano futuro (sem código de gameplay)
+- **Direção atual:** gestão de oficina em primeiro plano; mundo estilizado legível com rua existente preservada; capô, peças, ferramentas e intervenções mecânicas mais ricas nos momentos de reparo.
+- **Pesquisa:** Junk Mechanics, My Car Workshop!, Fix It Up! e Mechanic Legends — distinção entre funções oficiais, relatos isolados e riscos de design, sem “críticas majoritárias” inventadas.
+- **Nova ideia aprovada para planejamento FUTURO:** test-drive ocasional/contextual para diagnóstico ou checagem pós-reparo, com ruídos/vibração/sintomas, sem obrigar o jogador a dirigir após toda OS. Dependente de uma plataforma de direção segura e compatível com o bairro.
+- **Auditoria:** C1–C17 na main em df3f1a66; a Issue #15 contém pendências de **código e integração**, não apenas Studio. V2 começou com **todos os checkboxes de gameplay pendentes**.
+- **Documentação:** docs/DIRECAO_JOGO_V2_2026-11-13.md, docs/CHECK_LIST_MESTRE_V2.md, docs/PESQUISA_MERCADO_V2_2026-11-13.md, docs/AUDITORIA_V2_BASE_CODIGO_2026-11-13.md e docs/PROPOSTA_TEST_DRIVE_V2_FUTURO.md.
+- **Acompanhamento V2:** [Issue #26](https://github.com/FiaresAlan/Oficina24H/issues/26), separada do histórico V1 [Issue #15](https://github.com/FiaresAlan/Oficina24H/issues/15).
+- **Próxima ação:** obter autorização explícita para V2-00. Não iniciar implementação de gameplay nem afirmar teste Studio realizado nesta rodada.

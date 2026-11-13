@@ -1,3 +1,5 @@
+> **Documento-base histórico (v0.1).** A direção de produto e arte aprovada em 13/11/2026 é [DIRECAO_JOGO_V2_2026-11-13.md](DIRECAO_JOGO_V2_2026-11-13.md). A V2 coloca **gestão da oficina** em primeiro plano e mecânica prática detalhada quando aplicável. Esta revisão não implementou código.
+
 # OFICINA 24H — Documento de visão e design
 
 **Versão:** 0.1 — Documento-base  

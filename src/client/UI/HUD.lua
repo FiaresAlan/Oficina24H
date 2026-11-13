@@ -585,7 +585,7 @@ function HUD.start()
 		local car = p:FindFirstAncestorOfClass("Model")
 		local ownerId = p:GetAttribute("OwnerUserId") or (car and car:GetAttribute("OwnerUserId"))
 		-- Uma OS delegada não deve convidar o dono a executar as etapas do contratado.
-		if car and (p.Name == "Repair" or string.sub(p.Name, 1, 5) == "Prep_") then
+		if car and (p.Name == "Repair" or string.sub(p.Name, 1, 5) == "Prep_" or string.sub(p.Name, 1, 3) == "V2_" or string.sub(p.Name,1,5)=="Proc_") then
 			local assigned = car:GetAttribute("AssignedRepairUserId")
 			if type(assigned) == "number" and assigned ~= player.UserId then
 				activePrompt = nil

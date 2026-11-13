@@ -1,5 +1,5 @@
 --!strict
--- DataService: perfil persistente do jogador (schema v2).
+-- DataService: perfil persistente do jogador (schema v13).
 -- Garantias: retentativas com backoff, trava de sessão (um servidor por jogador), migração por reconcile,
 -- histórico de transações limitado, salvamento só quando houve mudança (ou para renovar a trava),
 -- liberação da trava ao sair, BindToClose paralelo. Em falha de leitura fora do Studio o jogador é expulso
@@ -21,10 +21,12 @@ local WorkerSettlementProofRules = require(ReplicatedStorage.Shared.WorkerSettle
 local WorkerPaidTombstoneRules = require(ReplicatedStorage.Shared.WorkerPaidTombstoneRules)
 local WorkerProofArchiveRules = require(ReplicatedStorage.Shared.WorkerProofArchiveRules)
 local EquipmentUpgradeRules = require(ReplicatedStorage.Shared.EquipmentUpgradeRules)
+local V2SupplyRules = require(ReplicatedStorage.Shared.V2SupplyRules)
+local V2StaffRules = require(ReplicatedStorage.Shared.V2StaffRules)
 
 local DataService = {}
 
-local SCHEMA_VERSION = 11 -- 11: auditoria persistida das claims legadas sem prova vinculada
+local SCHEMA_VERSION = 13 -- V2-05: escala, historico e folha de funcionarios; v11/v12 preservados
 local MAX_ATTEMPTS = 4
 local LOCK_TIMEOUT = 360 -- s; maior que 2 autosaves, para um servidor que caiu não prender o jogador para sempre
 local LOCK_WAIT_STEP = 3
@@ -106,6 +108,8 @@ local function makeDefaultData(): any
 		Equipment = { BasicToolset = true },
 		EquipmentLevels = { BasicToolset = 1 }, -- C16: upgrades permanentes de ferramentas e máquinas
 		Parts = { TirePatch = 3, Battery = 1, Fuse = 2 }, -- estoque inicial para os primeiros serviços
+		SupplyRequests = {}, -- V2-02: lista de peças a buscar na loja (NAO debita moedas)
+        TelemetryV2 = { FirstUpgrade = false, FirstEmployee = false }, -- eventos anonimos de primeiro progresso
 		Transactions = {},
 		TotalEarned = 0,
 		PriceMultiplier = 1, -- preço da oficina em relação à tabela (0.7 a 1.5)
@@ -132,6 +136,8 @@ local function makeDefaultData(): any
 		PendingVipReferral = false, -- um freguês indicou um VIP: o próximo cliente é VIP
 		League = { Week = -1, Points = 0, Badge = "", BadgeWeek = -1 }, -- liga semanal (shared/ProgressRules)
 		Employees = 0, -- mecânicos NPC contratados
+        StaffSlots = V2StaffRules.Sanitize(nil), -- V2-05: escala de dois mecânicos
+        StaffPayroll = { PaidCount=0, TotalPaid=0, LastDueAt=0 }, -- sem tokens privados novos
 	}
 end
 
@@ -248,6 +254,8 @@ local function reconcile(data: any): any
 			data.Parts[partId] = math.floor(count)
 		end
 	end
+	-- V2-02: migracao aditiva v11 -> v12; whitelist, limite e nenhuma retirada de moedas.
+	data.SupplyRequests = V2SupplyRules.Sanitize(data.SupplyRequests)
 	if type(data.Bag) ~= "table" then
 		data.Bag = {}
 	end
@@ -323,6 +331,13 @@ local function reconcile(data: any): any
 	end
 	data.Expansion = 0
 	data.Employees = intIn(data.Employees, 0, Config.MaxEmployees)
+    data.StaffSlots = V2StaffRules.Sanitize(data.StaffSlots)
+    local payroll = type(data.StaffPayroll)=="table" and data.StaffPayroll or {}
+    data.StaffPayroll = {
+        PaidCount = intIn(payroll.PaidCount,0,100000000),
+        TotalPaid = intIn(payroll.TotalPaid,0,1000000000),
+        LastDueAt = intIn(payroll.LastDueAt,0,4102444800),
+    }
 	if type(data.Transactions) ~= "table" then
 		data.Transactions = {}
 	end
@@ -330,6 +345,11 @@ local function reconcile(data: any): any
 		data.Onboarding = { Done = false }
 	end
 	data.Onboarding = { Done = data.Onboarding.Done == true }
+    local metrics = type(data.TelemetryV2) == "table" and data.TelemetryV2 or {}
+    data.TelemetryV2 = {
+        FirstUpgrade = metrics.FirstUpgrade == true,
+        FirstEmployee = metrics.FirstEmployee == true,
+    }
 	data.SchemaVersion = SCHEMA_VERSION
 	return data
 end
@@ -949,9 +969,44 @@ function DataService.AddParts(player: Player, partId: string, amount: number): b
 	if not profile or Catalog.Parts[partId] == nil or n <= 0 then
 		return false
 	end
-	profile.Parts[partId] = (profile.Parts[partId] or 0) + n
+		profile.Parts[partId] = (profile.Parts[partId] or 0) + n
 	Dirty[player.UserId] = true
 	return true
+end
+
+-- Apenas compra confirmada na loja reduz a lista de requisicoes.
+-- AddParts generico serve tambem para rollback e recompensas; nao deve diminuir pedidos.
+function DataService.FulfillSupplyRequest(player: Player, partId: string, count: number): boolean
+    local profile = Profiles[player.UserId]
+    if not profile or Catalog.Parts[partId] == nil or type(count) ~= "number"
+        or count ~= count or count % 1 ~= 0 or count <= 0 or count > Catalog.MaxPartPurchase then
+        return false
+    end
+    profile.SupplyRequests = V2SupplyRules.OnPurchase(profile.SupplyRequests, partId, count)
+    Dirty[player.UserId] = true
+    return true
+end
+
+-- V2-02: pedido de compra SEM transacao financeira; a compra real continua na loja V1.
+-- Recebe somente deficit calculado no servidor por WorkshopService.
+function DataService.RequestSupply(player: Player, needed: any): (boolean, string)
+    local profile = Profiles[player.UserId]
+    if not profile then return false, "Perfil indisponível." end
+    local nextList, added = V2SupplyRules.MergeMissing(profile.SupplyRequests, needed)
+    if added == 0 then return false, "Nenhuma peça nova para adicionar à lista." end
+    profile.SupplyRequests = nextList
+    Dirty[player.UserId] = true
+    return true, "Lista atualizada. Compre as peças na Loja de Autopeças."
+end
+
+-- Descarte explicito de wishlist: nenhuma transacao financeira nem estoque muda.
+function DataService.ClearSupplyRequests(player: Player): (boolean, string)
+    local profile = Profiles[player.UserId]
+    if not profile then return false, "Perfil indisponível." end
+    if next(profile.SupplyRequests) == nil then return false, "Lista já está vazia." end
+    profile.SupplyRequests = {}
+    Dirty[player.UserId] = true
+    return true, "Lista de compras descartada sem alterar estoque ou saldo."
 end
 
 -- Devolve true se o estoque cobre TODAS as peças pedidas ({ [partId] = quantidade }).
@@ -1087,9 +1142,79 @@ end
 function DataService.SetEmployees(player: Player, count: number)
 	local profile = DataService.Get(player)
 	if profile then
-		profile.Employees = math.clamp(math.floor(count), 0, Config.MaxEmployees)
-		DataService.MarkDirty(player)
+        local previous=profile.Employees or 0
+        local newCount=math.clamp(math.floor(count),0,Config.MaxEmployees)
+        if newCount>previous then
+            for i=previous+1,newCount do
+                profile.StaffSlots[i]=V2StaffRules.DefaultSlot()
+            end
+        end
+        profile.Employees=newCount
+        DataService.MarkDirty(player)
 	end
+end
+
+-- V2-05: quadro de funcionários salvo no mesmo perfil com limites rígidos.
+function DataService.UpdateStaffPolicy(player: Player,index: any,key: any,value: any): (boolean,string)
+    local profile=Profiles[player.UserId]
+    if not profile or type(index)~="number" or index%1~=0 or index<1
+        or index>(profile.Employees or 0) then return false,"Mecânico não contratado." end
+    local ok,message=V2StaffRules.Update(profile.StaffSlots,index,key,value)
+    if ok then Dirty[player.UserId]=true end
+    return ok,message
+end
+
+function DataService.RecordStaffJob(player: Player,index: number,jobId: string,
+    service: string,amount: number,quality: number,seconds: number): boolean
+    local profile=Profiles[player.UserId]
+    if not profile then return false end
+    -- O caller chama somente após SettleNpcRepairOnce confirmar crédito e consumo no mesmo perfil.
+    local ok=V2StaffRules.Record(profile.StaffSlots,index,jobId,service,amount,
+        quality,seconds,os.time())
+    if ok then Dirty[player.UserId]=true end
+    return ok
+end
+
+-- Debita salário no mesmo perfil em que se avança a data de vencimento,
+-- sem yield. Chamadas repetidas com a mesma data são recusadas.
+function DataService.ChargeStaffPayrollOnce(player: Player,dueAt: any,count: any): (boolean,string)
+    local profile=Profiles[player.UserId]
+    if not profile or type(dueAt)~="number" or dueAt%1~=0 or dueAt<=0
+        or type(count)~="number" or count%1~=0 or count<1
+        or count>Config.MaxEmployees or profile.Employees~=count
+        or profile.NextPayAt~=dueAt or os.time()<dueAt then
+        return false,"Folha já executada ou prazo inválido."
+    end
+    local due=count*Config.EmployeeSalary
+    if profile.Coins<due then return false,"Saldo insuficiente para salários." end
+    profile.NextPayAt=os.time()+Config.PaydaySeconds
+    profile.StaffPayroll.PaidCount+=1
+    profile.StaffPayroll.TotalPaid+=due
+    profile.StaffPayroll.LastDueAt=dueAt
+    DataService.AddCoins(player,-due,"Salário dos funcionários")
+    return true,"Salários registrados no perfil."
+end
+
+-- Se não há saldo, registra somente novo prazo (nenhum pagamento presumido).
+function DataService.DeferStaffPayroll(player: Player,dueAt: any): boolean
+    local profile=Profiles[player.UserId]
+    if not profile or type(dueAt)~="number" or profile.NextPayAt~=dueAt
+        or os.time()<dueAt then return false end
+    profile.NextPayAt=os.time()+Config.PaydaySeconds
+    Dirty[player.UserId]=true
+    return true
+end
+
+-- Concedido uma unica vez por perfil; permite registrar funis sem identificadores pessoais.
+function DataService.ClaimTelemetryMilestone(player: Player, kind: string): boolean
+    if kind ~= "FirstUpgrade" and kind ~= "FirstEmployee" then return false end
+    local profile = Profiles[player.UserId]
+    if not profile then return false end
+    profile.TelemetryV2 = profile.TelemetryV2 or {}
+    if profile.TelemetryV2[kind] then return false end
+    profile.TelemetryV2[kind] = true
+    Dirty[player.UserId] = true
+    return true
 end
 
 function DataService.MarkDirty(player: Player)

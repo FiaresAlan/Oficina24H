@@ -1,0 +1,16 @@
+local R=require(game:GetService("ReplicatedStorage").Shared.V2SupplyRules)
+local out={}
+local function check(name,ok) table.insert(out,(ok and "PASS " or "FAIL ")..name) end
+local r=R.Sanitize({Battery=2,Fuse=100,Unknown=15,Tire=0})
+check("lista tipada e limitada",r.Battery==2 and r.Fuse==20 and r.Unknown==nil and r.Tire==nil)
+local merged,n=R.MergeMissing(r,{Battery=1,Tire=2})
+check("adiciona falta sem duplicar existente",merged.Battery==2 and merged.Tire==2 and n==1)
+local same,n2=R.MergeMissing(merged,{Tire=2})
+check("requisicao repetida idempotente",n2==0 and same.Tire==2)
+local after=R.OnPurchase(merged,"Tire",1)
+check("compra fisica reduz pendencia",after.Tire==1)
+local paid=R.OnPurchase(after,"Tire",1)
+check("pedido atendido desaparece",paid.Tire==nil)
+check("nao permite quantidade frauda",R.MergeMissing({}, {Tire=math.huge}) == nil or R.Sanitize({Tire=math.huge}).Tire==nil)
+check("custo estimado nao debita",R.TotalEstimatedCost({Battery=1})>0)
+return table.concat(out,"\n")

@@ -15,6 +15,8 @@ local PanelKit = require(script.Parent.Parent.PanelKit)
 local Stations = require(script.Parent.Parent.Stations)
 local ServiceFocusRules = require(ReplicatedStorage.Shared.ServiceFocusRules)
 local RepairStatementRules = require(ReplicatedStorage.Shared.RepairStatementRules)
+local V2ManagementSummaryRules = require(ReplicatedStorage.Shared.V2ManagementSummaryRules)
+local V2ReceptionRules = require(ReplicatedStorage.Shared.V2ReceptionRules)
 
 local t = Kit.t
 local Orders = {}
@@ -78,6 +80,7 @@ function Orders.new(parent: Instance)
 	tabs = PanelKit.tabs(body, {
 		{ Id = "open", Label = t("or_tab_open"), Icon = "pn_o_clock" },
 		{ Id = "progress", Label = t("or_tab_progress"), Icon = "pn_o_wrench" },
+        { Id = "team", Label = "Equipe", Icon = "pn_p_people" },
 		{ Id = "done", Label = t("or_tab_done"), Icon = "pn_o_check" },
 	}, function()
 		render()
@@ -222,6 +225,14 @@ function Orders.new(parent: Instance)
 		info.Name = "Info"
 		HudParts.text(info, t("or_customer", (job.Vip and "★ VIP " or (job.Regular and "♥ " or (job.Fleet and "📋 " or ""))) .. (job.CustomerName or "?")), 30, { Font = Theme.FontTitle, LayoutOrder = 1 })
 		HudParts.text(info, job.VehicleName, 26, { Font = Theme.FontSemi, LayoutOrder = 2 })
+        local reception = job.Reception or {}
+        HudParts.text(info, (reception.Stage or "Aguardando") .. string.format(
+            " · Faixa geral (estimativa): %d–%d moedas",
+                reception.PriceGuideMin or 0, reception.PriceGuideMax or 0), 18, {
+            Font = Theme.FontSemi, TextColor3 = Theme.Muted, LayoutOrder = 2,
+            TextWrapped = true, AutomaticSize = Enum.AutomaticSize.Y,
+            Size = UDim2.new(1, 0, 0, 0),
+        })
 		local status = stack(info, 8, true, 3)
 		HudParts.sprite(status, "pn_o_clock", Vector2.new(28, 28))
 		HudParts.text(status, t("or_waiting"), 24, { Font = Theme.FontSemi, LayoutOrder = 2 })
@@ -252,6 +263,32 @@ function Orders.new(parent: Instance)
 			Store.Act("DeclineJob", { JobId = job.Id })
 		end)
 		decline.LayoutOrder = 3
+        local priority = PanelKit.button(actions,
+            reception.Priority == 1 and "PRIORIDADE ALTA" or reception.Priority == -1
+                and "PRIORIDADE BAIXA" or "PRIORIZAR FILA",
+            "blue", Vector2.new(200, 42), function()
+                if not Stations.IsNear("orders") then
+                    Store.Message:Fire(Stations.FarText.orders, false, "")
+                    Stations.Guide("orders")
+                    return
+                end
+                local nextValue = reception.Priority == 1 and -1 or
+                    reception.Priority == -1 and 0 or 1
+                Store.Act("SetJobPriority", { JobId = job.Id, Priority = nextValue })
+            end)
+        priority.LayoutOrder = 4
+        if reception.CanSchedule then
+            local schedule = PanelKit.button(actions, "ATENDER EM 60 S", "dark",
+                Vector2.new(200, 42), function()
+                    if not Stations.IsNear("orders") then
+                        Store.Message:Fire(Stations.FarText.orders, false, "")
+                        Stations.Guide("orders")
+                        return
+                    end
+                    Store.Act("ScheduleJob", { JobId = job.Id, Seconds = 60 })
+                end)
+            schedule.LayoutOrder = 5
+        end
 	end
 
 	local function progressCard(scroll: ScrollingFrame, snapshot: any, job: any, order: number, compact: boolean)
@@ -279,6 +316,48 @@ function Orders.new(parent: Instance)
 			LayoutOrder = 2,
 		})
 		requirement(info, job, snapshot, 4)
+        if job.Procedure then
+            local proc=job.Procedure
+            HudParts.text(info,string.format("REPARO TÉCNICO · %d/%d etapas · %s",
+                proc.Completed or 0,proc.Total or 0,proc.StepName or ""),
+                19,{Font=Theme.FontSemi,TextColor3=Theme.Accent,
+                    LayoutOrder=4,TextWrapped=true,AutomaticSize=Enum.AutomaticSize.Y,
+                    Size=UDim2.new(1,0,0,0)})
+            if not proc.Ready then
+                HudParts.text(info,"Local: "..(proc.Area or "").." · Ferramenta: "..(proc.Tool or ""),
+                    17,{Font=Theme.FontSemi,TextColor3=Theme.Muted,LayoutOrder=4,
+                        TextWrapped=true,AutomaticSize=Enum.AutomaticSize.Y,
+                        Size=UDim2.new(1,0,0,0)})
+            end
+        end
+        if job.Mechanics then
+            local mechanics = job.Mechanics
+            local panelHint = not mechanics.Ready and mechanics.Next or
+                (mechanics.Hood == "Open" and "Capô aberto — feche antes da saída" or
+                    mechanics.WheelFL == "Detached" and "Roda dianteira esquerda removida" or
+                    "Componentes prontos para o serviço")
+            HudParts.text(info, "OFICINA 3D · " .. panelHint, 19, {
+                Font = Theme.FontSemi, TextColor3 = Theme.Accent,
+                LayoutOrder = 4, TextWrapped = true, AutomaticSize = Enum.AutomaticSize.Y,
+                Size = UDim2.new(1, 0, 0, 0),
+            })
+        end
+        local reception = job.Reception or {}
+        if job.Diagnosed and reception.EstimatedPartsCost ~= nil then
+            HudParts.text(info, string.format(
+                "Peças (estimativa): %d · Contribuição antes salários: %d",
+                    reception.EstimatedPartsCost, reception.ContributionBeforeLabor or 0),
+                19, { Font = Theme.FontSemi, TextColor3 = Theme.Muted,
+                    LayoutOrder = 4, TextWrapped = true, AutomaticSize = Enum.AutomaticSize.Y,
+                    Size = UDim2.new(1, 0, 0, 0) })
+        end
+        HudParts.text(info, "Etapa: " .. (reception.Stage or "Em andamento")
+            .. ((reception.DiscountPercent or 0) > 0 and
+                (" · desconto " .. tostring(reception.DiscountPercent) .. "%") or ""), 19, {
+                Font = Theme.FontSemi, TextColor3 = Theme.Muted, LayoutOrder = 5,
+                TextWrapped = true, AutomaticSize = Enum.AutomaticSize.Y,
+                Size = UDim2.new(1, 0, 0, 0),
+            })
 		local actions = stack(content, 8, false, 3)
 		actions.Name = "Actions"
 		if goal.Kind == "Delegated" then
@@ -309,7 +388,31 @@ function Orders.new(parent: Instance)
 			go.LayoutOrder = 1
 		end
 		if job.Diagnosed and not job.CollaboratorUserId then
-			local npc = PanelKit.button(actions, t("orders_hire_npc"), "dark", Vector2.new(210, 42), function()
+            for _, pct in ipairs({5, 10}) do
+                local discount = PanelKit.button(actions, "OFERECER " .. pct .. "% DESCONTO",
+                    "dark", Vector2.new(210, 42), function()
+                        if not Stations.IsNear("orders") then
+                            Store.Message:Fire(Stations.FarText.orders, false, "")
+                            Stations.Guide("orders")
+                            return
+                        end
+                        Store.Act("DiscountJob", { JobId = job.Id, Percent = pct })
+                    end)
+                discount.LayoutOrder = 5 + pct
+            end
+            if reception.MissingParts and next(reception.MissingParts) ~= nil then
+                local supplies = PanelKit.button(actions, "ADICIONAR PEÇAS À LISTA",
+                    "blue", Vector2.new(210, 42), function()
+                        if not Stations.IsNear("orders") then
+                            Store.Message:Fire(Stations.FarText.orders, false, "")
+                            Stations.Guide("orders")
+                            return
+                        end
+                        Store.Act("RequestJobSupplies", { JobId = job.Id })
+                    end)
+                supplies.LayoutOrder = 8
+            end
+            local npc = PanelKit.button(actions, t("orders_hire_npc"), "dark", Vector2.new(210, 42), function()
 				Store.Act("HireNpc", { JobId = job.Id })
 			end)
 			npc.LayoutOrder = 2
@@ -353,15 +456,39 @@ function Orders.new(parent: Instance)
 		local parts = { tabs.Current(), tostring(inviteJobId), tostring(snapshot.HasWorkshop) }
 		for _, job in ipairs(snapshot.Jobs) do
 			table.insert(parts, string.format("%s.%s.%s.%s.%s.%s",
-				job.Id, job.Status, tostring(job.Diagnosed), tostring(job.CollaboratorUserId),
-				tostring(job.PrepComplete), tostring(job.Requirement and job.Requirement.EquipmentId)))
+                job.Id, job.Status, tostring(job.Diagnosed), tostring(job.CollaboratorUserId),
+                tostring(job.PrepComplete), tostring(job.Requirement and job.Requirement.EquipmentId)))
+            local reception = job.Reception or {}
+            table.insert(parts, table.concat({
+                tostring(reception.Priority), tostring(reception.ScheduledUntil),
+                tostring(reception.DiscountPercent), tostring(reception.Stage),
+                tostring(job.Mechanics and job.Mechanics.Hood),
+                tostring(job.Mechanics and job.Mechanics.WheelFL),
+                tostring(job.Mechanics and job.Mechanics.Ready),
+                tostring(job.Procedure and job.Procedure.Completed),
+                tostring(job.Procedure and job.Procedure.StepName),
+                tostring(job.EmployeeAssignedSlot),
+            }, ":"))
 		end
 		for _, job in ipairs(snapshot.CollabJobs or {}) do
 			table.insert(parts, "c" .. job.Id .. tostring(job.Diagnosed))
 		end
-		table.insert(parts, HttpService:JSONEncode({ snapshot.Profile.Parts, snapshot.Profile.Equipment, snapshot.SkillLevels }))
+		table.insert(parts, HttpService:JSONEncode({ snapshot.Profile.Parts, snapshot.Profile.Equipment, snapshot.Profile.SupplyRequests, snapshot.SkillLevels }))
 		table.insert(parts, tostring(#(snapshot.Profile.OrderHistory or {})))
+		table.insert(parts, table.concat({ tostring(snapshot.Profile.Coins), tostring(snapshot.Profile.Employees),
+			tostring(snapshot.Profile.WorkshopLevel) }, ":"))
 		table.insert(parts, HttpService:JSONEncode(snapshot.RecentSettlements or {}))
+        local staff=snapshot.Staff or {}
+        table.insert(parts, tostring(staff.TotalPaid))
+        for _,worker in ipairs(staff.Workers or {}) do
+            table.insert(parts,table.concat({
+                tostring(worker.Slot),tostring(worker.Mode),tostring(worker.Focus),
+                tostring(worker.Completed),tostring(worker.Gross),
+                tostring(worker.Status),tostring(worker.JobId),
+                tostring(math.floor((worker.Progress or 0)/25)),
+                tostring(worker.Queued),
+            },":"))
+        end
 		table.insert(parts, HttpService:JSONEncode(snapshot.PendingClaimSummary or {}))
 		return table.concat(parts, "|")
 	end
@@ -395,9 +522,7 @@ function Orders.new(parent: Instance)
 				table.insert(progressJobs, job)
 			end
 		end
-		table.sort(openJobs, function(a, b)
-			return (a.WaitSeconds or 0) > (b.WaitSeconds or 0)
-		end)
+		table.sort(openJobs, V2ReceptionRules.QueueLess)
 		local history = snapshot.Profile.OrderHistory or {}
 		tabs.SetLabel("open", t("or_tab_open") .. (#openJobs > 0 and (" (" .. #openJobs .. ")") or ""))
 		tabs.SetLabel("progress", t("or_tab_progress") .. (#progressJobs > 0 and (" (" .. #progressJobs .. ")") or ""))
@@ -414,7 +539,56 @@ function Orders.new(parent: Instance)
 		end
 
 		if id == "open" then
-			local top = stack(scroll, 10, true, 0)
+            -- V2-02: visão gerencial apenas de leitura, sem exibir margem inventada.
+            local summary = type(snapshot.Management) == "table" and snapshot.Management
+                or V2ManagementSummaryRules.Build(snapshot)
+            local cardV2 = PanelKit.card(scroll, "V2ManagementOverview")
+            cardV2.Size = UDim2.new(1, -10, 0, compact and 128 or 114)
+            cardV2.LayoutOrder = -10
+            HudParts.text(cardV2,
+                string.format("OPERAÇÃO · %d aguardando · %d box(es) livre(s) de %d · %d mecânico(s)",
+                    summary.Waiting, summary.FreeBays, summary.Bays, summary.Employees),
+                compact and 18 or 21, {
+                    Font = Theme.FontSemi, TextColor3 = Theme.Accent,
+                    Position = UDim2.fromOffset(14, 12),
+                    Size = UDim2.new(1, -28, 0, 28), TextWrapped = true,
+                })
+            HudParts.text(cardV2, string.format(
+                "Caixa: %d · Histórico bruto (%d OS): %d · Líquido: V2-08",
+                    summary.Coins, summary.RecentCount, summary.RecentGross),
+                compact and 16 or 18, {
+                    Font = Theme.FontSemi, TextColor3 = Theme.Muted,
+                    Position = UDim2.fromOffset(14, 42),
+                    Size = UDim2.new(1, -28, 0, compact and 47 or 37),
+                    TextWrapped = true,
+                })
+            HudParts.text(cardV2, string.format("%s · estoque %d un. · pedidos %d tipo(s) (%d moedas)",
+                summary.NextAction, summary.StockUnits, summary.SupplyRequestKinds, summary.SupplyEstimatedCost),
+                compact and 15 or 18, {
+                Font = Theme.FontSemi, TextColor3 = Theme.Accent,
+                Position = UDim2.fromOffset(14, compact and 94 or 85),
+                Size = UDim2.new(1, -28, 0, 24), TextWrapped = true,
+            })
+            -- Próximo investimento aparece depois do primeiro atendimento, sem overlay.
+            if (snapshot.Profile.RatingCount or 0) > 0
+                and (snapshot.Profile.WorkshopLevel or 0) == 0 then
+                local upgrade = snapshot.Workshop and snapshot.Workshop.Next
+                if upgrade then
+                    local guide = PanelKit.card(scroll, "V2FirstExpansion")
+                    guide.LayoutOrder = -9
+                    guide.Size = UDim2.new(1, -10, 0, 68)
+                    HudParts.text(guide, upgrade.CanBuy and
+                        ("PRÓXIMO PASSO: amplie para " .. upgrade.Name .. " na Construtora")
+                        or ("META DE EXPANSÃO: " .. upgrade.Name .. " · custo "
+                            .. tostring(upgrade.Cost) .. " moedas; confira os requisitos na Construtora"),
+                        compact and 17 or 20, {
+                        Font = Theme.FontSemi, TextColor3 = Theme.Accent,
+                        Position = UDim2.fromOffset(14, 9),
+                        Size = UDim2.new(1, -28, 0, 50), TextWrapped = true,
+                    })
+                end
+            end
+            local top = stack(scroll, 10, true, 0)
 			local flyers = PanelKit.button(top, t("orders_new_customer"), "orange", Vector2.new(240, 48), function()
 				Store.Act("GenerateCustomer")
 			end)
@@ -429,8 +603,123 @@ function Orders.new(parent: Instance)
 				empty.Size = UDim2.new(1, -10, 0, 250)
 			end
 			refreshLive()
-		elseif id == "progress" then
-			for index, job in ipairs(progressJobs) do
+        elseif id == "team" then
+            -- V2-05: supervisionar até dois mecânicos sem UI sobreposta ou
+            -- campos financeiros/clientes privados.
+            local staff=snapshot.Staff or {Workers={},Employees=0}
+            HudParts.text(scroll,string.format(
+                "EQUIPE · %d contratado(s) · salário %d por mecânico a cada %d min",
+                staff.Employees or 0, staff.SalaryEach or 0,
+                math.floor((staff.PayEvery or 300)/60)),21,{
+                    Font=Theme.FontTitle,LayoutOrder=1,TextWrapped=true,
+                    AutomaticSize=Enum.AutomaticSize.Y,
+                    Size=UDim2.new(1,-10,0,0),
+                })
+            HudParts.text(scroll,string.format(
+                "Folha paga: %d moedas em %d ciclos · próximo vencimento em %d min",
+                staff.TotalPaid or 0,staff.PaidCount or 0,
+                math.ceil((staff.DueSeconds or 0)/60)),18,{
+                    Font=Theme.FontSemi,TextColor3=Theme.Muted,LayoutOrder=2,
+                    TextWrapped=true,AutomaticSize=Enum.AutomaticSize.Y,
+                    Size=UDim2.new(1,-10,0,0),
+                })
+            HudParts.text(scroll,"Altere escala e atribuições junto à TV de ordens da sua oficina. A pausa só impede novos serviços; o atual é concluído.",17,{
+                Font=Theme.FontSemi,TextColor3=Theme.Muted,LayoutOrder=3,
+                TextWrapped=true,AutomaticSize=Enum.AutomaticSize.Y,
+                Size=UDim2.new(1,-10,0,0),
+            })
+            if #(staff.Workers or {})==0 then
+                HudParts.text(scroll,"Contrate mecânicos na estação física da oficina nível 1 ou superior.",21,{
+                    Font=Theme.FontSemi,LayoutOrder=10,TextWrapped=true,
+                    Size=UDim2.new(1,-10,0,80),
+                })
+            end
+            for _,worker in ipairs(staff.Workers or {}) do
+                local card=PanelKit.card(scroll,"Staff_"..tostring(worker.Slot))
+                card.LayoutOrder=10+worker.Slot
+                card.Size=UDim2.new(1,-10,0,compact and 330 or 304)
+                HudParts.text(card,string.format("MECÂNICO %d · %s · %s (%d%%)",
+                    worker.Slot,tostring(worker.Name),
+                    worker.Status or "Descansando",worker.Progress or 0),compact and 19 or 22,{
+                        Font=Theme.FontTitle,TextColor3=Theme.Accent,
+                        Position=UDim2.fromOffset(14,10),
+                        Size=UDim2.new(1,-28,0,44),
+                        TextWrapped=true,
+                    })
+                HudParts.text(card,string.format(
+                    "Serviços %d · receita bruta %d · qualidade média %d%% · duração média %ds",
+                    worker.Completed or 0,worker.Gross or 0,
+                    worker.AverageQuality or 0,worker.AverageSeconds or 0),
+                    compact and 16 or 18,{
+                        Font=Theme.FontSemi,TextColor3=Theme.Muted,
+                        Position=UDim2.fromOffset(14,60),
+                        Size=UDim2.new(1,-28,0,40),TextWrapped=true,
+                    })
+                local modes={"Auto","Manual","Paused"}
+                local modeLabels={Auto="Automático",Manual="Manual",Paused="Pausado"}
+                local modeIndex=table.find(modes,worker.Mode) or 1
+                local newMode=modes[modeIndex%#modes+1]
+                local control=PanelKit.button(card,"Escala: "..(modeLabels[worker.Mode] or "?"),"dark",
+                    Vector2.new(compact and 160 or 190,40),function()
+                        Store.Act("SetStaffPolicy",{Index=worker.Slot,Key="Mode",Value=newMode})
+                    end)
+                control.Position=UDim2.fromOffset(14,108)
+                local focuses={"Any","Tires","Engine","Electrical","Suspension","Bodywork"}
+                local labels={Any="Todas",Tires="Pneus",Engine="Motor",Electrical="Elétrica",
+                    Suspension="Suspensão",Bodywork="Funilaria"}
+                local focusIndex=table.find(focuses,worker.Focus) or 1
+                local nextFocus=focuses[focusIndex%#focuses+1]
+                local focus=PanelKit.button(card,"Foco: "..(labels[worker.Focus] or "?"),"dark",
+                    Vector2.new(compact and 150 or 190,40),function()
+                        Store.Act("SetStaffPolicy",{Index=worker.Slot,Key="Focus",Value=nextFocus})
+                    end)
+                focus.Position=UDim2.fromOffset(compact and 184 or 225,108)
+                HudParts.text(card,string.format("OS atual: %s · %d aguardando na fila",
+                    worker.JobId or "nenhuma",worker.Queued or 0),17,{
+                    Font=Theme.FontSemi,TextColor3=Theme.Muted,
+                    Position=UDim2.fromOffset(14,161),
+                    Size=UDim2.new(1,-28,0,28),TextWrapped=true,
+                })
+                local count=0
+                for _,job in ipairs(progressJobs) do
+                    if count>=2 then break end
+                    if not job.CollaboratorUserId and job.EmployeeAssignedSlot==worker.Slot then
+                        count+=1
+                        local btn=PanelKit.button(card,"Retirar da fila · "..job.VehicleName,
+                            "dark",Vector2.new(compact and 300 or 370,34),function()
+                                Store.Act("ClearStaffJob",{JobId=job.Id})
+                            end)
+                        btn.Position=UDim2.fromOffset(14,190+(count-1)*44)
+                    elseif not job.CollaboratorUserId and not job.EmployeeAssignedSlot
+                        and worker.Mode~="Paused" then
+                        count+=1
+                        local btn=PanelKit.button(card,"Atribuir · "..job.VehicleName,
+                            "blue",Vector2.new(compact and 300 or 370,34),function()
+                                Store.Act("AssignStaffJob",{Index=worker.Slot,JobId=job.Id})
+                            end)
+                        btn.Position=UDim2.fromOffset(14,190+(count-1)*44)
+                    end
+                end
+                if count==0 then
+                    HudParts.text(card,"Sem OS elegível para atribuição manual.",17,{
+                        Font=Theme.FontSemi,TextColor3=Theme.Muted,
+                        Position=UDim2.fromOffset(14,193),Size=UDim2.new(1,-28,0,30),
+                        TextWrapped=true,
+                    })
+                end
+                local recent=worker.Recent or {}
+                if #recent>0 then
+                    local last=recent[1]
+                    HudParts.text(card,string.format("Último: %s · %d moedas · qualidade %d%%",
+                        last.Service,last.Gross,last.Quality),17,{
+                        Font=Theme.FontSemi,TextColor3=Theme.Muted,
+                        Position=UDim2.fromOffset(14,compact and 288 or 275),
+                        Size=UDim2.new(1,-28,0,33),TextWrapped=true,
+                    })
+                end
+            end
+        elseif id == "progress" then
+\t\t\tfor index, job in ipairs(progressJobs) do
 				progressCard(scroll, snapshot, job, index, compact)
 			end
 			local collab = snapshot.CollabJobs or {}

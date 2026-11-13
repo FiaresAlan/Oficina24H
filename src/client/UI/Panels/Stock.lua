@@ -156,8 +156,9 @@ function Stock.new(parent: Instance)
 				return
 			end
 			local qty = (snapshot.Profile.Parts or {})[id] or 0
+            local requested = (snapshot.Profile.SupplyRequests or {})[id] or 0
 			HudParts.text(detail, part.DisplayName, 30, { Font = Theme.FontTitle, LayoutOrder = 1 })
-			HudParts.text(detail, t("st_detail_category", t("cat_" .. (Catalog.PartCategory[id] or "Misc"))) .. "   ·   " .. (qty > 0 and t("st_qty", qty) or t("st_out")), 22, { Font = Theme.FontSemi, TextColor3 = qty > 0 and rgb(80, 230, 110) or Theme.Muted, LayoutOrder = 2 })
+			HudParts.text(detail, t("st_detail_category", t("cat_" .. (Catalog.PartCategory[id] or "Misc"))) .. "   ·   " .. (qty > 0 and t("st_qty", qty) or t("st_out")) .. (requested > 0 and (" · LISTA DE COMPRAS: " .. requested) or ""), 22, { Font = Theme.FontSemi, TextColor3 = qty > 0 and rgb(80, 230, 110) or Theme.Muted, LayoutOrder = 2 })
 			HudParts.text(detail, t("st_detail_used", usedIn(id)) .. "   ·   " .. t("st_detail_cost", part.Cost), 21, { Font = Theme.FontSemi, TextColor3 = rgb(180, 198, 225), LayoutOrder = 3, TextWrapped = true, AutomaticSize = Enum.AutomaticSize.Y, Size = UDim2.new(1, 0, 0, 0) })
 			-- Mochila: o que o jogador carrega (para reparos fora da oficina); o resto fica na prateleira.
 			local bag = snapshot.Profile.Bag or {}
@@ -276,7 +277,7 @@ function Stock.new(parent: Instance)
 	local lastKey = ""
 	Store.Changed.Event:Connect(function(snapshot: any)
 		if window.IsOpen() then
-			local key = game:GetService("HttpService"):JSONEncode({ snapshot.Profile.Parts, snapshot.Profile.Bag, snapshot.Profile.Equipment })
+			local key = game:GetService("HttpService"):JSONEncode({ snapshot.Profile.Parts, snapshot.Profile.Bag, snapshot.Profile.Equipment, snapshot.Profile.SupplyRequests })
 			if key ~= lastKey then
 				lastKey = key
 				refresh()

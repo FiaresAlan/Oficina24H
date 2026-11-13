@@ -135,6 +135,24 @@ local function buildStations(plot: Instance, root: CFrame, level: number): Folde
 	text(screen, "Titulo", UDim2.fromScale(0.04, 0.05), UDim2.fromScale(0.92, 0.2), YELLOW, Enum.Font.GothamBlack, "ORDENS DE SERVIÇO")
 	text(screen, "Lista", UDim2.fromScale(0.04, 0.3), UDim2.fromScale(0.92, 0.65), Color3.new(1, 1, 1), Enum.Font.GothamBold, "Nenhum cliente esperando.")
 	addPrompt(tv, plot, "Ordens", "Ver ordens", "TV da oficina", 0, "orders")
+    -- V2-02: balcão físico da recepção, funcional mesmo sem pack GLB importado.
+    -- Montado na mesma área da TV para respeitar a checagem de proximidade do servidor.
+    local deskCf = root * CFrame.new(s.x + 3.4, 0, s.z - 3.3)
+    local desk = part(folder, "RecepcaoBalcao", Vector3.new(5.4, 1.1, 1.8),
+        deskCf * CFrame.new(0, 1.2, 0), Color3.fromRGB(52, 58, 65), Enum.Material.Metal)
+    part(folder, "RecepcaoTampo", Vector3.new(5.9, 0.18, 2.1),
+        deskCf * CFrame.new(0, 1.82, 0), WOOD, Enum.Material.Wood)
+    local badge = part(folder, "RecepcaoPlaca", Vector3.new(4.5, 0.65, 0.12),
+        deskCf * CFrame.new(0, 1.32, -0.97), YELLOW)
+    badge.CanCollide = false
+    local badgeGui = label(badge, Enum.NormalId.Front, "Recepcao")
+    text(badgeGui, "Titulo", UDim2.fromScale(0, 0), UDim2.fromScale(1, 1),
+        DARK, Enum.Font.GothamBlack, "RECEPÇÃO · ORDENS")
+    local deskPrompt = part(folder, "RecepcaoAcesso", Vector3.new(0.4, 0.4, 0.4),
+        deskCf * CFrame.new(0, 2.3, -1.4), YELLOW)
+    deskPrompt.CanCollide = false
+    deskPrompt.Transparency = 1
+    addPrompt(deskPrompt, plot, "Recepcao", "Gerenciar fila", "Balcão de recepção", 0.3, "orders")
 	-- Prateleira do estoque
 	local k = specs.Stock
 	local shelfCf = root * CFrame.new(k.x, 0, k.z) * CFrame.Angles(0, math.rad(k.yaw), 0)

@@ -317,10 +317,12 @@ function OperationRepairGame.new(gui: ScreenGui)
 				end)
 			end
 			button(content, "RECOMEÇAR ORDEM", 16, 265, 250, 48, function()
-				if waiting then return end
-				sequence = {}
-				update()
-			end)
+                if waiting or pendingAction then return end
+                submit("Reset",nil,nil,function()
+                    sequence={}
+                    update()
+                end)
+            end)
 		elseif currentPlan.Mode == "Calibration" then
 			label(content, tostring(currentPlan.Hint or ""), 5, 60, 21)
 			for index, field in ipairs(currentPlan.Fields or {}) do
@@ -377,6 +379,17 @@ function OperationRepairGame.new(gui: ScreenGui)
 			return
 		end
 		update()
+        -- Refazer sem consumo/pagamento: CancelRepair cancela sessão e progresso
+        -- em memória. O usuário volta ao carro para iniciar outra tentativa.
+        if currentPlan.Mode ~= "Sequence" and currentPlan.Mode ~= "Battery" then
+            local retry = button(content, "REFAZER SEM COBRAR", 16, 265, 270, 48, function()
+                if active and not waiting and not pendingAction then
+                    close(true)
+                    Store.Message:Fire("Solicitando cancelamento da tentativa. Aguarde a confirmação do servidor.",false,"CancelRepair")
+                end
+            end)
+            retry.BackgroundColor3 = Color3.fromRGB(55, 68, 86)
+        end
 		local finishButton: TextButton? = nil
 		finishButton = button(content, "CONCLUIR SERVIÇO", 316, 265, 286, 48, function()
 			if not active or pendingAction then return end
@@ -454,6 +467,11 @@ function OperationRepairGame.new(gui: ScreenGui)
 		label(content, string.format("Execução %d · Habilidade %+d · Equipamento %+d · Peça %+d · Diagnóstico %+d",
 			tonumber(b.Execution) or 0, tonumber(b.Skill) or 0, tonumber(b.Equipment) or 0,
 			tonumber(b.Part) or 0, tonumber(b.Diagnosis) or 0), 180, 56, 20)
+        local mistakes = math.max(0,math.floor(tonumber(payload.Miss) or 0))
+        local advice = mistakes > 0
+            and string.format("Atenção: %d decisão(ões) imprecisa(s) afetaram a qualidade e a recompensa.",mistakes)
+            or "Verificação final: execução sem erros detectados."
+        label(content,advice,232,30,17)
 		button(content, "CONTINUAR", 340, 262, 250, 48, function() close(false) end)
 		task.delay(9, function()
 			if showingResult then close(false) end

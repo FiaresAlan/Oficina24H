@@ -12,6 +12,7 @@ local RunService = game:GetService("RunService")
 
 local SoundIds = require(ReplicatedStorage.Shared.SoundIds)
 local RouteMotion = require(ReplicatedStorage.Shared.RouteMotion)
+local V2Art = require(ReplicatedStorage.Shared.V2PilotArtProfiles)
 
 local MAX_DISTANCE = 160
 
@@ -55,6 +56,7 @@ type WheelGroup = {
 	Side: number, -- -1 esquerda, +1 direita (X da Raiz)
 	Front: boolean,
 	Spin: number, -- ângulo atual da roda
+    V2Removed: number, -- animação individual de desmontagem, só nos pilotos
 }
 
 type Hood = { Parts: { BasePart }, Offsets: { CFrame }, Hinge: Vector3 }
@@ -109,7 +111,8 @@ local function ownParts(model: Model, root: BasePart): { BasePart }
 	local list = {}
 	for _, d in ipairs(model:GetDescendants()) do
 		if d:IsA("BasePart") and d ~= root and d.Name ~= "Casco" and d.Name ~= "InteractPoint"
-			and not d:FindFirstAncestor("InspectionPoints") and not d:FindFirstAncestor("RepairPrepPoints") then
+			and not d:FindFirstAncestor("InspectionPoints") and not d:FindFirstAncestor("RepairPrepPoints")
+            and not d:FindFirstAncestor("V2ComponentPoints") then
 			local owner = d:FindFirstAncestorWhichIsA("Model")
 			if owner == model or (owner and not owner:FindFirstChildOfClass("Humanoid")) then
 				table.insert(list, d) -- o cliente sentado ao volante (modelo com Humanoid) não é parte do carro
@@ -121,17 +124,24 @@ end
 
 -- Solta a peça do conjunto SÓ no cliente (para podermos girar/mover): remove a solda e ancora localmente.
 local function detach(root: BasePart, p: BasePart)
-	for _, w in ipairs(root:GetChildren()) do
-		if w:IsA("WeldConstraint") and (w.Part1 == p or w.Part0 == p) then
-			w:Destroy()
-		end
-	end
-	for _, w in ipairs(p:GetChildren()) do
-		if w:IsA("WeldConstraint") then
-			w:Destroy()
-		end
-	end
+	local car = root:FindFirstAncestorWhichIsA("Model")
+    if car then
+        for _, w in ipairs(car:GetDescendants()) do
+            local attached = false
+            if w:IsA("WeldConstraint") or w:IsA("Weld") or w:IsA("Motor6D") then
+                attached = w.Part1 == p or w.Part0 == p
+            elseif w:IsA("RigidConstraint") then
+                local a0, a1 = w.Attachment0, w.Attachment1
+                attached = (a0 ~= nil and a0:IsDescendantOf(p))
+                    or (a1 ~= nil and a1:IsDescendantOf(p))
+            end
+            if attached then
+                w:Destroy() -- somente no cliente: desliga malha visual para animar
+            end
+        end
+    end
 	p.Anchored = true
+    p.CanCollide = false -- o Casco invisível mantém a colisão autoritativa do veículo
 end
 
 local function detectWheels(model: Model, root: BasePart, parts: { BasePart }): { WheelGroup }
@@ -140,15 +150,21 @@ local function detectWheels(model: Model, root: BasePart, parts: { BasePart }): 
 	for _, p in ipairs(parts) do
 		local rel = root.CFrame:ToObjectSpace(p.CFrame)
 		local pos = rel.Position
-		if pos.Y < H * 0.45 and math.abs(pos.X) > W * 0.15 and math.abs(pos.Z) > L * 0.15 then
-			local ext = extents(rel, p.Size)
-			local big = math.max(ext.Y, ext.Z)
-			if ext.Y > 0.6 and ext.Z > 0.6 and math.abs(ext.Y - ext.Z) < big * 0.35 and ext.X < W * 0.35 and big < H * 0.7 then
-				local key = (pos.X > 0 and "R" or "L") .. (pos.Z > 0 and "B" or "F")
-				buckets[key] = buckets[key] or {}
-				table.insert(buckets[key], { Part = p, Rel = rel, Ext = ext })
-			end
-		end
+        local tagged = p:GetAttribute("V2MovingComponent")
+        local explicit = ({ WheelFL = "LF", WheelFR = "RF", WheelRL = "LB", WheelRR = "RB" })[tagged]
+        if explicit or (pos.Y < H * 0.45 and math.abs(pos.X) > W * 0.15
+            and math.abs(pos.Z) > L * 0.15) then
+            local ext = extents(rel, p.Size)
+            local big = math.max(ext.Y, ext.Z)
+            local geometryWheel = ext.Y > 0.6 and ext.Z > 0.6
+                and math.abs(ext.Y - ext.Z) < big * 0.35
+                and ext.X < W * 0.35 and big < H * 0.7
+            if explicit or geometryWheel then
+                local key = explicit or ((pos.X > 0 and "R" or "L") .. (pos.Z > 0 and "B" or "F"))
+                buckets[key] = buckets[key] or {}
+                table.insert(buckets[key], { Part = p, Rel = rel, Ext = ext })
+            end
+        end
 	end
 	local groups: { WheelGroup } = {}
 	for key, list in pairs(buckets) do
@@ -167,6 +183,7 @@ local function detectWheels(model: Model, root: BasePart, parts: { BasePart }): 
 			Side = string.sub(key, 1, 1) == "R" and 1 or -1,
 			Front = string.sub(key, 2, 2) == "F",
 			Spin = 0,
+            V2Removed = 0,
 		}
 		for _, item in ipairs(list) do
 			local d = item.Rel.Position - axle
@@ -186,7 +203,7 @@ local function detectHood(_model: Model, root: BasePart, parts: { BasePart }): H
 	local hoodParts = {}
 	for _, p in ipairs(parts) do
 		local n = string.lower(p.Name)
-		if string.find(n, "hood", 1, true) or string.find(n, "bonnet", 1, true) or string.find(n, "capo", 1, true) then
+		if p:GetAttribute("V2MovingComponent") == "Hood" or string.find(n, "hood", 1, true) or string.find(n, "bonnet", 1, true) or string.find(n, "capo", 1, true) then
 			table.insert(hoodParts, p)
 		end
 	end
@@ -215,7 +232,83 @@ local function setup(model: Model): CarFx?
 	end
 	local parts = ownParts(model, root)
 	local wheels = detectWheels(model, root, parts)
+    if type(model:GetAttribute("V2PilotId")) == "string" then
+        -- Complementa GLBs monobloco que não tenham rodas individuais.
+        -- Visual cliente; o Casco e toda a física continuam no servidor.
+        local L, W, H = dims(model)
+        for _, spec in ipairs({
+            { Id = "WheelFL", Front = true, Side = -1 },
+            { Id = "WheelFR", Front = true, Side = 1 },
+            { Id = "WheelRL", Front = false, Side = -1 },
+            { Id = "WheelRR", Front = false, Side = 1 },
+        }) do
+            local exists = false
+            for _, group in ipairs(wheels) do
+                if group.Front == spec.Front and group.Side == spec.Side then
+                    exists = true
+                    break
+                end
+            end
+            if not exists then
+                local radius = math.clamp(H * 0.21, 0.65, 1.65)
+                local axle = Vector3.new(spec.Side * W * 0.46, radius,
+                    (spec.Front and -1 or 1) * L * 0.34)
+                local tire = Instance.new("Part")
+                tire.Name = "V2Proxy_" .. spec.Id
+                tire.Shape = Enum.PartType.Cylinder
+                tire.Size = Vector3.new(0.82, radius * 2, radius * 2)
+                tire.Color = Color3.fromRGB(26, 28, 31)
+                tire.Material = Enum.Material.SmoothPlastic
+                tire.Anchored = true
+                tire.CanCollide, tire.CanTouch, tire.CanQuery = false, false, false
+                tire.CFrame = root.CFrame * CFrame.new(axle)
+                tire:SetAttribute("V2GeneratedVisual", true)
+                tire.Parent = model
+                local hub = Instance.new("Part")
+                hub.Name = "V2ProxyHub_" .. spec.Id
+                hub.Shape = Enum.PartType.Cylinder
+                hub.Size = Vector3.new(0.11, radius * 1.15, radius * 1.15)
+                hub.Color = Color3.fromRGB(150, 158, 168)
+                hub.Material = Enum.Material.Metal
+                hub.Anchored = true
+                hub.CanCollide, hub.CanTouch, hub.CanQuery = false, false, false
+                hub.CFrame = tire.CFrame * CFrame.new(spec.Side * 0.44, 0, 0)
+                hub:SetAttribute("V2GeneratedVisual", true)
+                hub.Parent = model
+                table.insert(wheels, {
+                    Parts = { tire, hub },
+                    Offsets = { CFrame.identity, CFrame.new(spec.Side * 0.44, 0, 0) },
+                    Axle = axle,
+                    Radius = radius,
+                    Side = spec.Side,
+                    Front = spec.Front,
+                    Spin = 0,
+                    V2Removed = 0,
+                })
+            end
+        end
+    end
 	local hood = detectHood(model, root, parts)
+    if not hood and type(model:GetAttribute("V2PilotId")) == "string" then
+        -- Asset monobloco: painel articulável client-side até o artista fornecer capô separado.
+        local L, W, H = dims(model)
+        local hinge = Vector3.new(0, H * 0.80, -L * 0.17)
+        local center = Vector3.new(0, H * 0.80, -L * 0.34)
+        local p = Instance.new("Part")
+        p.Name = "V2ProxyHood"
+        p.Size = Vector3.new(W * 0.78, 0.12, L * 0.34)
+        p.CFrame = root.CFrame * CFrame.new(center)
+        p.Anchored = true
+        p.CanCollide, p.CanTouch, p.CanQuery = false, false, false
+        p.CastShadow = false
+        p.Material = Enum.Material.Metal
+        local profile = V2Art.Styles[model:GetAttribute("V2PilotId")]
+        p.Color = profile and profile.Paint or Color3.fromRGB(95, 110, 125)
+        p:SetAttribute("V2GeneratedVisual", true)
+        p.Parent = model
+        hood = { Parts = {p}, Hinge = hinge,
+            Offsets = {CFrame.new(hinge):ToObjectSpace(CFrame.new(center))} }
+    end
 	for _, g in ipairs(wheels) do
 		for _, p in ipairs(g.Parts) do
 			detach(root, p)
@@ -398,16 +491,19 @@ end
 watch("Vehicles")
 watch("Arrivals")
 
-local camera = workspace.CurrentCamera
+local lastComponentState: { [Model]: { [string]: string } } = {}
 
 RunService.RenderStepped:Connect(function(dt: number)
-	stepRoutes()
-	local now = os.clock()
-	local camPos = camera.CFrame.Position
+    stepRoutes()
+    local camera = workspace.CurrentCamera
+    if not camera then return end
+    local now = os.clock()
+    local camPos = camera.CFrame.Position
 	for model, fx in pairs(cars) do
 		if not model.Parent or not fx.Root.Parent then
 			clearFx(fx)
 			fx.Engine:Destroy()
+            lastComponentState[model] = nil
 			cars[model] = nil
 			continue
 		end
@@ -422,14 +518,20 @@ RunService.RenderStepped:Connect(function(dt: number)
 				fx.Engine:Stop()
 			end
 			for _, g in ipairs(fx.Wheels) do
-				local axleWorld = root.CFrame * CFrame.new(g.Axle) * CFrame.Angles(g.Spin, 0, 0)
+				local wheelId = "Wheel" .. (g.Front and "F" or "R") .. (g.Side < 0 and "L" or "R")
+                local state = model:GetAttribute("V2State_" .. wheelId)
+                local offset = state == "Detached" and Vector3.new(g.Side * 3, -0.4, 0) or Vector3.zero
+                local axleWorld = root.CFrame * CFrame.new(g.Axle + offset) * CFrame.Angles(g.Spin, 0, 0)
 				for i, p in ipairs(g.Parts) do
 					p.CFrame = axleWorld * g.Offsets[i]
 				end
 			end
 			local farHood = fx.Hood
 			if farHood then
-				local hinge = root.CFrame * CFrame.new(farHood.Hinge)
+				local isOpen = model:GetAttribute("Estacionado") == true
+                    and (model:GetAttribute("V2State_Hood") == "Open" or model:GetAttribute("PrepHoodOpen") == true)
+                local hinge = root.CFrame * CFrame.new(farHood.Hinge) *
+                    CFrame.Angles(math.rad(55) * (isOpen and 1 or 0), 0, 0)
 				for i, p in ipairs(farHood.Parts) do
 					p.CFrame = hinge * farHood.Offsets[i]
 				end
@@ -452,6 +554,26 @@ RunService.RenderStepped:Connect(function(dt: number)
 		elseif fx.Engine.Volume <= 0.02 and fx.Engine.IsPlaying then
 			fx.Engine:Stop()
 		end
+		-- Feedback mecânico: somente mudança autorizada de estado (sem despesas ou servidor).
+        if model:GetAttribute("V2PilotId") ~= nil then
+            local previous = lastComponentState[model]
+            if not previous then
+                previous = {}
+                lastComponentState[model] = previous
+            end
+            for _, id in ipairs({ "Hood", "WheelFL", "WheelFR", "WheelRL", "WheelRR" }) do
+                local value = model:GetAttribute("V2State_" .. id)
+                if type(value) == "string" then
+                    if previous[id] and previous[id] ~= value then
+                        local s = sound(fx.Root,
+                            id == "Hood" and SoundIds.Ratchet or SoundIds.AirWrench, 0.18, false)
+                        s:Play()
+                        game:GetService("Debris"):AddItem(s, 4)
+                    end
+                    previous[id] = value
+                end
+            end
+        end
 		-- efeitos de defeito / reparo
 		applyFx(fx)
 		local repairing = model:GetAttribute("Reparando") == true and model:GetAttribute("Estacionado") == true
@@ -462,8 +584,10 @@ RunService.RenderStepped:Connect(function(dt: number)
 		local jackPoint = prepPoints and prepPoints:FindFirstChild("Prep_JackSupport")
 		local wheelPrepared = jackPoint ~= nil and jackPoint:GetAttribute("Completed") == true
 		local wantRemove = (repairing or wheelPrepared) and (symptom == "Tires" or symptom == "Suspension") and 1 or 0
-		local wantHood = (repairing or model:GetAttribute("PrepHoodOpen") == true)
-			and (symptom == "Engine" or symptom == "Electrical") and 1 or 0
+		local wantHood = ((model:GetAttribute("V2State_Hood") == "Open"
+            and model:GetAttribute("Estacionado") == true)
+            or ((repairing or model:GetAttribute("PrepHoodOpen") == true)
+                and (symptom == "Engine" or symptom == "Electrical"))) and 1 or 0
 		fx.Remove += (wantRemove - fx.Remove) * math.min(1, dt * 2)
 		fx.HoodOpen += (wantHood - fx.HoodOpen) * math.min(1, dt * 2)
 		if fx.Light then
@@ -495,11 +619,18 @@ RunService.RenderStepped:Connect(function(dt: number)
 					elseif symptom == "Suspension" and model:GetAttribute("Estacionado") == true then
 						extra = CFrame.Angles(0, 0, math.rad(10) * g.Side) -- roda torta
 					end
-					if fx.Remove > 0.001 then
-						axle += Vector3.new(g.Side * 3 * fx.Remove, -0.4 * fx.Remove, 0) -- pneu sai do carro
-					end
+					if not model:GetAttribute("V2PilotId") and fx.Remove > 0.001 then
+                        axle += Vector3.new(g.Side * 3 * fx.Remove, -0.4 * fx.Remove, 0)
+                    end
 				end
-				g.Spin = (g.Spin + spin) % (math.pi * 2)
+				local wheelId = "Wheel" .. (g.Front and "F" or "R") .. (g.Side < 0 and "L" or "R")
+                local removed = model:GetAttribute("V2PilotId") ~= nil
+                    and model:GetAttribute("V2State_" .. wheelId) == "Detached"
+                g.V2Removed += ((removed and 1 or 0) - g.V2Removed) * math.min(1, dt * 5)
+                if g.V2Removed > 0.001 then
+                    axle += Vector3.new(g.Side * 3 * g.V2Removed, -0.4 * g.V2Removed, 0)
+                end
+                g.Spin = (g.Spin + spin) % (math.pi * 2)
 				local axleWorld = root.CFrame * CFrame.new(axle) * extra * CFrame.Angles(g.Spin, 0, 0)
 				for i, p in ipairs(g.Parts) do
 					p.CFrame = axleWorld * g.Offsets[i]

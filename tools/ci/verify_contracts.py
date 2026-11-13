@@ -247,7 +247,7 @@ check("client result correlated with job and token",
 ledger = text(SHARED / "SettlementLedgerRules.lua")
 data_service = text(ROOT / "src" / "server" / "DataService.lua")
 check("ledger bounded and sanitized", "SettlementLedgerRules.MaxEntries" in ledger and "function SettlementLedgerRules.Sanitize" in ledger)
-check("ledger persists in profile schema v11", "local SCHEMA_VERSION = 11" in data_service
+check("ledger persists across additive profile schema v12", "local SCHEMA_VERSION = 13" in data_service
       and "RepairLedger = {}" in data_service
       and "SettlementLedgerRules.Sanitize(data.RepairLedger)" in data_service)
 check("ledger credit idempotency", "function DataService.CreditRepairOnce" in data_service
@@ -404,8 +404,8 @@ check("C23: worker paid confirmation archive validates and never silently rotate
       "Paid.MaxEntries = 2048" in paid and "function Paid.FromLedger" in paid
       and "function Paid.CanAdd" in paid and "function Paid.Matches" in paid
       and "while #raw > Paid.MaxEntries" not in paid)
-check("C23: worker confirmation stored with coins and ledger in schema v11",
-      "local SCHEMA_VERSION = 11" in data_service
+check("C23: worker confirmation survives schema v12",
+      "local SCHEMA_VERSION = 13" in data_service
       and "WorkerSettlementProofs = {}" in data_service
       and "WorkerSettlementProofRules.FromLedger" in data_service
       and "WorkerSettlementProofRules.Add(profile.WorkerSettlementProofs, workerProof)" in data_service
@@ -438,8 +438,8 @@ check("C24: verify durable owner data, with limited reads and two worker saves",
       and "WorkerProofArchiveRules.MinIntervalSeconds" in data_service
       and "Archive.MaxReadsPerPass = 4" in archive
       and "WorkerPaidTombstoneRules.Compact(proofs, profile.WorkerPaidTombstones," in data_service)
-check("C24: schema v11 preserves private tombstones and schedules reconciliation",
-      "local SCHEMA_VERSION = 11" in data_service
+check("C24: schema v12 preserves v11 private tombstones and schedules reconciliation",
+      "local SCHEMA_VERSION = 13" in data_service
       and "WorkerPaidTombstones = {}" in data_service
       and "WorkerPaidTombstoneRules.Sanitize(data.WorkerPaidTombstones)" in data_service
       and "data.RepairLedger, data.WorkerPaidTombstones)" in data_service
@@ -473,21 +473,22 @@ check("paid equipment level benefits repairs and employee speed",
       "EquipmentUpgradeRules.RewardMultiplier(ownerLevel)" in workshop
       and "EquipmentUpgradeRules.EmployeeSeconds" in workshop)
 check("employee physically walks before working",
-      "walkEmployee(npc, target" in workshop
-      and "PathfindingService:CreatePath" in workshop)
+      "walkEmployee(npc,target,animator,valid)" in workshop
+      and "V2StaffNavigator.Travel" in workshop
+      and "PathfindingService:CreatePath" in text(ROOT / "src" / "server" / "V2StaffNavigator.lua"))
 check("staff starts at 2 bays and waits 25 seconds for one car",
       "MaxEmployees = 1" in text(SHARED / "WorkshopLevels.lua")
       and "StaffAssignmentRules.ShouldDispatch" in workshop
       and "Rules.SoloWaitSeconds = 25" in staff_rules)
 check("NPC reservation is created before asynchronous work and enforced at interaction entry",
-      "StaffAssignmentRules.TryReserve(entry.Busy, jobId)" in workshop
+      "StaffAssignmentRules.TryReserve(entry.Busy,candidate.Id)" in workshop
       and "function Rules.TryReserve" in staff_rules
       and "if employeeReserved(job) then" in workshop
       and 'or (Repairs[owner.UserId] and Repairs[owner.UserId].JobId == job.Id)' in workshop)
 check("NPC failure releases busy slot and restores vehicle state",
       'xpcall(function()' in workshop
-      and 'StaffAssignmentRules.Release(entry.Busy, jobId)' in workshop
-      and 'VehicleService.SetRepairing(jobId, false)' in workshop)
+      and 'StaffAssignmentRules.Release(entry.Busy,candidate.Id)' in workshop
+      and 'VehicleService.SetRepairing(candidate.Id,false)' in workshop)
 check("NPC payouts use per-owner idempotent ledger and confirmed save",
       "function DataService.SettleNpcRepairOnce" in data_service
       and "DataService.CreditRepairOnce(player, jobId, token" in data_service
@@ -544,6 +545,282 @@ check("C31: auditoria do place usa regras em 21 veiculos, NPCs e equipamentos",
 check("C31: suite nao destrutiva registrada",
       '"AssetIntegrityRulesTest"' in runner
       and (TOOLS / "AssetIntegrityRulesTest.luau").is_file())
+
+# V2-00/01/02: contratos minimos de integração e suítes registradas.
+v2_compatibility = text(SHARED / "V2CompatibilityRules.lua")
+v2_pilots = text(SHARED / "V2VehiclePilotRules.lua")
+v2_management = text(SHARED / "V2ManagementSummaryRules.lua")
+check("V2-00 preflight sem alterar schema ou perfis",
+      "function Rules.Profile" in v2_compatibility and "MinSchema = 12" in v2_compatibility
+      and "function Rules.Snapshot" in v2_compatibility)
+check("V2-00 nao replica segredos", all(k in v2_compatibility for k in
+      ("RepairLedger", "PendingClaims", "WorkerPaidTombstones", "OwnerSettlementProofs")))
+check("V2-01 tres pilotos no catalogo V1", all(k in v2_pilots for k in
+      ("Veiculo_Hatch_MG3", "Veiculo_Sedan_Civic", "Veiculo_Picape_S10",
+       "AssetIntegrityRules", "V2Pivot_Hood", "function Rules.Resolve")))
+check("V2-01 auditoria Studio disponivel", (TOOLS / "V2PilotPlaceAudit.luau").is_file()
+      and (ROOT / "docs" / "GUIA_UNICO_ASSETS_V2.md").is_file())
+check("V2-02 resumo nao inventa lucro", "NetProfitAvailable = false" in v2_management
+      and "OrderHistory" in v2_management
+      and "V2ManagementSummaryRules.Build(snapshot)" in text(CLIENT / "UI" / "Panels" / "Orders.lua"))
+check("V2-00/01/02 suites Luau registradas",
+      all(f'"{name}"' in runner and (TOOLS / (name + ".luau")).is_file()
+          for name in ("V2FoundationTest", "V2PilotRigTest", "V2ManagementSummaryTest")))
+
+# V2-00/01/02: contratos reais de fila, migracao e rig gerado em clones.
+v2_reception = text(SHARED / "V2ReceptionRules.lua")
+v2_supply = text(SHARED / "V2SupplyRules.lua")
+data_service = text(ROOT / "src" / "server" / "DataService.lua")
+workshop = text(ROOT / "src" / "server" / "WorkshopService.lua")
+server = text(ROOT / "src" / "server" / "Main.server.lua")
+arrival = text(ROOT / "src" / "server" / "CustomerArrivalService.lua")
+ui_orders = text(CLIENT / "UI" / "Panels" / "Orders.lua")
+check("V2-00: migracao aditiva schema v12 com lista persistente",
+    "SCHEMA_VERSION = 13" in data_service and "V2SupplyRules.Sanitize" in data_service
+    and "SupplyRequests = {}" in data_service and "SupplyRequests" in v2_compatibility)
+check("V2-02: compra no estoque desconta lista sem debitar pedido",
+    "V2SupplyRules.OnPurchase" in data_service
+    and "function DataService.RequestSupply" in data_service
+    and "function Rules.OnPurchase" in v2_supply)
+check("V2-02: prioridade e agenda validadas no servidor, nao no cliente",
+    all(x in workshop for x in ("function WorkshopService.SetJobPriority",
+       "function WorkshopService.ScheduleJob", "function WorkshopService.DiscountJob",
+       "function WorkshopService.RequestJobSupplies", "nearReception(player)",
+       "ScheduleUsed", "V2ReceptionRules.BuildVisible"))
+    and all(x in v2_reception for x in ("ValidPriority", "ValidAppointment", "ValidDiscount", "MissingParts")))
+check("V2-02: remotes V2 registrados e ligados",
+    all(x in server for x in ('"SetJobPriority"', '"ScheduleJob"',
+        '"DiscountJob"', '"RequestJobSupplies"')))
+check("V2-01: pivots apenas nos clones de carros pilotados",
+    "V2PilotRigBuilder.Attach(car, job.VehicleName)" in arrival
+    and "function Rules.Attach" in text(SHARED / "V2PilotRigBuilder.lua"))
+check("V2-02: recepcao fisica, painel, sinais de cliente e desconto",
+    '"RecepcaoBalcao"' in text(ROOT / "src" / "server" / "StationService.lua")
+    and all(x in ui_orders for x in ('Store.Act("SetJobPriority"',
+      'Store.Act("ScheduleJob"', 'Store.Act("DiscountJob"', 'Store.Act("RequestJobSupplies"',
+      'V2ReceptionRules.QueueLess')))
+check("V2: testes de novos contratos integrados",
+    all(f'"{name}"' in runner and (TOOLS / (name + ".luau")).is_file()
+       for name in ("V2ReceptionRulesTest", "V2SupplyRulesTest", "V2PilotRigBuilderTest")))
+
+check("V2-01: LOD leve e teste visual registrados",
+    (CLIENT / "V2PilotLOD.client.lua").is_file()
+    and "LocalTransparencyModifier" in text(CLIENT / "V2PilotLOD.client.lua")
+    and "function Rules.Show" in text(SHARED / "V2VisualBudgetRules.lua")
+    and "function Rules.Apply" in text(SHARED / "V2PilotArtProfiles.lua")
+    and (TOOLS / "V2AuthorPilotRigs.luau").is_file()
+    and (TOOLS / "V2VisualBudgetTest.luau").is_file()
+    and '"V2VisualBudgetTest"' in runner)
+check("V2-02: descontos exibidos e vagas livres consideram bay real",
+    "DiscountPercent = job.DiscountPercent or 0" in workshop
+    and "VehicleService.GetFreeBayCount" in workshop
+    and "FreeBays = freeBays" in v2_management)
+check("V2-02: wishlist so limpa em pagamento confirmado",
+    "function DataService.FulfillSupplyRequest" in data_service
+    and "DataService.FulfillSupplyRequest(player, partId, quantity)" in workshop
+    and "V2SupplyRules.OnPurchase(profile.SupplyRequests" in data_service)
+
+check("V2-02: compras concorrentes somadas sem revelar OS nao diagnosticada",
+    "function Rules.AggregateMissing" in v2_reception
+    and "V2ReceptionRules.AggregateMissing(Jobs, player.UserId, profile.Parts)" in workshop)
+check("V2-02: pedido cancelavel sem custo via autorizacao servidor",
+    'function DataService.ClearSupplyRequests' in data_service
+    and 'function WorkshopService.ClearSupplyRequests' in workshop
+    and '"ClearSupplyRequests"' in server
+    and 'Store.Act("ClearSupplyRequests"' in text(CLIENT / "UI" / "Panels" / "Shop.lua"))
+
+# V2-03: interações físicas são prompts de servidor, sem RemoteEvent novo.
+v2_components = text(SHARED / "V2ComponentRules.lua")
+v2_vehicle = text(ROOT / "src" / "server" / "VehicleService.lua")
+v2_visual = text(CLIENT / "VehicleFx.client.lua")
+v2_articulations = text(CLIENT / "V2ArticulationFx.client.lua")
+check("V2-03: oito articulacoes e regras de seguranca",
+    all(x in v2_components for x in (
+      '"Hood"', '"DoorLeft"', '"DoorRight"', '"Trunk"',
+      '"WheelFL"', '"WheelFR"', '"WheelRL"', '"WheelRR"',
+      "function Rules.Next", "function Rules.ReadyToRepair", "function Rules.IsNear",
+      "function Rules.MayDrive")))
+check("V2-03: prompts ligados a pivot e distancia verificada no servidor",
+    all(x in v2_vehicle for x in (
+      "addComponentPrompts", "V2PilotRules.Resolve", "V2ComponentRules.IsNear",
+      "V2ComponentRules.Next", "V2ComponentPoints", "prompt.Triggered:Connect",
+      'root, anchor', "resetComponents(car)")))
+check("V2-03: fluxo de reparo e permissao do mecanico responsavel",
+    all(x in workshop for x in (
+      "function WorkshopService.ToggleVehicleComponent", "V2ComponentRules.FromPrompt",
+      "V2ComponentRules.ReadyToRepair", "CollaborationRules.IsAuthorized",
+      "VehicleService.ToggleComponent", "WheelSupportReady",
+      "employeeReserved(job)"))
+    and "V2_" in text(CLIENT / "UI" / "HUD.lua"))
+check("V2-03: animações de rodas e capo por estado servidor",
+    all(x in v2_visual for x in (
+      "V2State_", '"Detached"', '"Open"', "V2ProxyHood",
+      "V2Proxy_", "V2Removed", "V2GeneratedVisual")))
+check("V2-03: portas/porta-malas com malha nativa e fallback sem colisao",
+    all(x in v2_articulations for x in (
+      "V2MovingComponent", "V2ArticulationProxy_", "V2State_",
+      "CanCollide", "CanQuery", "CanTouch", "ReducedMotionEnabled",
+      "MAX_DISTANCE")))
+check("V2-03: auditoria de Studio e regras puras no runner",
+    (TOOLS / "V2ComponentRulesTest.luau").is_file()
+    and (TOOLS / "V2ComponentPlaceAudit.luau").is_file()
+    and '"V2ComponentRulesTest"' in runner
+    and '"V2ComponentPlaceAudit"' in runner)
+
+check("V2-03: cofre do motor com fallback 5 componentes e LOD",
+    (CLIENT / "V2EngineBayFx.client.lua").is_file()
+    and all(x in text(CLIENT / "V2EngineBayFx.client.lua") for x in (
+      '"EngineBlock"', '"Battery"', '"Coolant"', '"Intake"', '"Alternator"',
+      "V2EngineBayRole", "V2State_Hood", "CanCollide", "MAX_DISTANCE")))
+check("V2-03: peças nativas explícitas e integridade das rodas",
+    'V2MovingComponent' in v2_visual
+    and all(x in v2_visual for x in ('WheelFL = "LF"', 'WheelFR = "RF"',
+        'WheelRL = "LB"', 'WheelRR = "RB"'))
+    and "V2MovingComponent" in v2_articulations)
+check("V2-03: mecânica visível após diagnóstico e saída segura",
+    "entry.Mechanics =" in workshop
+    and "not V2ComponentRules.MayDrive(states)" in v2_vehicle
+    and "resetComponents(car)" in v2_vehicle
+    and "job.Mechanics" in ui_orders)
+
+# V2-04: 15 sequências físicas dirigidas por servidor e proteção financeira intacta.
+v2_procs = text(SHARED / "V2ServiceProcedureRules.lua")
+v2_procs_test = text(TOOLS / "V2ServiceProcedureRulesTest.luau")
+v2_procfx = text(CLIENT / "V2ProcedureFx.client.lua")
+operation_game = text(CLIENT / "UI" / "OperationRepairGame.lua")
+check("V2-04: 15 receitas mapeadas a todo catalogo de defeitos",
+    all(k in v2_procs for k in (
+      "FlatTire","WornTire","WeakBattery","LooseSuspension","EngineMisfire",
+      "ElectricalFault","Dent","BodyDamage","PaintJob","WheelImbalance",
+      "Misalignment","BrakeWear","BrokenArm","EngineOverhaul","Overheating"))
+    and 'count~=15' in v2_procs and "function Rules.ValidateCatalog" in v2_procs)
+check("V2-04: executor autorizado e sequencia fisica verificada",
+    all(k in workshop for k in (
+      "function WorkshopService.DoProcedureStep", "V2ServiceProcedureRules.Advance",
+      "VehicleService.IsNearProcedureStep", "DataService.HasParts(owner",
+      "ownsEquipment(workshop", "V2ServiceProcedureRules.Ready", "job.V2ProcedureIndex"))
+    and "function Rules.Advance" in v2_procs
+    and "ctx.Authorized" in v2_procs and "step.UsesPart" in v2_procs)
+check("V2-04: prompts so apos diagnostico em pivôs da V2-03",
+    all(k in v2_vehicle for k in (
+      "function VehicleService.SetServiceProcedure", "V2PilotRules.Resolve",
+      "V2ProcedurePoints", "Proc_", "function VehicleService.IsNearProcedureStep",
+      "function VehicleService.MarkProcedureFinished"))
+    and "VehicleService.SetServiceProcedure(job.Id,job.DefectId,job.V2ProcedureIndex)" in workshop)
+check("V2-04: sem pagamentos antecipados e credito pela V1",
+    "job.Status = \"Completed\"" in workshop
+    and "VehicleService.MarkProcedureFinished(job.Id,result.Quality)" in workshop
+    and "DataService.HasRepairCredit" in workshop and "RepairActionRules.FinalInput" in workshop)
+check("V2-04: erro e recomeço confirmados no servidor",
+    'submit("Reset",nil,nil' in operation_game
+    and 'Store.Act("CancelRepair"' in operation_game
+    and "REFAZER SEM COBRAR" in operation_game
+    and 'mode == "Battery" or mode == "Sequence"' in text(SHARED / "RepairActionRules.lua"))
+check("V2-04: feedback visual apos diagnostico e jogo acessivel",
+    "V2RepairStage" in v2_procfx and "V2ProcedureStepId" in v2_procfx
+    and "V2ProcedureFamily" in v2_procfx and "RANGE = 120" in v2_procfx
+    and 'job.Procedure' in ui_orders
+    and 'string.sub(p.Name,1,5)=="Proc_"' in text(CLIENT / "UI" / "HUD.lua"))
+check("V2-04: teste adversarial por serviço no runner",
+    (TOOLS / "V2ServiceProcedureRulesTest.luau").is_file()
+    and "test(\"15 receitas completas" in v2_procs_test
+    and '"V2ServiceProcedureRulesTest"' in runner)
+
+check("V2-04: integração de 15 serviços com todos sete modos de minijogo",
+    (TOOLS / "V2ProcedureIntegrationTest.luau").is_file()
+    and '"V2ProcedureIntegrationTest"' in runner
+    and "Modes.Sequence" not in text(TOOLS / "V2ProcedureIntegrationTest.luau")
+    and 'modes.Tire==1' in text(TOOLS / "V2ProcedureIntegrationTest.luau")
+    and "Operations.BuildPlan" in text(TOOLS / "V2ProcedureIntegrationTest.luau"))
+check("V2-04: resultado de qualidade explica erros e retrabalho seguro",
+    "payload.Miss" in operation_game and
+    "Verificação final" in operation_game
+    and "REFAZER SEM COBRAR" in operation_game
+    and "CancelRepair" in text(ROOT / "src" / "server" / "Main.server.lua"))
+
+check("V2-04: apoio fisico estavel exigido para roda e rollback seguro",
+    "function VehicleService.SetSupport" in v2_vehicle
+    and "function VehicleService.SupportIsStable" in v2_vehicle
+    and "StationService.IsLifted(bay)" in v2_vehicle
+    and 'VehicleService.SupportIsStable(jobId)' in workshop
+    and 'string.sub(id,1,5)=="Wheel"' in workshop
+    and "V2SupportReadyAt" in v2_vehicle)
+
+# V2-05: supervisor and payroll remain subordinate to original V1 credits.
+staff_v2=text(SHARED / "V2StaffRules.lua")
+nav_v2=text(ROOT / "src" / "server" / "V2StaffNavigator.lua")
+orders_v2=text(CLIENT / "UI" / "Panels" / "Orders.lua")
+server_v2=text(ROOT / "src" / "server" / "Main.server.lua")
+check("V2-05: schema v13 preserves all V1 financial evidence",
+    "SCHEMA_VERSION = 13" in data_service
+    and "StaffSlots = V2StaffRules.Sanitize(nil)" in data_service
+    and "data.StaffSlots = V2StaffRules.Sanitize" in data_service
+    and "RepairLedger = {}" in data_service and "PendingClaims = {}" in data_service)
+check("V2-05: payroll due once per profile, no duplicate debit",
+    "function DataService.ChargeStaffPayrollOnce" in data_service
+    and "profile.NextPayAt~=dueAt" in data_service
+    and "DataService.AddCoins(player,-due" in data_service
+    and "function DataService.DeferStaffPayroll" in data_service
+    and "DataService.ChargeStaffPayrollOnce(owner,dueAt" in workshop)
+check("V2-05: two employees, specialization, deterministic queue",
+    all(x in staff_v2 for x in (
+      "Rules.MaxEmployees = 2", "function Rules.Sanitize",
+      "function Rules.Order", "function Rules.Record", "function Rules.Update",
+      "function Rules.CanHandle"))
+    and "V2StaffRules.Order(thisSlot,slot,os.time())" in workshop
+    and "StaffAssignmentRules.TryReserve(entry.Busy,candidate.Id)" in workshop)
+check("V2-05: bounded cancellable pathfinding and no unsafe teleport",
+    "function Nav.Travel" in nav_v2 and "Nav.MaxRetries=2" in nav_v2
+    and "PathfindingService:CreatePath" in nav_v2
+    and "NpcKit.Place" not in nav_v2
+    and "V2StaffNavigator.Travel" in workshop
+    and 'npc:SetAttribute("V2WorkState","Buscando peças")' in workshop)
+check("V2-05: manual assignment and pause guarded at orders TV",
+    all(x in workshop for x in (
+      "function WorkshopService.SetStaffPolicy",
+      "function WorkshopService.AssignStaffJob",
+      "function WorkshopService.ClearStaffJob",
+      'StationService.IsNear(player,plot,"Orders")',
+      "employeeReserved(job)"))
+    and all(x in server_v2 for x in (
+      '"SetStaffPolicy"', '"AssignStaffJob"', '"ClearStaffJob"'))
+    and all(x in orders_v2 for x in (
+      'Id = "team"', 'Store.Act("SetStaffPolicy"',
+      'Store.Act("AssignStaffJob"', 'Store.Act("ClearStaffJob"')))
+check("V2-05: performance recorded only after validated NPC settlement",
+    "DataService.SettleNpcRepairOnce" in workshop
+    and "DataService.RecordStaffJob(owner,index,job.Id" in workshop
+    and workshop.index("DataService.RecordStaffJob(owner,index,job.Id")
+        > workshop.index("if not DataService.SettleNpcRepairOnce")
+    and 'job.Status = "Completed"' in workshop)
+check("V2-05: suites for policy, 0/1/2 worker dispatch and persistence",
+    (TOOLS / "V2StaffRulesTest.luau").is_file()
+    and (TOOLS / "V2StaffDispatchTest.luau").is_file()
+    and '"V2StaffRulesTest"' in runner and '"V2StaffDispatchTest"' in runner)
+
+check("V2-05: Studio auditoria de avatar e zonas registrada",
+    (TOOLS / "V2StaffPlaceAudit.luau").is_file()
+    and '"V2StaffPlaceAudit"' in runner
+    and "function CustomerNpcService.Position" in text(ROOT / "src" / "server" / "CustomerNpcService.lua")
+    and 'profileView.StaffSlots = nil' in workshop
+    and 'profileView.StaffPayroll = nil' in workshop)
+check("V2-05: waypoint no plano horizontal e prioridade com sinal",
+    "function Nav.HorizontalDistance" in text(ROOT/"src"/"server"/"V2StaffNavigator.lua")
+    and text(ROOT/"src"/"server"/"V2StaffNavigator.lua").count("Nav.HorizontalDistance") >= 5
+    and "local function signedPriority" in text(SHARED/"V2StaffRules.lua")
+    and 'ranked[3].Id=="low"' in text(TOOLS/"V2StaffRulesTest.luau"))
+
+check("V2-05: rejeita telemetria não finita sem contaminar estatísticas",
+    "local function finite" in text(SHARED/"V2StaffRules.lua")
+    and "not finite(gross)" in text(SHARED/"V2StaffRules.lua")
+    and "not finite(quality)" in text(SHARED/"V2StaffRules.lua")
+    and "not finite(seconds)" in text(SHARED/"V2StaffRules.lua")
+    and "rejeita NaN/inf" in text(TOOLS/"V2StaffRulesTest.luau"))
+
+check("V2-05: teste proprio de waypoint planar registrado no Studio",
+    (TOOLS/"V2StaffNavigatorTest.luau").is_file()
+    and '"V2StaffNavigatorTest"' in runner
+    and "Nav.HorizontalDistance" in text(TOOLS/"V2StaffNavigatorTest.luau"))
 
 print(f"\nStatic checks: {passed} passed, {len(failures)} failed")
 if failures:

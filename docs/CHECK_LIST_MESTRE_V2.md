@@ -1,6 +1,6 @@
 # CHECK_LIST_MESTRE_V2 — OFICINA 24H
 
-**Versão:** 2.1, 13/11/2026. **Situação:** planejamento e guia de assets finalizados; **nenhuma mecânica V2 implementada**, aguardando OK explícito para código.  
+**Versão:** 2.2, 13/11/2026. **Situação:** V2-00/01/02 implementadas em engenharia na PR #27; falta reconciliação com main/QA V1 e validação de modelos/Studio. V2-03–16 continuam planejadas. **Nenhuma homologação Studio presumida.**  
 **Direção aprovada pelo proprietário:** híbrida — estilização legível do mundo + reparos visualmente mecânicos + gestão de negócio.  
 **Código base de referência:** main em C31 (`2690f082` antes dos commits exclusivamente documentais da V2). **Atenção:** o Claude Code está homologando/corrigindo a V1 em paralelo; sempre ler novo HEAD e reconciliar diffs antes de programar V2. Preservar Issue #15 V1 como histórico.  
 **Documentos de referência:** DIRECAO_JOGO_V2_2026-11-13.md, PESQUISA_MERCADO_V2_2026-11-13.md, AUDITORIA_V2_BASE_CODIGO_2026-11-13.md (auditoria histórica até C17), [GUIA_UNICO_ASSETS_V2.md](GUIA_UNICO_ASSETS_V2.md) e GUIA_UNICO_ASSETS_V1.md.
@@ -9,7 +9,7 @@
 - [C] = código e teste de regressão escritos e integrados.
 - [A] = verificações automáticas e Rojo executados com sucesso no commit final.
 - [S] = jogo **realmente** testado no Roblox Studio / dispositivo.
-- Nada é marcado [x] por ter sido planejado. **Todas as fases V2 abaixo começam pendentes.**
+- Nada é marcado [x] por ter sido planejado. **Código implementado está em branch V2, ainda não na main**; checkboxes [C] históricos de integração seguem pendentes do merge/reconciliação. Ver quadro de execução abaixo.
 - O proprietário pretende executar a homologação Studio ao final. Isso não dispensa testes de código em cada etapa e mantém riscos de integração abertos.
 - Implementar **o máximo de fases completas e seguras possível por rodada**. Agrupar somente quando dependências, revisão, testes e CI permitirem; sem limite arbitrário de quantidade nem redução de qualidade.
 
@@ -17,7 +17,7 @@
 
 | ID | Entrega | Natureza | Depende de |
 |---|---|---|---|
-| V2-00 | Auditoria e reforço da fundação C1–C17 | P0 | main atual |
+| V2-00 | Auditoria e compatibilidade com a fundação C1–C31 | P0 | main atual |
 | V2-01 | Bible visual híbrida + 3 carros piloto | P0 | V2-00 |
 | V2-02 | Recepção e gestão visível da fila/negócio | P0 | V2-00 |
 | V2-03 | Carros interativos, capô/portas/rodas | P0 | V2-01 |
@@ -38,6 +38,21 @@
 P0 = prioridade para o núcleo de lançamento. P1 = opcional condicionado a viabilidade/qualidade; P2/P3 não bloqueia publicação. Test-drive é FUTURO, não antecipar no começo.
 
 ---
+
+## V2 — Engenharia desenvolvida na PR #27, sem interferir na V1
+
+**Autorização do proprietário recebida.** O código das primeiras fases está na branch `work/v2-00-02-fundacao-pilotos-gestao-2026-11-13`, documentado no [relatório de engenharia V2](V2_RODADA_01_ENGENHARIA.md).
+
+- [x] **V2-00 código na branch:** migração aditiva schema v11→v12, lista de compra e marcos anônimos, preservação de claims/ledger/recibos, testes de migração e reconexão escritos.
+- [x] **V2-01 código na branch:** três pilotos V1, pivôs autoráveis por script Studio, perfis de materiais, LOD seletivo, prevenção de modelos e sockets inválidos, suítes de regressão escritas.
+- [x] **V2-02 código na branch:** recepção física, controles server-authoritative de prioridade, agenda, descontos, estoque/loja, wishlist de múltiplas OS, orçamento e dashboard, com testes de contratos escritos.
+- [x] **Automação de engenharia na branch:** verificações estáticas e build Rojo aprovados [no último build anterior a esta revisão documental](https://github.com/FiaresAlan/Oficina24H/actions/runs/43496196905).
+- [ ] **Merge na main:** depende de comparar, revisar e conciliar as correções V1 do Claude e refazer CI.
+- [ ] **Arte real:** revisar/importar os três modelos piloto, ajustar malhas móveis, pivôs, licença, áudio e LOD reais.
+- [ ] **Studio:** executar RunAllTests, V2PilotPlaceAudit, 15 serviços, multiplayer, mobile/PC/gamepad e verificar efeitos reais.
+- [ ] **Demais V2-03–16:** implementar somente após as dependências, sem declarar V2 completa por CI verde.
+
+**Portão:** código escrito e integrado em branch não equivale a jogo homologado. Não há publicação automática.
 
 ## V2-00 — Integração segura com a V1 em homologação
 **Meta:** reconciliar o HEAD atualizado pelo Claude com a V1 C31, sem refazer correções C18–C31 nem interferir na homologação.
@@ -75,6 +90,15 @@ P0 = prioridade para o núcleo de lançamento. P1 = opcional condicionado a viab
 **Aceite:** o jogador percebe a próxima decisão de negócio rapidamente.
 
 ## V2-03 — Capô, portas, rodas, engine bay e elevadores
+
+**Código V2-03 entregue na PR #27, sem homologação Studio:** [guia exato e QA V2-03](V2_FASE_03_COMPONENTES.md).
+- [x] [C] Oito pontos físicos, estados server-authoritative, permissão do responsável, distância e bloqueio ao movimentar ou durante reparo.
+- [x] [C] Portas, tampa, capô, quatro rodas independentes e cofre do motor, com partes nativas marcadas ou proxies client-side.
+- [x] [C] Pré-requisitos dos procedimentos FlatTire/WeakBattery/Overheating, reset seguro antes da saída e próximo passo no HUD pós-diagnóstico.
+- [x] [C] Suítes Luau registradas, auditoria não destrutiva de pivôs/meshes e checks CI.
+- [ ] [S] Homologar separação física das malhas reais, posicionamento de pivôs, 15 serviços, mobile/gamepad e multiplayer no Studio.
+
+
 - [ ] [C] Rigs/Attachments/pivôs de capô, portas, porta-malas e rodas para os três carros.
 - [ ] [C] Usar sockets de componentes reais; não só posições genéricas do carro.
 - [ ] [C] Regras de porta/capô: abrir, inspecionar, reparar, fechar, impedir abertura em movimento.
@@ -86,6 +110,16 @@ P0 = prioridade para o núcleo de lançamento. P1 = opcional condicionado a viab
 **Aceite:** contato mecânico convincente sem simulação física integral de motor.
 
 ## V2-04 — Reparos ricos e variados (15 serviços)
+
+**Engenharia em branch V2, sem homologação no Studio:** [matriz dos 15 procedimentos e roteiro de QA](V2_FASE_04_15_SERVICOS.md).
+
+- [x] [C] Três etapas mecânicas distintas para cada um dos 15 defeitos, com interação física nos pivôs do carro e validação de proprietário/ator, sequência, proximidade e componentes.
+- [x] [C] Integração com os 15 minijogos V1 e regras V2-03, equipamento e estoque; bloqueio do reparo antes das etapas físicas.
+- [x] [C] HUD pós-diagnóstico, antes/depois visual, recap de qualidade, reinício de sequência confirmado e opção de tentar novamente sem cobrança antes da entrega.
+- [x] [A] Verificações estáticas e build Rojo executados, suites físicas e cruzamento com os sete modos V1 registradas.
+- [ ] [S] Studio: malhas e pivôs reais, 15 serviços, multiusuário, mobile/gamepad, performance, remotes e DataStore.
+
+
 - [ ] [C] Auditar cada um dos 15 serviços existentes quanto à integração com rig, peça e equipamento.
 - [ ] [C] Procedimentos diferenciados por família; interação real em pneu, elétrica, motor, suspensão, direção e lataria.
 - [ ] [C] Qualidade visível: defeito, peça danificada, ferramenta, ação e “antes/depois”.
@@ -97,13 +131,17 @@ P0 = prioridade para o núcleo de lançamento. P1 = opcional condicionado a viab
 **Aceite:** consertar um motor tem sensação distinta de trocar um pneu.
 
 ## V2-05 — Mecânicos NPC realmente úteis
-- [ ] [C] Melhorar pathfinding e recomputação; NPC caminha entre estoque, box, cliente e descanso.
-- [ ] [C] Gerente escolhe OS, prioridade e especialização do funcionário; fila evita disputa pelo mesmo carro.
-- [ ] [C] Mostrar produtividade, qualidade, salário, tempo e histórico de trabalho.
-- [ ] [C] NPC usa peça/salário/equipamento e gera receita apenas após serviço concluído.
-- [ ] [C] Proteger demissão/cancelamento/desconexão e despesa duplicada.
-- [ ] [A] Testes simultâneos com 0/1/2 funcionários e 1/2/3 OS.
-- [ ] [S] Observar caminhada/animações e carga de servidor em Studio.
+
+**Engenharia V2-05 implementada na PR #27, sem homologação Studio:** [fluxo de funcionários, escala, dinheiro e matriz de QA](V2_FASE_05_FUNCIONARIOS.md).
+
+- [x] [C] Caminhada controlada com recálculo limitado e falha segura sem teleporte pelo cliente, estoque, box e descanso.
+- [x] [C] Gerência física com modo automático/manual/pausado, especialização, atribuição/cancelamento de fila e ordem determinística por prioridade.
+- [x] [C] Supervisão de produtividade, qualidade média, duração, histórico individual, folha e vencimentos, com dados saneados.
+- [x] [C] NPC só usa estoque e gera pagamento por SettlementNpcRepairOnce, registra resultado após liquidação e preserva provas financeiras da V1.
+- [x] [C] Migração aditiva v12→v13, folha salarial sem replay do mesmo vencimento, demissão segura e recuperação de rotas/abandono.
+- [x] [A] Suítes de escala, múltiplas OS e persistência escritas, mais auditoria não destrutiva dos personagens; CI e Rojo verificam os contratos.
+- [ ] [S] Studio: animações/caminhadas, 0/1/2 empregados, 1/2/3 OS, fluxo financeiro e performance real.
+
 
 **Aceite:** a equipe trabalha de maneira crível e não substitui o dono de imediato.
 

@@ -6,13 +6,13 @@ Simulador social de oficina mecânica para Roblox: o jogador atende clientes, di
 
 **[CHECKLIST MESTRE V1 — desenvolvimento ativo, fases até C31 (Issue #15)](https://github.com/FiaresAlan/Oficina24H/issues/15)**
 
-**[CHECKLIST MESTRE V2 — direção híbrida aprovada, ainda não implementada (Issue #26)](https://github.com/FiaresAlan/Oficina24H/issues/26)**
+**[CHECKLIST MESTRE V2 — engenharia V2-00/01/02 na PR #27 (Issue #26)](https://github.com/FiaresAlan/Oficina24H/issues/26)**
 
-**[Checklist Mestre V2 atualizado — fases, dependências, qualidade](docs/CHECK_LIST_MESTRE_V2.md)** · **[Guia de assets V2 — onde baixar, licenças e importação](docs/GUIA_UNICO_ASSETS_V2.md)**
+**[Relatório de engenharia V2-00/01/02](docs/V2_RODADA_01_ENGENHARIA.md)** · **[Checklist Mestre V2 atualizado](docs/CHECK_LIST_MESTRE_V2.md)** · **[Guia de assets V2 — onde baixar, licenças e importação](docs/GUIA_UNICO_ASSETS_V2.md)**
 
 **[Direção oficial do jogo V2](docs/DIRECAO_JOGO_V2_2026-11-13.md)** · **[Checklist completo V2](docs/CHECK_LIST_MESTRE_V2.md)** · **[Pesquisa de mercado V2](docs/PESQUISA_MERCADO_V2_2026-11-13.md)** · **[Auditoria do código C1–C17](docs/AUDITORIA_V2_BASE_CODIGO_2026-11-13.md)** · **[Test-drive futuro (especificação)](docs/PROPOSTA_TEST_DRIVE_V2_FUTURO.md)**
 
-**Status da V2:** direção aprovada, apenas documentos. **Nenhuma nova mecânica V2 implementada.** A V1 (Issue #15) continua sendo o desenvolvimento ativo das fases A1–C31, não uma garantia de QA no Studio. A implementação das fases V2 depende de nova autorização do proprietário.
+**Status da V2 nesta branch:** V2-00/01/02 e V2-03 foram implementadas em código na [PR #27](https://github.com/FiaresAlan/Oficina24H/pull/27). **A arte nativa dos três carros e os testes Roblox Studio continuam pendentes. V2-05 foi implementada em código; V2-06–16 ainda não foram implementadas.** [Guia de mecânica V2-03](docs/V2_FASE_03_COMPONENTES.md). [Matriz dos 15 serviços V2-04](docs/V2_FASE_04_15_SERVICOS.md). [Mecânicos NPC e supervisão V2-05](docs/V2_FASE_05_FUNCIONARIOS.md).
 
 **[Portões finais da V1 — o que ainda falta para homologar](docs/PORTOES_FINALIZACAO_V1_2026-11-13.md)** · **[Homologação V1 — rodada 1 no Studio](docs/HOMOLOGACAO_V1_2026-11-13.md)**: `RunAllTests` passou (2014/0) e os 15 serviços rodaram ao vivo num place de QA só com código; place original, duas contas e publicação ainda pendentes.
 

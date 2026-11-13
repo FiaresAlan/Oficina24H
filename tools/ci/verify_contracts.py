@@ -460,8 +460,9 @@ check("paid equipment level benefits repairs and employee speed",
       "EquipmentUpgradeRules.RewardMultiplier(ownerLevel)" in workshop
       and "EquipmentUpgradeRules.EmployeeSeconds" in workshop)
 check("employee physically walks before working",
-      "walkEmployee(npc, target" in workshop
-      and "PathfindingService:CreatePath" in workshop)
+      "walkEmployee(npc,target,animator,valid)" in workshop
+      and "V2StaffNavigator.Travel" in workshop
+      and "PathfindingService:CreatePath" in text(ROOT / "src" / "server" / "V2StaffNavigator.lua"))
 check("staff starts at 2 bays and waits 25 seconds for one car",
       "MaxEmployees = 1" in text(SHARED / "WorkshopLevels.lua")
       and "StaffAssignmentRules.ShouldDispatch" in workshop

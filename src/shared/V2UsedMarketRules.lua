@@ -71,8 +71,11 @@ function Rules.Sanitize(raw: any): any
             local offer = Rules.Offers[item.Variant]
             local stage = ({ Purchased = true, Inspected = true, Stripped = true, Restored = true })[item.Stage]
                 and item.Stage or "Purchased"
-            local style = (stage == "Restored" and
-                (item.Style == "Blue" or item.Style == "Red")) and item.Style or "Factory"
+            -- A tabela V2-09 permitia Blue/Red; a V2-10 permite Grafite.
+            -- Validação definitiva feita por Appearance.NormalizeCar, sem
+            -- descartar cores novas durante Save/replay.
+            local style = (stage == "Restored" and type(item.Style) == "string")
+                and item.Style or "Factory"
             local risk = integer(item.RiskFee, 0, offer.RiskMax)
             table.insert(state.Owned, {
                 Uid = item.Uid, Variant = item.Variant, Stage = stage,

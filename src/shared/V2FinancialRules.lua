@@ -158,7 +158,66 @@ function Rules.ServiceQuotes(multiplier: any): {any}
     end)
     return rows
 end
-function Rules.Snapshot(book: any, profile: any,now: number,employeeSalary: number): any
+-- Reposição baseada SOMENTE em OS diagnosticadas e demanda recente visível.
+-- Não reserva estoque, não compra nada e não adivinha defeitos ocultos.
+function Rules.Restock(profile: any,jobs: any): any
+    local p=type(profile)=="table" and profile or {}
+    local stock=type(p.Parts)=="table" and p.Parts or {}
+    local required,historyUsage,historyCount={}, {},0
+    for _,job in ipairs(type(jobs)=="table" and jobs or {}) do
+        if type(job)=="table" and job.Status=="InProgress" and job.Diagnosed==true
+            and type(job.Requirement)=="table" then
+            for id,qty in pairs(job.Requirement.Parts or {}) do
+                if Catalog.Parts[id] and finite(qty) and qty%1==0 and qty>0 and qty<=100 then
+                    required[id]=(required[id] or 0)+qty
+                end
+            end
+        end
+    end
+    local serviceNames={}
+    for _,service in pairs(Catalog.Services) do serviceNames[service.DisplayName]=service end
+    for _,h in ipairs(type(p.OrderHistory)=="table" and p.OrderHistory or {}) do
+        if historyCount>=30 then break end
+        if type(h)=="table" then
+            local service=type(h.Service)=="string" and serviceNames[h.Service]
+            local defect=service and Catalog.Defects[service.DefectId]
+            if defect then
+                for id,qty in pairs(defect.Parts or {}) do
+                    historyUsage[id]=(historyUsage[id] or 0)+qty
+                end
+                historyCount+=1
+            end
+        end
+    end
+    local lines,total,urgentCost={},0,0
+    for id,part in pairs(Catalog.Parts) do
+        local owned=int(stock[id],1000000)
+        local reserved=int(required[id],1000000)
+        -- Reserva recomendada para os PRÓXIMOS dois serviços, proporcional
+        -- ao histórico disponível. Não é previsão infalível nem mínimo obrigatório.
+        local buffer=historyCount>0 and math.ceil(2*(historyUsage[id] or 0)/historyCount) or 0
+        local toBuy=math.max(0,reserved+buffer-owned)
+        if toBuy>0 then
+            local shortage=math.max(0,reserved-owned)
+            table.insert(lines,{
+                Id=id,Name=part.DisplayName,OnHand=owned,
+                Required=reserved,MissingForJobs=shortage,
+                SuggestedBuffer=buffer,Quantity=toBuy,Cost=toBuy*part.Cost,
+            })
+            total+=toBuy*part.Cost
+            urgentCost+=shortage*part.Cost
+        end
+    end
+    table.sort(lines,function(a,b)
+        if a.MissingForJobs~=b.MissingForJobs then return a.MissingForJobs>b.MissingForJobs end
+        if a.Cost~=b.Cost then return a.Cost>b.Cost end
+        return a.Id<b.Id
+    end)
+    return {Items=lines,TotalCost=total,UrgentCost=urgentCost,
+        HistoryServices=historyCount}
+end
+
+function Rules.Snapshot(book: any, profile: any,now: number,employeeSalary: number,jobs: any?): any
     local p=type(profile)=="table" and profile or {}
     local b=Rules.Sanitize(book,p.Coins,now)
     local groups={}
@@ -177,8 +236,11 @@ function Rules.Snapshot(book: any, profile: any,now: number,employeeSalary: numb
     local available=int(p.Coins,Rules.MaxMoney)
     local nextPay=payable>0 and int(p.NextPayAt,4102444800) or 0
     local reserve=payable
+    local restock=Rules.Restock(p,jobs)
     local warning=""
     if available<reserve then warning="CAIXA INSUFICIENTE PARA PRÓXIMA FOLHA"
+    elseif restock.UrgentCost>0 and available-reserve<restock.UrgentCost then
+        warning="FALTA CAIXA PARA PEÇAS DE ORDENS EM ANDAMENTO"
     elseif operatingCash<0 and b.Count>=2 then warning="FLUXO OPERACIONAL NEGATIVO NO PERÍODO"
     elseif b.LegacyWindow then warning="HISTÓRICO ANTIGO PARCIAL: EXIBINDO APENAS LANÇAMENTOS DISPONÍVEIS"
     end
@@ -192,7 +254,7 @@ function Rules.Snapshot(book: any, profile: any,now: number,employeeSalary: numb
         Cash=available,StockReferenceValue=stockCost+bagCost,
         NextPayroll=payable,NextPayAt=nextPay,
         AvailableAfterPayroll=available-reserve,Warning=warning,
-        Recent=recent,Quotes=Rules.ServiceQuotes(p.PriceMultiplier),
+        Recent=recent,Quotes=Rules.ServiceQuotes(p.PriceMultiplier),Restock=restock,
         -- Nunca alegar lucro contábil: custos de peça de estoque legado
         -- não são rastreados por lote e o caixa inclui CAPEX não amortizado.
         AccountingProfitAvailable=false,

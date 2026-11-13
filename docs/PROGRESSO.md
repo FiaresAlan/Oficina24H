@@ -713,3 +713,13 @@ Detalhes em `docs/AUDITORIA_GERAL.md`. Resumo:
 - **Regressões:** novos cenários em `RepairActionRulesTest` e `RepairSessionTest` e invariantes de transporte incorporados ao `tools/ci/verify_contracts.py`.
 - **Roteiro de homologação:** `docs/TESTE_C6_REDE_REPARO_2026-11-12.md` (latência, ACK perdido, cancelamento antigo, multiplayer, mobile).
 - **Limite:** desenvolvimento de código e revisões estáticas; **nenhuma simulação real de rede em Studio executada por esta sessão**. A fase só deve ser considerada homologada após Play/2 jogadores/device.
+
+## 2026-11-12 — C7: comprovante consultável e reconciliação da OS após perda de confirmação
+
+- **Falha anterior:** `FinishRepair` liquidava a OS uma única vez, mas a HUD fechava sem prova quando o evento `RepairDone` se perdia. Repetir `FinishRepair` retornava "nenhum reparo em andamento" mesmo após pagamento.
+- **Novo contrato:** `RepairReceiptRules` armazena comprovantes privados pelo `UserId + JobId + Token`, com oito entradas por jogador e 15 minutos de retenção no servidor. O recibo é criado **após** consumir peças e creditar moedas, XP, reputação e avaliações, antes do evento `RepairDone`.
+- **Consulta segura:** `CheckRepairResult` devolve `Completed/Processing/Active/Unknown` sem executar reparos, compras ou pagamentos. O servidor recupera o resultado de uma conclusão duplicada já paga sem aplicar a economia novamente.
+- **UX:** `OperationRepairGame` mantém a janela em situação incerta, consulta automaticamente após 5 segundos, permite consulta manual, retransmite a mesma entrega somente se o servidor ainda indicar `Active`, e mostra o comprovante quando `Completed`. `RepairDone` exige `JobId` e token correspondentes.
+- **Regressões:** `RepairReceiptTest.luau` cobre cópia do payload, repetição, expiração, limites e isolamento por token; registrado em `RunAllTests`, com invariantes no CI.
+- **QA:** `docs/TESTE_C7_COMPROVANTES_ENTREGA_2026-11-12.md` documenta cenários críticos de entrega, falha e privacidade.
+- **Limite:** os comprovantes são **efêmeros**; não constituem um livro-caixa durável entre servidores. Para isso, seria necessária contabilização idempotente persistida no DataStore. O Studio e os testes com jogadores permanecem por validar.

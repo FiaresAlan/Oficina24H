@@ -233,6 +233,7 @@ actionEvent.OnServerEvent:Connect(function(player: Player, action: any, payload:
         actionEvent:FireClient(player, "RepairActionAck", {
             JobId = payload.JobId, Token = payload.Token, Accepted = success, Message = message,
             Revision = revision,
+            RequestRevision = type(payload.Command) == "table" and payload.Command.Revision or nil,
         })
         return
     end
@@ -269,7 +270,7 @@ actionEvent.OnServerEvent:Connect(function(player: Player, action: any, payload:
     elseif action == "RepairPrefs" and type(payload.Assist) == "boolean" then
         success, message = WorkshopService.SetRepairAssist(player, payload.Assist)
     elseif action == "CancelRepair" then
-        success, message = WorkshopService.CancelRepair(player)
+        success, message = WorkshopService.CancelRepair(player, payload.JobId, payload.Token)
     elseif action == "SkipOnboarding" then
         success, message = WorkshopService.SkipOnboarding(player)
     elseif action == "BuyEquipment" and type(payload.EquipmentId) == "string" then

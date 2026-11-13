@@ -89,6 +89,21 @@ check("client receives server ack", "Store.RepairActionAck.Event:Connect" in ui)
 check("operation UI attaches session token", "input.Token = sessionToken" in ui)
 check("legacy timing repair remains supported", "RepairRules.Evaluate(session.Plan, presses, elapsed, mods)" in workshop)
 
+# C6: a mesma ação aceita pode ser reenviada com segurança sob alta latência.
+session_rules = text(SHARED / "RepairSessionRules.lua")
+check("replay de operação disponível", "function RepairActionRules.IsReplay" in action_rules)
+check("replay não é reaplicado pelo servidor", "RepairActionRules.IsReplay(session.Progress, command)" in workshop)
+check("servidor verifica proximidade antes de ACK repetido",
+      workshop.find("checkRepairable(player, jobId)", workshop.find("function WorkshopService.RepairAction"))
+      < workshop.find("RepairActionRules.IsReplay(session.Progress, command)", workshop.find("function WorkshopService.RepairAction")))
+check("cancelamento exige identificação válida", "RepairSessionRules.CanCancel(session, jobId, token)" in workshop)
+check("remoto encaminha token ao cancelamento", "CancelRepair(player, payload.JobId, payload.Token)" in main)
+check("ACK identifica revisão da solicitação", "RequestRevision" in main and "payload.RequestRevision ~= pendingAction.Revision" in ui)
+check("cliente faz retransmissão idempotente", "local function transmit(attempt: number)" in ui)
+check("cliente envia token ao cancelar", 'Store.Act("CancelRepair", { JobId = jobId, Token = sessionToken })' in ui)
+check("regressões de rede registradas", (TOOLS / "RepairActionRulesTest.luau").is_file()
+      and (TOOLS / "RepairSessionTest.luau").is_file())
+
 check("readme links project checklist", "issues/15" in text(ROOT / "README.md"))
 
 print(f"\nStatic checks: {passed} passed, {len(failures)} failed")

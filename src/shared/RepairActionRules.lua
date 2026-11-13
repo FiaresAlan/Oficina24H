@@ -137,9 +137,27 @@ function RepairActionRules.Apply(plan: any, state: any, command: any): (boolean,
 	else
 		return false, "Modo de reparo inválido."
 	end
+	state.LastAccepted = {
+		Revision = command.Revision,
+		Kind = kind, Id = id, Value = value,
+	}
 	state.Commands += 1
 	state.Revision += 1
 	return true, ""
+end
+
+-- Retransmissão idempotente: somente o ÚLTIMO comando aceito, na revisão exata.
+-- Não aplica novamente um gesto, mas permite responder ao ACK perdido.
+function RepairActionRules.IsReplay(state: any, command: any): boolean
+	if type(state) ~= "table" or type(command) ~= "table" then return false end
+	local last = state.LastAccepted
+	return type(last) == "table" and type(state.Revision) == "number"
+		and type(command.Revision) == "number"
+		and command.Revision == state.Revision - 1
+		and last.Revision == command.Revision
+		and last.Kind == command.Kind
+		and last.Id == command.Id
+		and last.Value == command.Value
 end
 
 -- Somente dados montados do estado confirmado podem chegar ao avaliador de qualidade.

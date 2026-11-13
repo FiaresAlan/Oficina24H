@@ -189,7 +189,7 @@ do
 	A.Load(p)
 	local prof = A.Get(p)
 	check("migração: dados antigos preservados", prof and prof.Coins == 999 and prof.SkillXP.Tires == 150)
-	check("migração: campos novos criados", prof and prof.Equipment.BasicToolset and type(prof.Transactions) == "table" and prof.SchemaVersion == 4 and type(prof.Daily) == "table" and type(prof.League) == "table" and prof.League.Points == 0 and prof.WorkshopLevel ~= nil)
+	check("migração: campos novos criados", prof and prof.Equipment.BasicToolset and type(prof.Transactions) == "table" and prof.SchemaVersion == 9 and type(prof.Daily) == "table" and type(prof.League) == "table" and prof.League.Points == 0 and prof.WorkshopLevel ~= nil)
 	check("migração: outras habilidades zeradas", prof and prof.SkillXP.Engine == 0)
 end
 
@@ -621,7 +621,7 @@ do
 	local A = server(store, "claimCorruptA")
 	local p = fakePlayer(1301)
 	A.Load(p)
-	check("C16: schema atualizado ao carregar v5", A.Get(p).SchemaVersion == 8)
+	check("C23: schema v5 migra até v9", A.Get(p).SchemaVersion == 9)
 	check("C13: sanitize de reivindicações corrompidas", #A.Get(p).PendingClaims == 0)
 	check("C13: mantém saldo antigo", A.Get(p).Coins == 300)
 end

@@ -42,7 +42,7 @@ Ledger.Record(migratedLedger, "v8_owner",
 	"c23ccccc-1111-2222-3333-dddddddddddd", 10, "Owner", 1790000000, "Freios", "Hatch")
 local migrated = Paid.FromLedger(nil, migratedLedger)
 check("C23: migração v8 adiciona apenas créditos Worker",
-	# migrated == 1 and Paid.Find(migrated, "v8_work", token) ~= nil)
+	#migrated == 1 and Paid.Find(migrated, "v8_work", token) ~= nil)
 check("C23: migração repetida não duplica marcador",
 	#Paid.FromLedger(migrated, migratedLedger) == 1)
 check("C23: sanitize ignora valores corrompidos",

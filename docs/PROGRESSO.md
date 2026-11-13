@@ -755,3 +755,11 @@ Detalhes em `docs/AUDITORIA_GERAL.md`. Resumo:
 - **Regressões escritas:** `SettlementClaimRulesTest` e `PersistenceTest` ganharam cenários de queda, reentrada, prova ausente ou divergente, falha de leitura e corrupção do schema. Veja `docs/TESTE_C12_C13_CLAIMS_2026-11-13.md`.
 - **CI:** ver execução da branch e da main no checklist mestre. **Sem execução Roblox Studio** ou falha real de processo nesta rodada.
 - **Riscos abertos:** não há atomicidade multi-chave; ledger do dono possui retenção de 64 lançamentos, e claims não confirmadas podem acumular até 64. Legacy timing continua sem claim/recibo robusto. Antes de publicar, provar o fluxo sob falhas reais, concorrência e desconexões.
+
+
+## 2026-11-13 — C14/C15: arquivo compacto de provas e auditoria de reivindicações (GitHub-only)
+- **C14:** schema v7 inclui `OwnerSettlementProofs` (até 1024 provas privadas) junto da contabilidade do dono. A recuperação do contratado verifica valores e identidade do WorkerUserId nessa prova; se houver divergência, não aceita o ledger legado. Compatibilidade mantida para créditos anteriores a v7.
+- **C15:** reivindicações recentes ficam fora da reconciliação durante 600 s para evitar corrida com `FinishRepair`. HUD das Ordens exibe **apenas contagem** de reivindicações e aviso de pendências acima de 24 horas, sem GUIDs. Log limitado a um alerta por usuário/dia; sem descarte automático de dívidas.
+- **Testes escritos:** cobertura de prova após rotação de 64 registros, adulteração, identidade, retenção limitada, migração, janela de segurança e resumo privado. Consulte `docs/TESTE_C14_C15_PROVAS_ALERTAS_2026-11-13.md`.
+- **CI:** ver Issue #15. **Nenhum teste novo Luau ou fluxo real foi executado no Studio nesta rodada.**
+- **P0:** ausência de atomicidade entre duas chaves, prova com retenção finita e possíveis reivindicações órfãs; homologação real de rede, DataStore, UX e performance segue pendente.

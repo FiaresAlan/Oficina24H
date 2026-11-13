@@ -1,7 +1,7 @@
 --!strict
 -- Níveis da oficina (compra na Construtora do bairro). Fonte única para servidor, cliente e testes.
 --   0 Garagem de bairro  — 1 box  (todo jogador começa aqui)
---   1 Oficina            — 2 boxes
+--   1 Oficina            — 2 boxes, permite 1 funcionário
 --   2 Centro automotivo  — 4 boxes (libera o quadro de funcionários)
 --   3 Oficina premium    — 6 boxes (ocupa o terreno inteiro)
 -- Cada nível pede dinheiro + nível empresarial (total ganho) + reputação + XP (soma dos níveis de habilidade) +
@@ -35,12 +35,12 @@ WorkshopLevels.Levels = {
 	},
 	[1] = {
 		Id = 1, Name = "Oficina", Bays = { 5.5, 16.5 }, X0 = -9, X1 = 22, Height = 13,
-		Cost = 1500, MinBusinessLevel = 4, MinReputation = 20, MinSkillTotal = 8, MinEquipment = 3, MaxEmployees = 0,
+		Cost = 1500, MinBusinessLevel = 4, MinReputation = 20, MinSkillTotal = 8, MinEquipment = 3, MaxEmployees = 1,
 		Color = Color3.fromRGB(255, 140, 40),
 	},
 	[2] = {
 		Id = 2, Name = "Centro automotivo", Bays = { -5.5, 5.5, 16.5, 27.5 }, X0 = -20, X1 = 33, Height = 14,
-		Cost = 6000, MinBusinessLevel = 8, MinReputation = 70, MinSkillTotal = 14, MinEquipment = 5, MaxEmployees = 1,
+		Cost = 6000, MinBusinessLevel = 8, MinReputation = 70, MinSkillTotal = 14, MinEquipment = 5, MaxEmployees = 2,
 		Color = Color3.fromRGB(70, 190, 255),
 	},
 	[3] = {

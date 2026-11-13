@@ -1,5 +1,6 @@
 --!strict
 local Players = game:GetService("Players")
+local PathfindingService = game:GetService("PathfindingService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 
@@ -1809,7 +1810,8 @@ local function staffSpot(plot: Instance, index: number): Vector3?
     if not root then
         return nil
     end
-    return (root * CFrame.new(-8 - index * 2.5, 0.4, 12)).Position -- área livre perto da prateleira, longe dos boxes
+    local L = WorkshopLevels.Levels[StationService.LevelOf(plot)] or WorkshopLevels.Levels[0]
+    return (root * CFrame.new(L.X0 + 8 + index * 2.5, 0.4, 28)).Position -- corredor entre box e sala dos fundos
 end
 
 local function syncStaff(player: Player)
@@ -1859,7 +1861,7 @@ function WorkshopService.HireEmployee(player: Player)
     end
     local maxEmployees = WorkshopLevels.Levels[profile.WorkshopLevel or 0].MaxEmployees
     if maxEmployees <= 0 then
-        return false, "Funcionários só a partir do Centro automotivo (4 boxes). Amplie na Construtora."
+        return false, "Funcionários a partir da Oficina (2 boxes). Amplie na Construtora."
     end
     if (profile.Employees or 0) >= maxEmployees then
         return false, string.format("Seu prédio comporta %d mecânico(s). Amplie para contratar mais.", maxEmployees)
@@ -1886,7 +1888,26 @@ function WorkshopService.FireEmployee(player: Player)
     return true, "Mecânico demitido."
 end
 
--- O funcionário pega um carro estacionado ainda não atendido: diagnostica, sobe no elevador e conserta sozinho.
+-- Tentativa de rota calculada pela navmesh; caso a cena ainda não permita
+-- navegação (asset faltante), usa o destino direto com fallback do NpcKit.
+local function walkEmployee(npc: Model, target: Vector3, animator: any)
+    if not npc.Parent or not npc.PrimaryPart then return end
+    local points = { target }
+    local ok, path = pcall(function()
+        local route = PathfindingService:CreatePath({ AgentRadius = 2, AgentHeight = 5, AgentCanJump = false })
+        route:ComputeAsync(npc.PrimaryPart.Position, target)
+        return route
+    end)
+    if ok and path.Status == Enum.PathStatus.Success then
+        points = {}
+        for _, waypoint in ipairs(path:GetWaypoints()) do
+            table.insert(points, waypoint.Position)
+        end
+    end
+    NpcKit.WalkPath(npc, points, animator)
+end
+
+-- Funcionário assume um carro em espera e mostra seu trabalho ao proprietário.
 local function employeeWork(owner: Player, job: any, npc: Model)
     local entry = Staff[owner.UserId]
     entry.Busy[job.Id] = true
@@ -1898,8 +1919,8 @@ local function employeeWork(owner: Player, job: any, npc: Model)
         local plot = PlotService.GetPlot(owner)
         local spot = plot and staffSpot(plot, table.find(entry.Npcs, npc) or 1)
         if npc.Parent and spot then
-            NpcKit.Place(npc, spot, spot + Vector3.new(0, 0, 1))
-            NpcKit.ServerOwned(npc)
+            walkEmployee(npc, spot, NpcKit.Animate(npc))
+            if npc.Parent then NpcKit.ServerOwned(npc) end
         end
         if message and eventSender then
             eventSender(owner, "Notice", { Message = message, Success = false })
@@ -1920,9 +1941,17 @@ local function employeeWork(owner: Player, job: any, npc: Model)
     local carRoot = car and car:IsA("Model") and car.PrimaryPart
     if carRoot then
         local spot = carRoot.CFrame * Vector3.new(0, 0, -((tonumber(car:GetAttribute("Comprimento")) or 18) / 2 + 2))
-        NpcKit.Place(npc, Vector3.new(spot.X, carRoot.Position.Y, spot.Z), carRoot.Position)
-        NpcKit.ServerOwned(npc)
+        local plot = PlotService.GetPlot(owner)
+        local frame = plot and StationService.FrameOf(plot)
+        local groundY = frame and frame.Position.Y + 0.4 or (carRoot.Position.Y - 2.8)
+        local target = Vector3.new(spot.X, groundY, spot.Z)
+        walkEmployee(npc, target, NpcKit.Animate(npc))
+        if npc.Parent then
+            NpcKit.ServerOwned(npc)
+            NpcKit.Say(npc, "Revisando " .. service.DisplayName, 6)
+        end
     end
+    if not npc.Parent then release(nil); return end
     job.Diagnosed = true
     -- Se o NPC não puder terminar, os sockets de preparo precisam existir para o jogador retomar.
     job.PreparationStep = job.PreparationStep or 1
@@ -1930,7 +1959,9 @@ local function employeeWork(owner: Player, job: any, npc: Model)
     VehicleService.SetStage(job.Id, "None")
     VehicleService.SetSymptom(job.Id, defectSymptom(job.DefectId))
     VehicleService.SetRepairing(job.Id, true)
-    task.wait(Config.EmployeeWorkSeconds)
+    local level = DataService.GetEquipmentLevel(owner, defect.RequiredEquipment)
+    local workSeconds = EquipmentUpgradeRules.EmployeeSeconds(Config.EmployeeWorkSeconds, level)
+    task.wait(workSeconds)
     local current = Jobs[job.Id]
     if current ~= job or job.Status ~= "InProgress" or not owner.Parent then
         release(nil)
@@ -1948,10 +1979,12 @@ local function employeeWork(owner: Player, job: any, npc: Model)
     VehicleService.Flash(job.Id, Color3.fromRGB(90, 220, 130))
     VehicleService.Despawn(job.Id)
     local basePrice = job.Price or service.Reward
-    local price = math.floor(basePrice * RepairRules.PayMultiplier(Config.EmployeeQuality) + 0.5)
+    local quality = EquipmentUpgradeRules.EmployeeQuality(Config.EmployeeQuality, level)
+    local price = math.floor(basePrice * RepairRules.PayMultiplier(quality)
+        * EquipmentUpgradeRules.RewardMultiplier(level) + 0.5)
     DataService.AddCoins(owner, price, "Serviço do funcionário: " .. service.DisplayName)
     DataService.AddReputation(owner, service.Reputation)
-    local stars = rateService(owner, job, service, defect, nil, true, Config.EmployeeQuality)
+    local stars = rateService(owner, job, service, defect, nil, true, quality)
     WorkshopService.UpdateSkin(owner)
     release(nil)
     if eventSender then
@@ -1995,17 +2028,21 @@ local function staffTick()
             for _ in pairs(entry.Busy) do
                 working += 1
             end
-            -- Equilíbrio: o funcionário só pega um carro quando há pelo menos 2 esperando atendimento (sobra um para o
-            -- jogador). Assim a equipe ajuda a dar conta do movimento, mas não joga sozinha.
+            -- O proprietário tem 25 s para assumir a primeira ordem; depois disso o
+            -- funcionário pode trabalhar mesmo com apenas um cliente esperando.
+            -- Isso permite automatizar enquanto o dono cuida de estoque e expansão.
+            -- A renda ainda requer carros, peças e pagamento de salário.
             local waiting = 0
+            local oldestWait = 0
             for jobId, job in pairs(Jobs) do
                 if job.OwnerUserId == userId and job.Status == "InProgress" and not entry.Busy[jobId] and not job.CollaboratorUserId
                     and VehicleService.IsParked(jobId) and not (Repairs[userId] and Repairs[userId].JobId == jobId)
                     and not (RepairPrepRules.Requires(job.DefectId) and (job.PreparationStep or 1) > 1) then
                     waiting += 1
+                    oldestWait = math.max(oldestWait, os.time() - (job.AcceptedAt or os.time()))
                 end
             end
-            if working < #entry.Npcs and waiting >= 2 then
+            if working < #entry.Npcs and (waiting >= 2 or (waiting >= 1 and oldestWait >= 25)) then
                 for jobId, job in pairs(Jobs) do
                     if working >= #entry.Npcs then
                         break
@@ -2014,7 +2051,8 @@ local function staffTick()
                         and not job.CollaboratorUserId and VehicleService.IsParked(jobId)
                         and not (Repairs[userId] and Repairs[userId].JobId == jobId)
                         and not (RepairPrepRules.Requires(job.DefectId) and (job.PreparationStep or 1) > 1)
-                        and os.time() >= (job.EmployeeRetryAt or 0) then
+                        and os.time() >= (job.EmployeeRetryAt or 0)
+                        and (waiting >= 2 or os.time() - (job.AcceptedAt or os.time()) >= 25) then
                         local free: Model? = nil
                         for _, npc in ipairs(entry.Npcs) do
                             if not npc:GetAttribute("Trabalhando") then

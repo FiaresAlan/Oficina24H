@@ -3,9 +3,11 @@
 -- condições, identidade de oferta, preço de venda ou consumo de peças.
 -- Carro de revenda NÃO ocupa as vagas das OS de clientes.
 local Catalog = require(script.Parent.Catalog)
+local Appearance = require(script.Parent.V2ShowroomRules)
 
 local Rules = {}
 Rules.MaxOwned = 1
+Rules.MaxShowroom = Appearance.MaxShowroom
 Rules.MinServiceCount = 3
 Rules.CooldownSeconds = 600
 Rules.MaxSales = 100000
@@ -47,7 +49,8 @@ local function refCost(offer: any): number
 end
 
 function Rules.New(): any
-    return { Owned = {}, NextBuyAt = 0, TotalSales = 0, TotalContribution = 0 }
+    return { Owned = {}, Showroom = {}, ShowroomSeen = {},
+        NextBuyAt = 0, TotalSales = 0, TotalContribution = 0 }
 end
 
 -- Não aceitar carros, custos, id ou stage inventados em dados corrompidos.
@@ -74,9 +77,36 @@ function Rules.Sanitize(raw: any): any
             table.insert(state.Owned, {
                 Uid = item.Uid, Variant = item.Variant, Stage = stage,
                 Style = style, RiskFee = risk,
+                Finish = item.Finish, Wheels = item.Wheels,
                 PurchasedAt = integer(item.PurchasedAt, 0, 4102444800),
             })
+            Appearance.NormalizeCar(state.Owned[#state.Owned])
             seen[item.Uid] = true
+        end
+    end
+    -- V2-10: somente carros RESTAURADOS podem permanecer expostos.
+    -- A mesma identidade nunca pode existir no estoque e no showroom.
+    local showroom = type(raw.Showroom) == "table" and raw.Showroom or {}
+    for _, item in ipairs(showroom) do
+        if #state.Showroom >= Rules.MaxShowroom then break end
+        if type(item) == "table" and type(item.Uid) == "string"
+            and #item.Uid >= 12 and #item.Uid <= 64 and not seen[item.Uid]
+            and item.Stage == "Restored" and Rules.Offers[item.Variant] then
+            local offer = Rules.Offers[item.Variant]
+            local copy = {
+                Uid = item.Uid, Variant = item.Variant, Stage = "Restored",
+                Style = item.Style, Finish = item.Finish, Wheels = item.Wheels,
+                RiskFee = integer(item.RiskFee,0,offer.RiskMax),
+                PurchasedAt = integer(item.PurchasedAt,0,4102444800),
+            }
+            Appearance.NormalizeCar(copy)
+            table.insert(state.Showroom,copy)
+            seen[item.Uid] = true
+        end
+    end
+    if type(raw.ShowroomSeen) == "table" then
+        for variant in pairs(Rules.Offers) do
+            if raw.ShowroomSeen[variant] == true then state.ShowroomSeen[variant] = true end
         end
     end
     return state
@@ -122,26 +152,35 @@ function Rules.Public(profile: any, now: number): any
         })
     end
     local owned = {}
-    for _, car in ipairs(state.Owned) do
+    local showroomPublic = {}
+    local function visibleCar(car: any): any
         local offer = Rules.Offers[car.Variant]
-        table.insert(owned, {
+        return {
             Uid = car.Uid, Variant = car.Variant, Stage = car.Stage,
-            Style = car.Style, Name = offer.Name, VehicleName = offer.VehicleName,
+            Style = car.Style, Finish = car.Finish, Wheels = car.Wheels,
+            Name = offer.Name, VehicleName = offer.VehicleName,
             VehicleModel = Catalog.VehicleModels[offer.VehicleName],
             RepairFee = offer.RepairFee + car.RiskFee,
             RiskFee = car.RiskFee, Parts = table.clone(offer.Parts),
             PartsReferenceCost = refCost(offer),
+            CosmeticSpend = Appearance.Spent(car),
             SellPrice = car.Stage == "Restored" and
-                (offer.SalePrice + (car.Style ~= "Factory" and Rules.StyleBonus or 0))
+                (offer.SalePrice + Appearance.SaleBonus(car))
                 or offer.ScrapPrice,
-        })
+        }
     end
+    for _, car in ipairs(state.Owned) do table.insert(owned,visibleCar(car)) end
+    for _, car in ipairs(state.Showroom) do table.insert(showroomPublic,visibleCar(car)) end
+    local recognized = 0
+    for _ in pairs(state.ShowroomSeen) do recognized += 1 end
     return {
         CanBuy = allowed, BlockedReason = why,
         NextBuyAt = state.NextBuyAt, TotalSales = state.TotalSales,
         TotalContribution = state.TotalContribution, Capacity = Rules.MaxOwned,
         MinServices = Rules.MinServiceCount, StyleCost = Rules.StyleCost,
-        Offers = offers, Owned = owned,
+        Offers = offers, Owned = owned, Showroom = showroomPublic,
+        ShowroomCapacity = Rules.MaxShowroom, ShowroomReputationEarned = recognized,
+        Customizations = Appearance.Public(),
     }
 end
 
@@ -157,9 +196,10 @@ function Rules.Plan(profile: any, operation: any, input: any, now: number,
         return nil, "Ação inválida."
     end
     local market = Rules.Sanitize(profile.UsedMarket)
-    local function result(delta: number, reason: string, parts: any?, message: string): any
+    local function result(delta: number, reason: string, parts: any?,
+        message: string, reputation: number?): any
         return { Market = market, Delta = delta, Reason = reason,
-            Parts = parts, Message = message }
+            Parts = parts, Message = message, ReputationAward = reputation or 0 }
     end
     if operation == "Buy" then
         local permitted, why = Rules.CanBuy(profile, now)
@@ -172,14 +212,46 @@ function Rules.Plan(profile: any, operation: any, input: any, now: number,
             or chosenRisk < 0 or chosenRisk > offer.RiskMax then
             return nil, "Proposta inválida."
         end
+        for _, exhibit in ipairs(market.Showroom) do
+            if exhibit.Uid == freshUid then return nil, "Identificador já utilizado." end
+        end
         table.insert(market.Owned, {
             Uid = freshUid, Variant = input, Stage = "Purchased",
-            Style = "Factory", RiskFee = chosenRisk, PurchasedAt = now,
+            Style = "Factory", Finish = "Standard", Wheels = "Stock",
+            RiskFee = chosenRisk, PurchasedAt = now,
         })
         return result(-offer.BuyPrice, "Usados: compra de " .. offer.Name,
             nil, "Carro comprado. Avalie, desmonte e restaure antes da venda.")
     end
     local car = market.Owned[1]
+    if (operation == "Recall" or operation == "SellExhibit") then
+        local index: number? = nil
+        for i, exhibit in ipairs(market.Showroom) do
+            if exhibit.Uid == input then index = i break end
+        end
+        if not index then return nil, "Veículo não encontrado no showroom." end
+        local exhibit = market.Showroom[index]
+        if operation == "Recall" then
+            if #market.Owned > 0 then
+                return nil, "Finalize o veículo em restauração antes de retirar o carro da vitrine."
+            end
+            table.insert(market.Owned, exhibit)
+            table.remove(market.Showroom,index)
+            return result(0, "", nil,"Veículo devolvido à área de preparação para personalização.")
+        end
+        local showroomOffer = Rules.Offers[exhibit.Variant]
+        local sale = showroomOffer.SalePrice + Appearance.SaleBonus(exhibit)
+        if profile.Coins + sale > 1000000000000 then return nil, "Saldo acima do limite." end
+        local contribution = sale - showroomOffer.BuyPrice - showroomOffer.RepairFee
+            - exhibit.RiskFee - refCost(showroomOffer) - Appearance.Spent(exhibit)
+        market.TotalSales += 1
+        market.TotalContribution = math.clamp(market.TotalContribution + contribution,
+            -100000000, 100000000)
+        table.remove(market.Showroom,index)
+        market.NextBuyAt = now + Rules.CooldownSeconds
+        return result(sale, "Usados: venda showroom de " .. showroomOffer.Name,
+            nil, string.format("Vendido por %d; contribuição estimada %+d.",sale,contribution))
+    end
     if not car or car.Uid ~= input then return nil, "Esse veículo não está na sua coleção." end
     local offer = Rules.Offers[car.Variant]
     if operation == "Inspect" and car.Stage == "Purchased" then
@@ -200,6 +272,28 @@ function Rules.Plan(profile: any, operation: any, input: any, now: number,
         car.Stage = "Restored"
         return result(-due, "Usados: restauração de " .. offer.Name,
             table.clone(offer.Parts), "Restauração concluída; revisão visual disponível.")
+    elseif operation == "Customize" and car.Stage == "Restored" then
+        local category, choice = Appearance.Parse(chosenRisk)
+        local quote, errorMessage = Appearance.Quote(category, choice, car)
+        if not quote then return nil, errorMessage end
+        if profile.Coins < quote.Cost then return nil, "Saldo insuficiente para esta personalização." end
+        if category == "Paint" then car.Style = choice
+        elseif category == "Finish" then car.Finish = choice
+        else car.Wheels = choice end
+        return result(-quote.Cost, "Usados: personalizado " .. quote.Name,
+            nil, quote.Name .. " aplicado. Bônus de revenda menor que o gasto.")
+    elseif operation == "Showcase" and car.Stage == "Restored" then
+        if #market.Showroom >= Rules.MaxShowroom then
+            return nil, "As duas vagas de exposição já estão ocupadas."
+        end
+        local reputation = market.ShowroomSeen[car.Variant] and 0 or 1
+        market.ShowroomSeen[car.Variant] = true
+        table.insert(market.Showroom, car)
+        market.Owned = {}
+        return result(0, "", nil,
+            reputation > 0 and "Veículo exibido. Reputação +1 pela primeira exposição desta variante."
+                or "Veículo exibido. Esta variante já concedeu reputação anteriormente.",
+            reputation)
     elseif operation == "Paint" and car.Stage == "Restored" and car.Style == "Factory" then
         if chosenRisk ~= "Blue" and chosenRisk ~= "Red" then
             return nil, "Escolha uma pintura disponível."
@@ -209,10 +303,10 @@ function Rules.Plan(profile: any, operation: any, input: any, now: number,
         return result(-Rules.StyleCost, "Usados: pintura",
             nil, "Pintura aplicada. Personalização não garante lucro.")
     elseif operation == "Sell" and car.Stage == "Restored" then
-        local sale = offer.SalePrice + (car.Style ~= "Factory" and Rules.StyleBonus or 0)
+        local sale = offer.SalePrice + Appearance.SaleBonus(car)
         if profile.Coins + sale > 1000000000000 then return nil, "Saldo acima do limite." end
         local contribution = sale - offer.BuyPrice - offer.RepairFee - car.RiskFee
-            - refCost(offer) - (car.Style ~= "Factory" and Rules.StyleCost or 0)
+            - refCost(offer) - Appearance.Spent(car)
         market.TotalSales += 1
         market.TotalContribution = math.clamp(market.TotalContribution + contribution,
             -100000000, 100000000)

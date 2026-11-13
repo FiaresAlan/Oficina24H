@@ -39,7 +39,7 @@ Config.EmployeeHireCost = 300
 Config.EmployeeSalary = 60
 Config.PaydaySeconds = 300
 Config.MaxEmployees = 2
-Config.EmployeeWorkSeconds = 60 -- funcionário é mais lento que o jogador (e só pega carro quando há 2+ esperando)
+Config.EmployeeWorkSeconds = 60 -- 1 carro: prioridade de 25s para o dono; 2+ esperando: funcionário ajuda logo
 Config.EmployeeQuality = 72 -- qualidade (%) do serviço feito por funcionário
 
 -- Oficinas rivais (NPC) ocupam lotes livres para o bairro não parecer vazio; sempre sobra lote para quem entra.

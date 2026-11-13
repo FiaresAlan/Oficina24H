@@ -399,8 +399,9 @@ function RepairGame.new(gui: ScreenGui): { Start: (any) -> (), IsActive: () -> b
 
 	finish = function()
 		waitingResult = true
-		presses.Token = sessionToken -- os índices 1..N continuam sendo tempos do minijogo
-		finishPacket = { JobId = jobId, Presses = presses }
+		local input: any = table.clone(presses)
+		input.Token = sessionToken -- índices 1..N continuam sendo tempos do minijogo
+		finishPacket = { JobId = jobId, Presses = input }
 		finishRetries, outcomeChecks = 0, 0
 		task.delay(FEEDBACK_PAUSE, function()
 			if active and waitingResult and finishPacket then

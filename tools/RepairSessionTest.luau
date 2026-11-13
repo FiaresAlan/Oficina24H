@@ -28,4 +28,16 @@ check("timing protegido aceita apenas seu token", Rules.CanCancel({ JobId = "job
 check("timing protegido recusa token ausente", not Rules.CanCancel({ JobId = "job_9", Token = "timing-token" }, "job_9", nil))
 check("timing de outra OS é recusado", not Rules.CanCancel(session, "job_2", nil))
 check("sessão inválida não autoriza cancelamento", not Rules.CanCancel("bad", nil, nil))
+local signed = { JobId = "job_9", Token = "11111111-2222-3333-4444-555555555555", Plan = { Kind = "Timing" } }
+check("timing: aceita seu token de finalização", Rules.MatchesFinish(signed, "job_9", {
+	Token = signed.Token, 0.6, 1.7, 2.1,
+}))
+check("timing: não aceita sessão sem token", not Rules.MatchesFinish({ JobId = "job_9" }, "job_9", {}))
+check("timing: não aceita token omitido", not Rules.MatchesFinish(signed, "job_9", { 0.6 }))
+check("timing: não aceita token antigo", not Rules.MatchesFinish(signed, "job_9", { Token = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee" }))
+check("timing: não aceita outra OS", not Rules.MatchesFinish(signed, "job_10", { Token = signed.Token }))
+check("timing: não aceita payload estranho", not Rules.MatchesFinish(signed, "job_9", "bad"))
+local operationSession = { JobId = "job_10", Token = "eeeeeeee-1111-2222-3333-444444444444", Plan = { Kind = "Operations" } }
+check("operação: mantém proteção equivalente", Rules.MatchesFinish(operationSession, "job_10", { Token = operationSession.Token }))
+check("operação: rejeita pacote timing de outro token", not Rules.MatchesFinish(operationSession, "job_10", { Token = signed.Token }))
 return table.concat(results, "\n")

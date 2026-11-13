@@ -15,6 +15,14 @@ function RepairSessionRules.IsActive(session: any?, now: number, maxSeconds: num
 	return elapsed >= 0 and elapsed <= maxSeconds
 end
 
+-- Finalização protegida em TODOS os tipos de reparo: não confiar no cliente
+-- para concluir a sessão de outra OS (pacotes atrasados, replay de rede).
+function RepairSessionRules.MatchesFinish(session: any?, jobId: any, payload: any): boolean
+	return type(session) == "table" and session.JobId == jobId
+		and type(session.Token) == "string" and #session.Token >= 16
+		and type(payload) == "table" and payload.Token == session.Token
+end
+
 -- Cancelamento atrasado de qualquer painel (timing ou operações) nunca derruba sessão nova.
 -- Um estado sem token é inválido; não criar exceções para reparos legacy.
 function RepairSessionRules.CanCancel(session: any?, jobId: any, token: any): boolean

@@ -1063,8 +1063,7 @@ function WorkshopService.FinishRepair(player: Player, jobId: string, presses: an
     end
     -- Todo reparo exige o seu token (inclusive o antigo minijogo de timing).
     -- Pacote atrasado de outro reparo jamais consome peças da sessão atual.
-    if type(presses) ~= "table" or type(presses.Token) ~= "string"
-        or presses.Token ~= session.Token then
+    if not RepairSessionRules.MatchesFinish(session, jobId, presses) then
         return false, "Identificador de sessão inválido."
     end
     Repairs[player.UserId] = nil -- sessão de uso único: reenviar não paga duas vezes

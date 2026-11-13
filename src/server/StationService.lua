@@ -160,7 +160,7 @@ local function buildStations(plot: Instance, root: CFrame, level: number): Folde
 	local tagFace = label(tag, Enum.NormalId.Back, "Texto")
 	text(tagFace, "T", UDim2.fromScale(0, 0), UDim2.fromScale(1, 1), DARK, Enum.Font.GothamBlack, "ESTOQUE")
 	shelf.Parent = folder
-	-- Quadro de funcionários (só a partir do Centro automotivo, nível 2)
+	-- Quadro de funcionários: disponível quando o nível atual permite contratação (2 boxes ou mais).
 	local f = specs.Staff
 	if not f then
 		folder.Parent = plot

@@ -797,3 +797,11 @@ Detalhes em `docs/AUDITORIA_GERAL.md`. Resumo:
 - **Regressões:** `StaffAssignmentTest`, `PersistenceTest` e contratos do CI (ver `docs/TESTE_C20_ORDEM_NPC_EXCLUSIVA_2026-11-13.md`). Validação runtime/Studio pendente.
 - **Assets:** usuário confirmou download e organização local de `Car Repair Garage and MOT Workshop.glb`, `CGTrader Low Poly City`, `Shuriken Town Streets & Park v1`, `Shuriken Houses` e `Shuriken City`. Ainda não importados no place; `docs/GUIA_UNICO_ASSETS_V1.md` atualizado.
 - **Fase V2:** não iniciada; V1 ainda tem P0 de liquidação colaborativa e homologação de assets.
+
+
+## 2026-11-13 — V1 C21: provas de repasses só são removidas após confirmação de salvamento
+- **Problema:** o arquivo privado do dono expulsava provas antigas quando chegava a 1024 entradas, mesmo que o contratado ainda estivesse pendente.
+- **C21:** `OwnerSettlementProofRules.CanAdd` recusa novos registros ao chegar ao teto sem apagar prova anterior. `CreditRepairOnce` testa a capacidade antes de mutar saldo/ledger; `FinishRepair` bloqueia serviço colaborativo antes de consumir peças caso o arquivo esteja cheio.
+- **Limpeza segura:** a conclusão dos dois perfis inicia remoção da claim do contratado, salva a conta do trabalhador e só então remove a prova correspondente da conta do dono. Em falha de Save, mantém prova.
+- **Regressões escritas:** `OwnerSettlementProofRulesTest`, `PersistenceTest` (falha do DataStore, idempotência, reconexão, 1024 provas) e `verify_contracts.py`. Detalhes em `docs/TESTE_C21_PROVAS_REPASSE_2026-11-13.md`.
+- **Limitações:** não há atomicidade entre duas chaves, proofs/claims antigos de trabalhadores offline podem ocupar espaço e o Studio ainda não foi executado. A V2 continua somente documental.

@@ -1077,6 +1077,12 @@ function DataService.TradeUsedCar(player: Player, operation: any, itemId: any, s
     -- fica estado parcial: essa condição foi validada no plano.
     profile.UsedMarket = planned.Market
     DataService.AddCoins(player, planned.Delta, planned.Reason)
+    -- Primeiro exemplar de cada variante exposto concede +1 de reputação.
+    -- A marca de variante e a reputação mudam no MESMO perfil sem yield.
+    -- Trocar, retirar, reconectar ou revender o mesmo modelo não repete o prêmio.
+    if planned.ReputationAward and planned.ReputationAward > 0 then
+        DataService.AddReputation(player, planned.ReputationAward)
+    end
     Dirty[player.UserId] = true
     return true, planned.Message
 end

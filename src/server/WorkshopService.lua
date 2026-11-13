@@ -1588,6 +1588,7 @@ function WorkshopService.Checkout(player: Player, items: any)
         return false, "Registre sua oficina primeiro."
     end
     local total = 0
+    local partSpend, equipmentSpend = 0, 0
     local partQuantities: { [string]: number } = {}
     local equipmentIds: { [string]: boolean } = {}
     for _, line in ipairs(items) do
@@ -1608,6 +1609,7 @@ function WorkshopService.Checkout(player: Player, items: any)
                 return false, "Quantidade acima do limite por compra."
             end
             total += part.Cost * quantity
+            partSpend += part.Cost * quantity
         elseif line.Kind == "Equipment" then
             local equipment = Catalog.Equipment[line.Id]
             if not equipment or quantity ~= 1 or equipmentIds[line.Id] or ownsEquipment(workshop, line.Id) then
@@ -1615,6 +1617,7 @@ function WorkshopService.Checkout(player: Player, items: any)
             end
             equipmentIds[line.Id] = true
             total += equipment.Cost
+            equipmentSpend += equipment.Cost
         else
             return false, "Item inválido."
         end
@@ -1630,7 +1633,11 @@ function WorkshopService.Checkout(player: Player, items: any)
         return false, "Não cabe tanto equipamento no seu prédio: amplie a oficina na Construtora."
     end
     -- tudo validado: aplica sem yield entre a checagem e a gravação
-    DataService.AddCoins(player, -total, "Loja de peças")
+    -- V2-08: compra mista não pode classificar máquinas como peças.
+    -- As duas parcelas são debitadas sem yield dentro do mesmo perfil
+    -- após validar o total; jamais cobrar duas vezes a mesma parcela.
+    if partSpend > 0 then DataService.AddCoins(player, -partSpend, "Loja de peças") end
+    if equipmentSpend > 0 then DataService.AddCoins(player, -equipmentSpend, "Compra: equipamentos na loja") end
     for partId, quantity in pairs(partQuantities) do
         DataService.AddParts(player, partId, quantity)
         DataService.FulfillSupplyRequest(player, partId, quantity)

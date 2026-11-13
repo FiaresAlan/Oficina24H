@@ -1129,8 +1129,15 @@ end
 function DataService.SetEmployees(player: Player, count: number)
 	local profile = DataService.Get(player)
 	if profile then
-		profile.Employees = math.clamp(math.floor(count), 0, Config.MaxEmployees)
-		DataService.MarkDirty(player)
+        local previous=profile.Employees or 0
+        local newCount=math.clamp(math.floor(count),0,Config.MaxEmployees)
+        if newCount>previous then
+            for i=previous+1,newCount do
+                profile.StaffSlots[i]=V2StaffRules.DefaultSlot()
+            end
+        end
+        profile.Employees=newCount
+        DataService.MarkDirty(player)
 	end
 end
 

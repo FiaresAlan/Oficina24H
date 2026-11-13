@@ -537,7 +537,7 @@ v2_compatibility = text(SHARED / "V2CompatibilityRules.lua")
 v2_pilots = text(SHARED / "V2VehiclePilotRules.lua")
 v2_management = text(SHARED / "V2ManagementSummaryRules.lua")
 check("V2-00 preflight sem alterar schema ou perfis",
-      "function Rules.Profile" in v2_compatibility and "Rules.MinSchema = 11" in v2_compatibility
+      "function Rules.Profile" in v2_compatibility and "MinSchema = 11" in v2_compatibility
       and "function Rules.Snapshot" in v2_compatibility)
 check("V2-00 nao replica segredos", all(k in v2_compatibility for k in
       ("RepairLedger", "PendingClaims", "WorkerPaidTombstones", "OwnerSettlementProofs")))

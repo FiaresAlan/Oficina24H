@@ -479,16 +479,19 @@ end
 watch("Vehicles")
 watch("Arrivals")
 
-local camera = workspace.CurrentCamera
+local lastComponentState: { [Model]: { [string]: string } } = {}
 
 RunService.RenderStepped:Connect(function(dt: number)
-	stepRoutes()
-	local now = os.clock()
-	local camPos = camera.CFrame.Position
+    stepRoutes()
+    local camera = workspace.CurrentCamera
+    if not camera then return end
+    local now = os.clock()
+    local camPos = camera.CFrame.Position
 	for model, fx in pairs(cars) do
 		if not model.Parent or not fx.Root.Parent then
 			clearFx(fx)
 			fx.Engine:Destroy()
+            lastComponentState[model] = nil
 			cars[model] = nil
 			continue
 		end
@@ -539,6 +542,26 @@ RunService.RenderStepped:Connect(function(dt: number)
 		elseif fx.Engine.Volume <= 0.02 and fx.Engine.IsPlaying then
 			fx.Engine:Stop()
 		end
+		-- Feedback mecânico: somente mudança autorizada de estado (sem despesas ou servidor).
+        if model:GetAttribute("V2PilotId") ~= nil then
+            local previous = lastComponentState[model]
+            if not previous then
+                previous = {}
+                lastComponentState[model] = previous
+            end
+            for _, id in ipairs({ "Hood", "WheelFL", "WheelFR", "WheelRL", "WheelRR" }) do
+                local value = model:GetAttribute("V2State_" .. id)
+                if type(value) == "string" then
+                    if previous[id] and previous[id] ~= value then
+                        local s = sound(fx.Root,
+                            id == "Hood" and SoundIds.Ratchet or SoundIds.AirWrench, 0.18, false)
+                        s:Play()
+                        game:GetService("Debris"):AddItem(s, 4)
+                    end
+                    previous[id] = value
+                end
+            end
+        end
 		-- efeitos de defeito / reparo
 		applyFx(fx)
 		local repairing = model:GetAttribute("Reparando") == true and model:GetAttribute("Estacionado") == true

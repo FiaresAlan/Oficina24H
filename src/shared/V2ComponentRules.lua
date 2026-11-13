@@ -101,10 +101,8 @@ end
 function Rules.ReadyToRepair(defectId: any, pilotId: any, states: any): (boolean, string)
     if type(pilotId) ~= "string" or type(states) ~= "table" then return true, "" end
     if defectId == "FlatTire" then
-        for _, id in ipairs({ "WheelFL", "WheelFR", "WheelRL", "WheelRR" }) do
-            if states[id] == "Detached" then return true, "" end
-        end
-        return false, "Retire uma roda no ponto físico depois de apoiar o carro."
+        if states.WheelFL == "Detached" then return true, "" end
+        return false, "Retire a roda dianteira esquerda depois de apoiar o carro."
     end
     if defectId == "WeakBattery" or defectId == "Overheating" then
         if states.Hood == "Open" then return true, "" end

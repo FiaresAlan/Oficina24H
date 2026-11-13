@@ -34,7 +34,8 @@ test("distancia valida e finita",R.IsNear(Vector3.zero,Vector3.new(1,0,1),8)
 test("reparo de bateria exige capo",R.ReadyToRepair("WeakBattery","Hatch",{Hood="Closed"})==false
     and R.ReadyToRepair("WeakBattery","Hatch",{Hood="Open"})==true)
 test("reparo de pneu exige roda retirada",R.ReadyToRepair("FlatTire","Sedan",{WheelFL="Mounted"})==false
-    and R.ReadyToRepair("FlatTire","Sedan",{WheelRR="Detached"})==true)
+    and R.ReadyToRepair("FlatTire","Sedan",{WheelFL="Detached"})==true
+    and R.ReadyToRepair("FlatTire","Sedan",{WheelRR="Detached"})==false)
 test("outro carro preserva V1",R.ReadyToRepair("FlatTire",nil,{})==true)
 test("partida bloqueada com porta aberta/roda solta",not R.MayDrive({DoorLeft="Open"})
     and not R.MayDrive({WheelFR="Detached"}) and R.MayDrive({Hood="Closed",WheelFR="Mounted"}))

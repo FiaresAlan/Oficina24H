@@ -73,6 +73,13 @@ for i = 1, plan.Steps do allPerfect[i] = perfectAt(i) end
 
 -- Validação dos toques
 check("toques: válidos aceitos", play(allPerfect).Valid)
+-- V1: a sessão timing também leva token, mas só índices numéricos contam como toques.
+local signedInput: any = table.clone(allPerfect)
+signedInput.Token = "11111111-2222-3333-4444-555555555555"
+local signedResult = play(signedInput)
+check("timing assinado conserva avaliação e quantidade de toques",
+	signedResult.Valid and signedResult.Quality == play(allPerfect).Quality
+		and #signedInput == #allPerfect)
 check("toques: quantidade errada ou tipo errado recusados", not play({ 1, 1 }).Valid and not R.Evaluate(plan, "x", 5, neutral).Valid and not R.Evaluate(plan, nil, 5, neutral).Valid)
 local function with(i: number, v: any): { any } local c = table.clone(allPerfect) c[i] = v return c end
 check("toques: NaN/infinito/negativo/zero/enorme/texto recusados",

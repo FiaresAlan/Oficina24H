@@ -75,6 +75,20 @@ check("runner has no duplicate suite names", len(set(suite_ids)) == len(suite_id
 for suite in suite_ids:
     check(f"tool exists: {suite}", (TOOLS / f"{suite}.luau").is_file())
 check("runner includes StudioPlaceAudit", "StudioPlaceAudit" in suite_ids)
+snapshot_rules = text(SHARED / "SnapshotCacheRules.lua")
+main_src = text(ROOT / "src" / "server" / "Main.server.lua")
+check("C27: generation-aware snapshot cache avoids stale second copy",
+      "function Cache.Invalidate" in snapshot_rules
+      and "function Cache.Get" in snapshot_rules
+      and "state.Generation == generation" in snapshot_rules
+      and "SnapshotCacheRules.Get(snapshotStates" in main_src
+      and "lastSnapshotBuild" not in main_src)
+check("C27: prompts/actions/upgrades and logout invalidate snapshot",
+      main_src.count("invalidateSnapshot(player.UserId)") >= 6
+      and "SnapshotCacheRules.Clear(snapshotStates, player.UserId)" in main_src)
+check("C27: snapshot coherence regression registered",
+      '"SnapshotCacheRulesTest"' in runner
+      and (TOOLS / "SnapshotCacheRulesTest.luau").is_file())
 job_exit = text(SHARED / "JobExitRules.lua")
 service_flow = text(TOOLS / "AllServiceActionFlowTest.luau")
 check("C26: logout never leaves owner jobs available without a vehicle",

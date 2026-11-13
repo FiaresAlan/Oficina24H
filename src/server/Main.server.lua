@@ -12,6 +12,12 @@ local StationService = require(script.Parent.StationService)
 local RivalService = require(script.Parent.RivalService)
 local ProgressService = require(script.Parent.ProgressService)
 local ContractService = require(script.Parent.ContractService)
+local SnapshotCacheRules = require(ReplicatedStorage.Shared.SnapshotCacheRules)
+
+local snapshotStates: { [number]: any } = {}
+local function invalidateSnapshot(userId: number)
+    SnapshotCacheRules.Invalidate(snapshotStates, userId)
+end
 
 local remotesFolder = Instance.new("Folder")
 remotesFolder.Name = "OficinaRemotes"
@@ -100,6 +106,7 @@ EquipmentUpgradePads.Start()
 EquipmentUpgradePads.SetPurchaseHandler(function(player: Player, equipmentId: string, plot: Instance)
     local ok, message = WorkshopService.UpgradeOwnedEquipment(player, equipmentId, plot)
     if ok then
+        invalidateSnapshot(player.UserId)
         local profile = DataService.Get(player)
         if profile then EquipmentUpgradePads.Sync(player, profile.Equipment, profile.EquipmentLevels) end
     end
@@ -139,14 +146,17 @@ task.spawn(function()
 end)
 
 WorkshopService.SetRatingNotifier(function(owner: Player, info: any)
+    invalidateSnapshot(owner.UserId)
     actionEvent:FireClient(owner, "Rated", info)
 end)
 WorkshopService.SetEventSender(function(player: Player, kind: string, payload: any)
+    invalidateSnapshot(player.UserId)
     actionEvent:FireClient(player, kind, payload) -- "RepairStart" / "RepairDone"
 end)
 
 -- Retenção: diária, missões, conquistas, códigos e Hora do Rush (ProgressService).
 ProgressService.Init(DataService, function(player: Player, message: string, ok: boolean)
+    invalidateSnapshot(player.UserId)
     actionEvent:FireClient(player, "Notice", { Message = message, Success = ok })
 end, function(kind: string, payload: any)
     actionEvent:FireAllClients(kind, payload)
@@ -155,6 +165,7 @@ ProgressService.Start()
 
 -- Contratos de frota: quando o tempo acaba, um rival do bairro "pega" o contrato.
 ContractService.Init(DataService, function(player: Player, message: string, ok: boolean)
+    invalidateSnapshot(player.UserId)
     actionEvent:FireClient(player, "Notice", { Message = message, Success = ok })
 end, function(kind: string, payload: any)
     actionEvent:FireAllClients(kind, payload)
@@ -164,12 +175,7 @@ end, function(): string?
 end)
 ContractService.Start()
 
-local snapshotCache: { [number]: { At: number, Value: any } } = {} -- ver GetSnapshot abaixo
-local lastSnapshotBuild: { [number]: { At: number, Value: any } } = {}
-Players.PlayerRemoving:Connect(function(player)
-    lastSnapshotBuild[player.UserId] = nil
-    snapshotCache[player.UserId] = nil
-end)
+-- O cache por jogador foi consolidado em SnapshotCacheRules.
 
 -- Prompts "E" (carro e cliente) também passam por limite por jogador: sem ele dava para disparar Interact em rajada.
 local lastInteractAt: {[number]: number} = {}
@@ -180,7 +186,7 @@ local function onPrompt(player: Player, jobId: string, kind: string)
     local nowClock = os.clock()
     if nowClock - (lastInteractAt[player.UserId] or 0) < 0.5 then return end
     lastInteractAt[player.UserId] = nowClock
-    snapshotCache[player.UserId] = nil
+    invalidateSnapshot(player.UserId)
     local ok, message = WorkshopService.Interact(player, jobId, kind)
     sendResult(player, ok, message)
 end
@@ -190,7 +196,7 @@ EquipmentService.SetUseHandler(function(player: Player, equipmentId: string, plo
     local nowClock = os.clock()
     if nowClock - (lastInteractAt[player.UserId] or 0) < 0.5 then return end
     lastInteractAt[player.UserId] = nowClock
-    snapshotCache[player.UserId] = nil
+    invalidateSnapshot(player.UserId)
     local ok, message = WorkshopService.UseEquipment(player, equipmentId, plot)
     sendResult(player, ok, message)
 end)
@@ -200,7 +206,7 @@ StationService.SetPromptHandler(function(player: Player, _plot: Instance, action
     local nowClock = os.clock()
     if nowClock - (lastInteractAt[player.UserId] or 0) < 0.5 then return end
     lastInteractAt[player.UserId] = nowClock
-    snapshotCache[player.UserId] = nil
+    invalidateSnapshot(player.UserId)
     local ok, message
     if action == "Contratar" then
         ok, message = WorkshopService.HireEmployee(player)
@@ -212,25 +218,16 @@ StationService.SetPromptHandler(function(player: Player, _plot: Instance, action
     sendResult(player, ok, message)
 end)
 
--- GetSnapshot custa CPU (percorre ordens e ranking): resposta em cache por 0,4 s por jogador contra laço de InvokeServer.
+-- C27: cache de 0,4 s por jogador, invalidado por geração após ações. Sem segundo cache obsoleto.
 snapshotFunction.OnServerInvoke = function(player: Player)
     local profile = DataService.Get(player)
     if not profile then
         return { Ready = false }
     end
-    local cached = snapshotCache[player.UserId]
-    if cached and os.clock() - cached.At < 0.4 then
-        return cached.Value
-    end
-    -- limite próprio do snapshot: mesmo com ações limpando o cache, no máximo ~4 montagens por segundo por jogador
-    local last = lastSnapshotBuild[player.UserId]
-    if last and os.clock() - last.At < 0.25 then
-        return last.Value
-    end
-    local value = WorkshopService.GetSnapshot(player)
-    snapshotCache[player.UserId] = { At = os.clock(), Value = value }
-    lastSnapshotBuild[player.UserId] = snapshotCache[player.UserId]
-    return value
+    -- C27: cada ação invalidada obriga uma montagem nova, sem segunda cópia velha.
+    return SnapshotCacheRules.Get(snapshotStates, player.UserId, os.clock(), function()
+        return WorkshopService.GetSnapshot(player)
+    end)
 end
 
 actionEvent.OnServerEvent:Connect(function(player: Player, action: any, payload: any)
@@ -268,7 +265,7 @@ actionEvent.OnServerEvent:Connect(function(player: Player, action: any, payload:
     end
     if now - (perPlayer[action] or 0) < 0.25 then return end
     perPlayer[action] = now
-    snapshotCache[player.UserId] = nil -- a ação vai mudar o estado: o próximo snapshot não pode vir do cache
+    invalidateSnapshot(player.UserId) -- a ação vai mudar o estado: o próximo snapshot não pode vir do cache
 
     local success = false
     local message = "Ação desconhecida."
@@ -367,6 +364,6 @@ end
 Players.PlayerRemoving:Connect(function(player)
     lastActionAt[player.UserId] = nil
     lastOutcomeQuery[player.UserId] = nil
-    snapshotCache[player.UserId] = nil
+    SnapshotCacheRules.Clear(snapshotStates, player.UserId)
     WorkshopService.PlayerLeft(player.UserId)
 end)

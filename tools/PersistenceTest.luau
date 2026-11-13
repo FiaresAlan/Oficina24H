@@ -1328,6 +1328,34 @@ do
             Target=2,Cost=6000,Source="Construtora"},102))
 end
 
+-- V2-06: cotejo de tier e preco na PRÓPRIA transação do DataService.
+do
+    local store=newStore()
+    local A=server(store,"v2-equipment-quote-A")
+    local player=fakePlayer(2902)
+    A.Load(player)
+    local profile=A.Get(player)
+    local before=profile.Coins
+    check("V2-06: oferta de tier saltado e recusada",
+        not A.UpgradeOwnedEquipment(player,"BasicToolset",3,180)
+        and profile.Coins==before and A.GetEquipmentLevel(player,"BasicToolset")==1)
+    check("V2-06: preco incorreto e recusado",
+        not A.UpgradeOwnedEquipment(player,"BasicToolset",2,420)
+        and profile.Coins==before)
+    check("V2-06: somente cotacao exata compra nivel 2",
+        A.UpgradeOwnedEquipment(player,"BasicToolset",2,180)
+        and profile.Coins==before-180 and A.GetEquipmentLevel(player,"BasicToolset")==2)
+    check("V2-06: replay da mesma cotacao nao compra nivel 3",
+        not A.UpgradeOwnedEquipment(player,"BasicToolset",2,180)
+        and profile.Coins==before-180 and A.GetEquipmentLevel(player,"BasicToolset")==2)
+    check("V2-06: nivel da maquina salvo",A.Save(player))
+    A.Remove(player)
+    local B=server(store,"v2-equipment-quote-B")
+    B.Load(player)
+    check("V2-06: cotacao confirmada persiste sem debito repetido",
+        B.GetEquipmentLevel(player,"BasicToolset")==2 and B.Get(player).Coins==before-180)
+end
+
 for _, c in ipairs(clones) do c:Destroy() end
 table.insert(results, failures == 0 and "TODOS OS TESTES PASSARAM" or (failures .. " TESTE(S) FALHARAM"))
 return table.concat(results, "\n")

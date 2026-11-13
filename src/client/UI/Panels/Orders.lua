@@ -17,6 +17,7 @@ local ServiceFocusRules = require(ReplicatedStorage.Shared.ServiceFocusRules)
 local RepairStatementRules = require(ReplicatedStorage.Shared.RepairStatementRules)
 local V2ManagementSummaryRules = require(ReplicatedStorage.Shared.V2ManagementSummaryRules)
 local V2ReceptionRules = require(ReplicatedStorage.Shared.V2ReceptionRules)
+local V2ShowroomPreview = require(script.Parent.Parent.V2ShowroomPreview)
 
 local t = Kit.t
 local Orders = {}
@@ -75,6 +76,7 @@ function Orders.new(parent: Instance)
 	pad.Parent = body
 
 	local inviteJobId: string? = nil
+    local previewChoice: { [string]: string } = {} -- somente UI; nunca debita ou muda o perfil
 	local render: () -> ()
 	local tabs: PanelKit.Tabs
 	tabs = PanelKit.tabs(body, {
@@ -807,25 +809,122 @@ function Orders.new(parent: Instance)
                             end)
                         scrap.LayoutOrder=21
                     elseif stage=="Restored" then
-                        if car.Style=="Factory" then
-                            for order,paint in ipairs({"Blue","Red"}) do
-                                local colorButton=PanelKit.button(card,
-                                    "PINTURA "..(paint=="Blue" and "AZUL" or "VERMELHA")
-                                    .." · "..tostring(market.StyleCost or 40),
-                                    "dark",Vector2.new(230,44),function()
-                                        Store.Act("UsedMarket",{
-                                            Operation="Paint",Id=car.Uid,Style=paint})
-                                    end)
-                                colorButton.LayoutOrder=20+order
+                        -- V2-10: personalizações com prévia CLIENT-SIDE e
+                        -- confirmação separada. A seleção nunca é paga nem enviada.
+                        local choices=market.Customizations or {}
+                        local staged=previewChoice[car.Uid]
+                        local selection: any?=nil
+                        local appearance={
+                            Paint=car.Style or "Factory",
+                            Finish=car.Finish or "Standard",
+                            Wheels=car.Wheels or "Stock",
+                        }
+                        local order=12
+                        for _,category in ipairs(choices) do
+                            local current=appearance[category.Id]
+                            local pristine=(category.Id=="Paint" and current=="Factory")
+                                or (category.Id=="Finish" and current=="Standard")
+                                or (category.Id=="Wheels" and current=="Stock")
+                            if pristine then
+                                for _,option in ipairs(category.Options or {}) do
+                                    local spec=category.Id..":"..option.Id
+                                    if staged==spec then selection=option end
+                                    local previewButton=PanelKit.button(card,
+                                        (staged==spec and "VISUALIZANDO: " or "PRÉVIA: ")
+                                        ..option.Name.." · "..option.Cost.." moedas",
+                                        "dark",Vector2.new(285,43),function()
+                                            previewChoice[car.Uid]=spec
+                                            render()
+                                        end)
+                                    previewButton.LayoutOrder=order
+                                    order+=1
+                                end
                             end
+                        end
+                        if staged and selection then
+                            local beforeAfter=V2ShowroomPreview.Pair(
+                                card,car.VehicleModel,car,staged)
+                            beforeAfter.LayoutOrder=40
+                            HudParts.text(card,string.format(
+                                "TOTAL A PAGAR: %d · AUMENTO DE REVENDA: +%d · custo não recuperado: %d",
+                                selection.Cost,selection.ResaleBonus,
+                                selection.Cost-selection.ResaleBonus),18,{
+                                    Font=Theme.FontSemi,LayoutOrder=41,
+                                    TextColor3=Theme.Accent,TextWrapped=true,
+                                    AutomaticSize=Enum.AutomaticSize.Y,
+                                    Size=UDim2.new(1,0,0,0),
+                                })
+                            local apply=PanelKit.button(card,"CONFIRMAR PERSONALIZAÇÃO",
+                                "orange",Vector2.new(285,44),function()
+                                    previewChoice[car.Uid]=nil
+                                    Store.Act("UsedMarket",{
+                                        Operation="Customize",Id=car.Uid,Style=staged,
+                                    })
+                                end)
+                            apply.LayoutOrder=42
+                            local cancel=PanelKit.button(card,"CANCELAR PRÉVIA (GRÁTIS)",
+                                "dark",Vector2.new(285,44),function()
+                                    previewChoice[car.Uid]=nil
+                                    render()
+                                end)
+                            cancel.LayoutOrder=43
+                        elseif staged then
+                            previewChoice[car.Uid]=nil
+                        end
+                        if #(market.Showroom or {}) < (market.ShowroomCapacity or 2) then
+                            local exhibit=PanelKit.button(card,
+                                "EXIBIR NO SHOWROOM · 0 MOEDAS",
+                                "dark",Vector2.new(285,44),function()
+                                    previewChoice[car.Uid]=nil
+                                    Store.Act("UsedMarket",{
+                                        Operation="Showcase",Id=car.Uid,
+                                    })
+                                end)
+                            exhibit.LayoutOrder=60
                         end
                         local sell=PanelKit.button(card,
                             "VENDER · "..tostring(car.SellPrice or 0).." MOEDAS",
-                            "dark",Vector2.new(230,44),function()
+                            "dark",Vector2.new(285,44),function()
+                                previewChoice[car.Uid]=nil
                                 Store.Act("UsedMarket",{Operation="Sell",Id=car.Uid})
                             end)
-                        sell.LayoutOrder=24
+                        sell.LayoutOrder=61
                     end
+                end
+                financialCard(scroll,"ShowroomIntro",30,"SHOWROOM · COLEÇÃO LIMITADA",{
+                    string.format("%d/%d veículos expostos · %d/3 bônus únicos de reputação recebidos",
+                        #(market.Showroom or {}),market.ShowroomCapacity or 2,
+                        market.ShowroomReputationEarned or 0),
+                    "Cada variante exposta pela primeira vez concede +1 reputação; retirar e reexibir não dá novo bônus.",
+                    "Veículos no showroom são decorativos, não ocupam boxes e não podem ser dirigidos.",
+                    "Retirar da exposição é gratuito; vender é irreversível e segue o preço calculado no servidor.",
+                })
+                for i,car in ipairs(market.Showroom or {}) do
+                    local card=financialCard(scroll,"ShowroomCar_"..car.Uid,30+i,
+                        "EXPOSTO · "..string.upper(car.Name or car.Variant),{
+                        "Pintura: "..tostring(car.Style)
+                            .." · acabamento: "..tostring(car.Finish)
+                            .." · rodas: "..tostring(car.Wheels),
+                        string.format("Investimento cosmético total: %d · preço final de revenda: %d",
+                            car.CosmeticSpend or 0,car.SellPrice or 0),
+                        "Exposição preservada entre sessões e separada do estoque para OS.",
+                    })
+                    local thumb,setVehicle=HudParts.vehicleThumb(card,170,84)
+                    thumb.LayoutOrder=10
+                    setVehicle(car.VehicleModel)
+                    if #(market.Owned or {})==0 then
+                        local recall=PanelKit.button(card,"RETIRAR DA VITRINE",
+                            "dark",Vector2.new(260,44),function()
+                                Store.Act("UsedMarket",{Operation="Recall",Id=car.Uid})
+                            end)
+                        recall.LayoutOrder=20
+                    end
+                    local sellExhibit=PanelKit.button(card,
+                        "VENDER VEÍCULO EXPOSTO · "..tostring(car.SellPrice or 0),
+                        "dark",Vector2.new(285,44),function()
+                            Store.Act("UsedMarket",{Operation="SellExhibit",Id=car.Uid})
+                        end)
+                    sellExhibit.LayoutOrder=21
                 end
             end
         elseif id == "team" then

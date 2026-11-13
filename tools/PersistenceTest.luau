@@ -948,6 +948,122 @@ do
 		A.Save(worker) and #store.data["u_2332"].PendingClaims == 1)
 end
 
+-- C24: provas quitadas vão para tombstones apenas depois que a
+-- claim do mecânico e a prova do dono foram salvas como encerradas.
+do
+	local Paid = require(game.ReplicatedStorage.Shared.WorkerSettlementProofRules)
+	local Tombs = require(game.ReplicatedStorage.Shared.WorkerPaidTombstoneRules)
+	local store = newStore()
+	local A = server(store, "workerArchive24-A")
+	local owner, worker = fakePlayer(2411), fakePlayer(2412)
+	local token = "c24aaaaa-1111-2222-3333-eeeeeeeeeeee"
+	A.Load(owner) A.Load(worker)
+	local before = A.Get(worker).Coins
+	check("C24: claim do contratado é persistida antes do reparo",
+		A.StageWorkerClaim(worker, owner.UserId, "job_2412", token,
+			80, 160, 20, 95, "Freios", "Hatch", "Tires") and A.Save(worker))
+	check("C24: proprietário possui prova e saldo salvos",
+		A.CreditRepairOnce(owner, "job_2412", token,
+			80, "Owner", "Freios", "Hatch", worker.UserId, 160) and A.Save(owner))
+	check("C24: contratado recebe com vínculo do proprietário",
+		A.CreditRepairOnce(worker, "job_2412", token,
+			160, "Worker", "Freios", "Hatch")
+		and Paid.Find(A.Get(worker).WorkerSettlementProofs, "job_2412", token).OwnerUserId
+			== owner.UserId)
+	A.Get(worker).WorkerSettlementProofs[1].At = os.time() - 1200
+	check("C24: claim removida e pagamento persistido", A.DiscardWorkerClaim(worker,
+		"job_2412", token) and A.Save(worker))
+	check("C24: dono ainda tem prova, compactação é proibida",
+		A.ReconcileWorkerProofs(worker) == 0
+		and #A.Get(worker).WorkerSettlementProofs == 1
+		and #A.Get(worker).WorkerPaidTombstones == 0)
+	check("C24: baixa do dono é persistida", A.DiscardConfirmedOwnerProof(owner,
+		"job_2412", token, worker.UserId) and A.Save(owner))
+	A._resetWorkerArchiveForTesting(worker.UserId)
+	store.failGetNext = 1
+	check("C24: falha de GetAsync preserva prova",
+		A.ReconcileWorkerProofs(worker) == 0
+		and #store.data["u_2412"].WorkerSettlementProofs == 1)
+	A._resetWorkerArchiveForTesting(worker.UserId)
+	store.failNext = 4
+	check("C24: falha do Save inicial não compacta",
+		A.ReconcileWorkerProofs(worker) == 0
+		and #store.data["u_2412"].WorkerSettlementProofs == 1
+		and #A.Get(worker).WorkerPaidTombstones == 0)
+	A._resetWorkerArchiveForTesting(worker.UserId)
+	check("C24: verificação completa converte prova em tombstone persistido",
+		A.ReconcileWorkerProofs(worker) == 1
+		and #store.data["u_2412"].WorkerSettlementProofs == 0
+		and #store.data["u_2412"].WorkerPaidTombstones == 1
+		and Tombs.Find(store.data["u_2412"].WorkerPaidTombstones,
+			"job_2412", token) ~= nil)
+	check("C24: replay recusado sem prova detalhada",
+		A.HasRepairCredit(worker, "job_2412", token)
+		and not A.CreditRepairOnce(worker, "job_2412", token,
+			160, "Worker", "Freios", "Hatch")
+		and A.Get(worker).Coins == before + 160)
+	A.Remove(owner) A.Remove(worker)
+	local B = server(store, "workerArchive24-B")
+	B.Load(worker)
+	check("C24: reconexão não ressuscita prova pelo ledger recente",
+		#B.Get(worker).WorkerSettlementProofs == 0
+		and #B.Get(worker).WorkerPaidTombstones == 1
+		and B.HasRepairCredit(worker, "job_2412", token))
+	check("C24: replay bloqueado após reconexão",
+		not B.CreditRepairOnce(worker, "job_2412", token,
+			160, "Worker", "Freios", "Hatch")
+		and B.Get(worker).Coins == before + 160)
+	for i = 1, 70 do
+		B.CreditRepairOnce(worker, "later_" .. i,
+			string.format("c24bbbb-1111-2222-3333-%012d", i),
+			2, "Worker", "Freios", "Hatch")
+	end
+	check("C24: tombstone bloqueia replay mesmo após 70 novos serviços",
+		B.HasRepairCredit(worker, "job_2412", token)
+		and not B.CreditRepairOnce(worker, "job_2412", token,
+			160, "Worker", "Freios", "Hatch")
+		and B.Get(worker).Coins == before + 160 + 140)
+end
+
+-- C24: não compactar registros históricos sem proprietário verificável.
+do
+	local Paid = require(game.ReplicatedStorage.Shared.WorkerSettlementProofRules)
+	local store = newStore()
+	local A = server(store, "workerArchive24-legacy")
+	local worker = fakePlayer(2420)
+	A.Load(worker)
+	local token = "c24cccc-1111-2222-3333-eeeeeeeeeeee"
+	Paid.Add(A.Get(worker).WorkerSettlementProofs,
+		Paid.Make("old_unknown", token, 100, os.time() - 1200,
+			"Freios", "Hatch"))
+	check("C24: prova v9 sem OwnerUserId permanece detalhada",
+		A.ReconcileWorkerProofs(worker) == 0
+		and #A.Get(worker).WorkerSettlementProofs == 1
+		and #A.Get(worker).WorkerPaidTombstones == 0)
+end
+
+-- C24: arquivo de tombstones cheio deve preservar detalhes (sem descarte).
+do
+	local Paid = require(game.ReplicatedStorage.Shared.WorkerSettlementProofRules)
+	local Tombs = require(game.ReplicatedStorage.Shared.WorkerPaidTombstoneRules)
+	local store = newStore()
+	local A = server(store, "workerArchive24-full")
+	local worker = fakePlayer(2430)
+	A.Load(worker)
+	local token = "c24dddd-1111-2222-3333-eeeeeeeeeeee"
+	Paid.Add(A.Get(worker).WorkerSettlementProofs,
+		Paid.Make("kept", token, 150, os.time() - 1200, "Freios", "Hatch", 2431))
+	local compacted = A.Get(worker).WorkerPaidTombstones
+	for i = 1, Tombs.MaxEntries do
+		compacted[i] = { JobId = "old_" .. i,
+			Token = string.format("c24ffff-1111-2222-3333-%012d", i) }
+	end
+	check("C24: tombstones no limite não forçam rotação de quitação",
+		A.ReconcileWorkerProofs(worker) == 0
+		and #A.Get(worker).WorkerSettlementProofs == 1
+		and #A.Get(worker).WorkerPaidTombstones == Tombs.MaxEntries)
+end
+
 for _, c in ipairs(clones) do c:Destroy() end
 table.insert(results, failures == 0 and "TODOS OS TESTES PASSARAM" or (failures .. " TESTE(S) FALHARAM"))
 return table.concat(results, "\n")

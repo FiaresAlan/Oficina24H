@@ -1503,6 +1503,81 @@ do
         and not C.TradeUsedCar(player,"Sell",uid))
 end
 
+-- V2-10: preço, personalização, reputação e identidade única
+-- atravessam Save/Load. Cancelamento de prévia ocorre apenas no cliente,
+-- logo não produz qualquer débito/estado no servidor.
+do
+    local store=newStore()
+    local A=server(store,"v2-showroom-A")
+    local player=fakePlayer(3201)
+    A.Load(player)
+    local p=A.Get(player)
+    p.WorkshopLevel=1
+    p.OrderHistory={
+        {Service="Reparar pneu"},{Service="Trocar pneus"},{Service="Substituir bateria"},
+    }
+    A.AddCoins(player,3000,"Saldo QA vitrine")
+    local startingRep=p.Reputation
+    local bought=A.TradeUsedCar(player,"Buy","Hatch")
+    local uid=bought and p.UsedMarket.Owned[1].Uid or ""
+    local stages=bought and A.TradeUsedCar(player,"Inspect",uid)
+        and A.TradeUsedCar(player,"Strip",uid)
+        and A.TradeUsedCar(player,"Restore",uid)
+    local cash=p.Coins
+    local applied=stages and A.TradeUsedCar(player,"Customize",uid,"Paint:Red")
+    local duplicate=A.TradeUsedCar(player,"Customize",uid,"Paint:Graphite")
+    local polish=A.TradeUsedCar(player,"Customize",uid,"Finish:Gloss")
+    local sport=A.TradeUsedCar(player,"Customize",uid,"Wheels:Sport")
+    check("V2-10: três estilos custam somente uma vez por categoria",
+        applied and polish and sport and not duplicate
+        and p.Coins==cash-40-45-75
+        and p.UsedMarket.Owned[1].Style=="Red"
+        and p.UsedMarket.Owned[1].Finish=="Gloss"
+        and p.UsedMarket.Owned[1].Wheels=="Sport")
+    local afterCost=p.Coins
+    local first=A.TradeUsedCar(player,"Showcase",uid)
+    check("V2-10: primeira variante exposta concede +1 rep e zero moeda",
+        first and p.Reputation==startingRep+1
+        and p.Coins==afterCost
+        and #p.UsedMarket.Owned==0 and #p.UsedMarket.Showroom==1)
+    check("V2-10: perfil v15 persiste exposição, reputação e custos",A.Save(player))
+    A.Remove(player)
+    local B=server(store,"v2-showroom-B")
+    B.Load(player)
+    local q=B.Get(player)
+    check("V2-10: reconexão conserva opções e UID com dinheiro",
+        q and q.SchemaVersion==15 and #q.UsedMarket.Showroom==1
+        and q.UsedMarket.Showroom[1].Uid==uid
+        and q.UsedMarket.Showroom[1].Finish=="Gloss"
+        and q.UsedMarket.Showroom[1].Wheels=="Sport"
+        and q.Coins==afterCost and q.Reputation==startingRep+1)
+    local recall=B.TradeUsedCar(player,"Recall",uid)
+    local second=recall and B.TradeUsedCar(player,"Showcase",uid)
+    check("V2-10: retirar/reexpor não incrementa reputação",
+        recall and second and q.Reputation==startingRep+1
+        and q.UsedMarket.ShowroomSeen.Hatch==true)
+    local selling=B.TradeUsedCar(player,"SellExhibit",uid)
+    local lastCash=q.Coins
+    check("V2-10: venda da vitrine sem crédito de OS e replay",
+        selling and #q.UsedMarket.Showroom==0
+        and q.UsedMarket.TotalSales==1
+        and q.FinanceLedger.Groups.Market.In==370+30+25+40
+        and not B.TradeUsedCar(player,"SellExhibit",uid)
+        and q.Coins==lastCash
+        and q.Reputation==startingRep+1)
+    check("V2-10: venda consolidada com o caixa",B.Save(player))
+    B.Remove(player)
+    local C=server(store,"v2-showroom-C")
+    C.Load(player)
+    local persisted=C.Get(player)
+    check("V2-10: showroom não ressurge após venda e reconexão",
+        persisted and #persisted.UsedMarket.Showroom==0
+        and persisted.UsedMarket.TotalSales==1
+        and persisted.Coins==lastCash
+        and persisted.UsedMarket.ShowroomSeen.Hatch==true
+        and not C.TradeUsedCar(player,"SellExhibit",uid))
+end
+
 for _, c in ipairs(clones) do c:Destroy() end
 table.insert(results, failures == 0 and "TODOS OS TESTES PASSARAM" or (failures .. " TESTE(S) FALHARAM"))
 return table.concat(results, "\n")

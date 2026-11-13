@@ -148,7 +148,7 @@ check("client result correlated with job and token",
 ledger = text(SHARED / "SettlementLedgerRules.lua")
 data_service = text(ROOT / "src" / "server" / "DataService.lua")
 check("ledger bounded and sanitized", "SettlementLedgerRules.MaxEntries" in ledger and "function SettlementLedgerRules.Sanitize" in ledger)
-check("ledger persists in profile schema v9", "local SCHEMA_VERSION = 9" in data_service
+check("ledger persists in profile schema v10", "local SCHEMA_VERSION = 10" in data_service
       and "RepairLedger = {}" in data_service
       and "SettlementLedgerRules.Sanitize(data.RepairLedger)" in data_service)
 check("ledger credit idempotency", "function DataService.CreditRepairOnce" in data_service
@@ -285,8 +285,8 @@ check("C23: worker paid confirmation archive validates and never silently rotate
       "Paid.MaxEntries = 2048" in paid and "function Paid.FromLedger" in paid
       and "function Paid.CanAdd" in paid and "function Paid.Matches" in paid
       and "while #raw > Paid.MaxEntries" not in paid)
-check("C23: worker confirmation stored with coins and ledger in schema v9",
-      "local SCHEMA_VERSION = 9" in data_service
+check("C23: worker confirmation stored with coins and ledger in schema v10",
+      "local SCHEMA_VERSION = 10" in data_service
       and "WorkerSettlementProofs = {}" in data_service
       and "WorkerSettlementProofRules.FromLedger" in data_service
       and "WorkerSettlementProofRules.Add(profile.WorkerSettlementProofs, workerProof)" in data_service
@@ -323,6 +323,7 @@ check("C24: schema v10 private tombstones and scheduled reconciliation",
       "local SCHEMA_VERSION = 10" in data_service
       and "WorkerPaidTombstones = {}" in data_service
       and "WorkerPaidTombstoneRules.Sanitize(data.WorkerPaidTombstones)" in data_service
+      and "data.RepairLedger, data.WorkerPaidTombstones)" in data_service
       and "profileView.WorkerPaidTombstones = nil" in workshop
       and "task.spawn(DataService.ReconcileWorkerProofs, player)" in data_service)
 check("C24: test suite registered",

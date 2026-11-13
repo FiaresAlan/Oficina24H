@@ -3,6 +3,7 @@
 -- e independente do extrato de 64 reparos. Nunca descartar prova por idade.
 -- Limite conservador: arquivo cheio recusa novos créditos, sem duplo pagamento.
 local Ledger = require(script.Parent.SettlementLedgerRules)
+local Tombstones = require(script.Parent.WorkerPaidTombstoneRules)
 local Paid = {}
 Paid.MaxEntries = 2048
 
@@ -50,11 +51,12 @@ end
 
 -- Perfis v8: só é legítimo recuperar os registros de Worker ainda presentes
 -- no ledger. Recebimentos que já giraram ANTES da migração são desconhecidos.
-function Paid.FromLedger(raw: any, ledger: any): { any }
+function Paid.FromLedger(raw: any, ledger: any, tombstones: any?): { any }
 	local clean = Paid.Sanitize(raw)
 	if type(ledger) == "table" then
 		for _, entry in ipairs(ledger) do
-			if type(entry) == "table" and entry.Role == "Worker" then
+			if type(entry) == "table" and entry.Role == "Worker"
+				and not Tombstones.Find(tombstones, entry.JobId, entry.Token) then
 				local marker = Paid.Make(entry.JobId, entry.Token, entry.Amount, entry.At,
 					entry.Service, entry.Vehicle)
 				if marker then Paid.Add(clean, marker) end

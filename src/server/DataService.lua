@@ -216,9 +216,9 @@ local function reconcile(data: any): any
 	end
 	data.OrderHistory = cleanHistory
 	data.RepairLedger = SettlementLedgerRules.Sanitize(data.RepairLedger)
-	data.WorkerSettlementProofs = WorkerSettlementProofRules.FromLedger(
-		data.WorkerSettlementProofs, data.RepairLedger)
 	data.WorkerPaidTombstones = WorkerPaidTombstoneRules.Sanitize(data.WorkerPaidTombstones)
+	data.WorkerSettlementProofs = WorkerSettlementProofRules.FromLedger(
+		data.WorkerSettlementProofs, data.RepairLedger, data.WorkerPaidTombstones)
 	data.PendingClaims = SettlementClaimRules.Sanitize(data.PendingClaims)
 	data.OwnerSettlementProofs = OwnerSettlementProofRules.Sanitize(data.OwnerSettlementProofs)
 	if type(data.Parts) ~= "table" then

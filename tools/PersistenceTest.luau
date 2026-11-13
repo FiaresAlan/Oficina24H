@@ -77,7 +77,7 @@ do
 	check("novo: perfil criado com moedas iniciais", prof and prof.Coins == 250, prof and prof.Coins)
 	check("novo: kit básico presente", prof and prof.Equipment.BasicToolset == true)
 	check("C16: kit inicia no nível 1", A.GetEquipmentLevel(p, "BasicToolset") == 1)
-	check("C23: perfil novo já nasce no schema v9", prof.SchemaVersion == 9)
+	check("C24: perfil novo já nasce no schema v10", prof.SchemaVersion == 10)
 	check("novo: trava de sessão gravada", store.data["u_1"] and store.data["u_1"].Session and store.data["u_1"].Session.JobId == "A")
 end
 
@@ -430,7 +430,7 @@ do
 	store.data["u_1101"].PendingClaims[1].At -= 900 -- simula novo servidor sem aplicar parcela do contratado
 	local B = server(store, "claimB")
 	B.Load(worker)
-	check("C23: migração do schema v9", B.Get(worker).SchemaVersion == 9)
+	check("C24: migração do schema v10", B.Get(worker).SchemaVersion == 10)
 	local recovered = B.ReconcileWorkerClaims(worker)
 	check("C13: parcela ausente recuperada", recovered == 1
 		or B.HasRepairCredit(worker, "job_77", token))
@@ -621,7 +621,7 @@ do
 	local A = server(store, "claimCorruptA")
 	local p = fakePlayer(1301)
 	A.Load(p)
-	check("C23: schema v5 migra até v9", A.Get(p).SchemaVersion == 9)
+	check("C24: schema v5 migra até v10", A.Get(p).SchemaVersion == 10)
 	check("C13: sanitize de reivindicações corrompidas", #A.Get(p).PendingClaims == 0)
 	check("C13: mantém saldo antigo", A.Get(p).Coins == 300)
 end
@@ -885,8 +885,8 @@ do
 	local A = server(store, "workerPaidC23-migration")
 	local player = fakePlayer(2310)
 	A.Load(player)
-	check("C23: migração v8->v9 conserva crédito antigo visível",
-		A.Get(player).SchemaVersion == 9
+	check("C24: migração v8->v10 conserva crédito antigo visível",
+		A.Get(player).SchemaVersion == 10
 		and A.HasRepairCredit(player, "legacy_paid", tk)
 		and #A.Get(player).WorkerSettlementProofs == 1)
 	check("C23: save conserva marcador migrado", A.Save(player)

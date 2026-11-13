@@ -763,3 +763,11 @@ Detalhes em `docs/AUDITORIA_GERAL.md`. Resumo:
 - **Testes escritos:** cobertura de prova após rotação de 64 registros, adulteração, identidade, retenção limitada, migração, janela de segurança e resumo privado. Consulte `docs/TESTE_C14_C15_PROVAS_ALERTAS_2026-11-13.md`.
 - **CI:** ver Issue #15. **Nenhum teste novo Luau ou fluxo real foi executado no Studio nesta rodada.**
 - **P0:** ausência de atomicidade entre duas chaves, prova com retenção finita e possíveis reivindicações órfãs; homologação real de rede, DataStore, UX e performance segue pendente.
+
+
+## 2026-11-13 — C16/C17: plataforma de upgrades e equipe NPC mais ativa (GitHub-only)
+- **Auditoria prévia:** já existiam equipamentos físicos adquiridos na loja, 4 níveis de oficina, mecânicos NPC e salário/renda automática. **Não** existia evolução de nível individual nem compra por pisar; funcionários teletransportavam para o carro e precisavam de 2 ordens aguardando.
+- **C16:** `EquipmentUpgradeRules`, `EquipmentUpgradePads` e `DataService` schema v8 permitem ferramentas/máquinas nível I–III com compra por entrada em plataforma física perto da máquina, débito validado no servidor, persistência, indicador visual de nível e efeitos moderados na eficiência/renda/funcionários.
+- **C17:** funcionário liberado na oficina de 2 boxes; usa pathfinding/animação ao caminhar, chave procedural e mensagens durante o reparo; assume ordem única após 25s de preferência do dono, mantendo regras de peças/salários. Módulo `StaffAssignmentRules` centraliza a política.
+- **Testes escritos:** `EquipmentUpgradeTest`, `StaffAssignmentTest`, atualizações de `PersistenceTest`, `CatalogTest` e contratos estáticos. Detalhes: `docs/TESTE_C16_C17_UPGRADES_EQUIPE_2026-11-13.md`.
+- **CI:** ver Issue #15. **Nenhuma execução Roblox Studio nesta rodada**; verificar preço do pad, posição, 2 jogadores, NPC com assets/anim e regras após reconexão.

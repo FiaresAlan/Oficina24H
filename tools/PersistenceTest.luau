@@ -363,8 +363,13 @@ do
 	check("outro beneficiário não vê recibo do executor", A.GetRepairReceipt(owner, "job_1", token) == nil)
 	local ownerReceipt = { JobId = "job_1", Token = token, Price = 80, Quality = 95, Stars = 5 }
 	check("dono anexa seu recibo", A.AttachRepairReceipt(owner, "job_1", token, ownerReceipt))
-	check("salvamento do executor aprovado", A.Save(p))
 	check("salvamento do dono aprovado", A.Save(owner))
+	-- Falha somente na conta do executor após a primeira conta já ter sido gravada.
+	store.failNext = 4
+	check("falha persistente não retorna sucesso falso", A.Save(p) == false)
+	check("crédito continua único em memória", A.HasRepairCredit(p, "job_1", token)
+		and not A.CreditRepairOnce(p, "job_1", token, 275, "Worker", "Freios", "Hatch"))
+	check("salvamento posterior do executor recupera", A.Save(p))
 	A.Remove(p) A.Remove(owner)
 	local B = server(store, "settlementB")
 	B.Load(p) B.Load(owner)

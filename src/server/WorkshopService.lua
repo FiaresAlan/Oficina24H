@@ -13,6 +13,7 @@ local CollaborationRules = require(ReplicatedStorage.Shared.CollaborationRules)
 local RepairOperations = require(ReplicatedStorage.Shared.RepairOperations)
 local RepairActionRules = require(ReplicatedStorage.Shared.RepairActionRules)
 local RepairReceiptRules = require(ReplicatedStorage.Shared.RepairReceiptRules)
+local SettlementDeliveryRules = require(ReplicatedStorage.Shared.SettlementDeliveryRules)
 local RepairPrepRules = require(ReplicatedStorage.Shared.RepairPrepRules)
 local DiagnosisRules = require(ReplicatedStorage.Shared.DiagnosisRules)
 local DiagnosisEvidence = require(ReplicatedStorage.Shared.DiagnosisEvidence)
@@ -69,7 +70,7 @@ local Repairs: { [number]: { JobId: string, Plan: any, StartedAt: number, Progre
 -- Comprovantes são privados do executor: últimos oito por jogador durante 15 minutos.
 -- Só guardamos um resultado DEPOIS de aplicar consumo, dinheiro, XP e avaliação.
 local RepairReceipts: { [number]: { any } } = {}
-local SettlingRepairs: { [number]: { JobId: string, Token: string, At: number } } = {}
+local SettlingRepairs: { [number]: any } = {} -- barreira de confirmação e retentativas por executor
 -- Funcionários por dono: NPCs, ordens em que estão trabalhando e próximo pagamento de salário.
 local Staff: { [number]: { Npcs: { Model }, Busy: { [string]: boolean }, NextPay: number } } = {}
 local RepairAssist: { [number]: boolean } = {} -- preferência de acessibilidade (Reduzir movimento), por jogador
@@ -867,6 +868,9 @@ function WorkshopService.SetRepairAssist(player: Player, value: boolean)
 end
 
 function WorkshopService.StartRepair(player: Player, jobId: string, assist: boolean?)
+    if SettlingRepairs[player.UserId] then
+        return false, "Há um pagamento anterior aguardando confirmação. Aguarde antes de iniciar outra OS."
+    end
     local ok, message, job, defect = checkRepairable(player, jobId)
     if not ok then
         return false, message
@@ -944,16 +948,17 @@ function WorkshopService.CheckRepairOutcome(player: Player, jobId: any, token: a
     end
     local userId = player.UserId
     local answer = { JobId = jobId, Token = token, Status = "Unknown" }
+    -- Um recibo em memória não prova que as duas contas já foram gravadas.
+    local settling = SettlingRepairs[userId]
+    if SettlementDeliveryRules.Matches(settling, jobId, token) then
+        answer.Status = "Processing"
+        return answer
+    end
     local receipt = RepairReceiptRules.Lookup(RepairReceipts[userId], jobId, token, os.clock())
         or DataService.GetRepairReceipt(player, jobId, token)
     if receipt then
         answer.Status = "Completed"
         answer.Result = receipt
-        return answer
-    end
-    local settling = SettlingRepairs[userId]
-    if settling and settling.JobId == jobId and settling.Token == token then
-        answer.Status = "Processing"
         return answer
     end
     local current = Repairs[userId]
@@ -976,6 +981,53 @@ function WorkshopService.CancelRepair(player: Player, jobId: any?, token: any?)
     return true, ""
 end
 
+-- Confirma o pagamento somente depois de salvar os dois perfis, em ordem.
+-- A confirmação de uma conta NÃO torna a outra atomicamente persistida.
+local function confirmDelivery(entry: any)
+    if SettlingRepairs[entry.WorkerUserId] ~= entry
+        or not SettlementDeliveryRules.Ready(entry) then return false end
+    SettlingRepairs[entry.WorkerUserId] = nil
+    if eventSender and entry.Worker.Parent == Players then
+        eventSender(entry.Worker, "RepairDone", entry.Receipt)
+    end
+    if entry.Delegated and eventSender and entry.Owner.Parent == Players then
+        eventSender(entry.Owner, "Notice", { Message = entry.OwnerMessage, Success = true })
+    end
+    return true
+end
+
+local function persistDelivery(entry: any): boolean
+    if SettlingRepairs[entry.WorkerUserId] ~= entry then return false end
+    if not entry.OwnerSaved and entry.Owner.Parent == Players then
+        SettlementDeliveryRules.MarkSaved(entry, "Owner", DataService.Save(entry.Owner))
+    end
+    if entry.OwnerSaved and not entry.WorkerSaved then
+        local workerSaved = entry.Worker == entry.Owner
+            or (entry.Worker.Parent == Players and DataService.Save(entry.Worker))
+        SettlementDeliveryRules.MarkSaved(entry, "Worker", workerSaved)
+    end
+    return confirmDelivery(entry)
+end
+
+local function retryDelivery(entry: any)
+    task.spawn(function()
+        -- Cada Save já faz retentativas com backoff; limitar a repetição externa.
+        for attempt = 1, 6 do
+            task.wait(math.min(8 + attempt * 4, 30))
+            if SettlingRepairs[entry.WorkerUserId] ~= entry
+                or entry.Worker.Parent ~= Players or entry.Owner.Parent ~= Players then return end
+            if persistDelivery(entry) then return end
+        end
+        if SettlingRepairs[entry.WorkerUserId] == entry and eventSender
+            and entry.Worker.Parent == Players then
+            eventSender(entry.Worker, "Notice", {
+                Message = "Pagamento ainda sem confirmação no DataStore. Evite sair e procure suporte se persistir.",
+                Success = false,
+            })
+        end
+    end)
+end
+
 -- Finaliza o minijogo: valida a sessão e os toques, recalcula a qualidade no servidor (6 fatores) e só então cobra peças e paga.
 function WorkshopService.FinishRepair(player: Player, jobId: string, presses: any)
     local session = Repairs[player.UserId]
@@ -983,6 +1035,9 @@ function WorkshopService.FinishRepair(player: Player, jobId: string, presses: an
         -- A conclusão anterior pode ter sido paga, mas o ACK se perdeu.
         -- Reenvie o MESMO comprovante; jamais chame as rotinas financeiras outra vez.
         local token = type(presses) == "table" and presses.Token
+        if SettlementDeliveryRules.Matches(SettlingRepairs[player.UserId], jobId, token) then
+            return false, "Pagamento em processamento: aguardando salvamento dos perfis."
+        end
         local receipt = RepairReceiptRules.Lookup(RepairReceipts[player.UserId], jobId, token, os.clock())
             or DataService.GetRepairReceipt(player, jobId, token)
         if receipt then
@@ -1134,31 +1189,54 @@ function WorkshopService.FinishRepair(player: Player, jobId: string, presses: an
         end
         RepairReceiptRules.Remember(receipts, jobId, session.Token, receiptPayload, os.clock())
     end
-    -- Força a tentativa de persistir ANTES de confirmar a entrega ao jogador.
-    -- Em falha transitória, o autosave tentará de novo; não declarar durabilidade.
-    local ownerSaved = DataService.Save(workshopOwner)
-    local workerSaved = workshopOwner == player and ownerSaved or DataService.Save(player)
-    if not ownerSaved or not workerSaved then
-        warn("[WorkshopService] Liquidado em memória, pendente de DataStore:", jobId)
-        if eventSender then
-            eventSender(player, "Notice", {
-                Message = "Serviço concluído, mas o salvamento falhou. Evite sair até recuperar a conexão.",
-                Success = false,
-            })
-        end
-    end
-    SettlingRepairs[player.UserId] = nil
-    if eventSender then
-        eventSender(player, "RepairDone", receiptPayload)
-        if delegated then
-            eventSender(workshopOwner, "Notice", {
-                Message = string.format("%s concluiu %s com %d%% de qualidade: sua parte foi %d moedas.",
-                    player.DisplayName, service.DisplayName, result.Quality, ownerPay),
-                Success = true,
-            })
-        end
-    end
+    -- C10: nenhum RepairDone enquanto alguma parcela não tiver sido persistida.
+    -- C11: salvamento com retentativa controlada; não reaplica saldo/peças/XP.
     funnel(workshopOwner, "Repaired")
+    if type(session.Token) == "string" then
+        local entry = SettlementDeliveryRules.New(jobId, session.Token,
+            workshopOwner.UserId, player.UserId)
+        if not entry then
+            warn("[WorkshopService] Token de liquidação inválido, sem confirmação:", jobId)
+            SettlingRepairs[player.UserId] = nil
+            return false, "Não foi possível confirmar o identificador do pagamento."
+        end
+        entry.Worker, entry.Owner = player, workshopOwner
+        entry.Delegated, entry.Receipt = delegated, receiptPayload
+        entry.OwnerMessage = string.format("%s concluiu %s com %d%% de qualidade: sua parte foi %d moedas.",
+            player.DisplayName, service.DisplayName, result.Quality, ownerPay)
+        entry.At = os.clock()
+        SettlingRepairs[player.UserId] = entry
+        if not persistDelivery(entry) then
+            warn("[WorkshopService] Liquidação em memória, entrega pendente de DataStore:", jobId)
+            if eventSender then
+                eventSender(player, "Notice", {
+                    Message = "Reparo executado; salvamento pendente. Aguarde a confirmação antes de sair.",
+                    Success = false,
+                })
+            end
+            retryDelivery(entry)
+            return false, "Pagamento em processamento: aguardando confirmação do DataStore."
+        end
+    else
+        -- Caminho legado do minijogo timing, sem token; permanece sem recibo durável.
+        local ownerSaved = DataService.Save(workshopOwner)
+        local workerSaved = workshopOwner == player and ownerSaved or DataService.Save(player)
+        SettlingRepairs[player.UserId] = nil
+        if not ownerSaved or not workerSaved then
+            warn("[WorkshopService] Minijogo legado: salvamento não confirmado:", jobId)
+            return false, "Reparo executado, mas o salvamento falhou. Evite sair."
+        end
+        if eventSender then
+            eventSender(player, "RepairDone", receiptPayload)
+            if delegated then
+                eventSender(workshopOwner, "Notice", {
+                    Message = string.format("%s concluiu %s com %d%% de qualidade: sua parte foi %d moedas.",
+                        player.DisplayName, service.DisplayName, result.Quality, ownerPay),
+                    Success = true,
+                })
+            end
+        end
+    end
     if delegated then
         return true, "Serviço colaborativo concluído. Sua parte: +" .. tostring(actorPay)
             .. " moedas e +" .. tostring(xp) .. " XP. Nota: "
@@ -1461,6 +1539,9 @@ function WorkshopService.PlayerLeft(userId: number)
         VehicleService.SetRepairing(ownSession.JobId, false)
     end
     Repairs[userId] = nil -- sessão de minijogo abandonada
+    -- O save de saída do DataService continua sendo a última tentativa de preservar o crédito.
+    -- Não enviar confirmação posterior a um executor desconectado.
+    SettlingRepairs[userId] = nil
     Combo[userId] = nil
     CustomerArrivalService.Clear(userId) -- clientes que ainda esperavam na rua somem junto
     RepairAssist[userId] = nil
@@ -2036,7 +2117,11 @@ function WorkshopService.Start()
                 if #receipts == 0 then RepairReceipts[userId] = nil end
             end
             for userId, settling in pairs(SettlingRepairs) do
-                if receiptNow - settling.At > 60 then SettlingRepairs[userId] = nil end
+                if receiptNow - settling.At > 900 then
+                    -- Bloqueia nova OS até desconectar: um pagamento não confirmado não vira sucesso silenciosamente.
+                    warn("[WorkshopService] Liquidação pendente há mais de 15 minutos:", settling.JobId, userId)
+                    settling.At = receiptNow
+                end
             end
             for userId, session in pairs(Repairs) do
                 if not RepairSessionRules.IsActive(session, os.clock(), RepairRules.MaxSessionSeconds + 5) then

@@ -114,7 +114,7 @@ check("receipt tests in runner", '"RepairReceiptTest"' in runner
 check("server stores settled receipt before notifying",
       "RepairReceiptRules.Remember(receipts, jobId, session.Token, receiptPayload" in workshop
       and workshop.index("RepairReceiptRules.Remember(receipts, jobId, session.Token, receiptPayload")
-      < workshop.index('eventSender(player, "RepairDone", receiptPayload)'))
+      < workshop.index('eventSender(entry.Worker, "RepairDone", entry.Receipt)'))
 check("server duplicate FinishRepair returns receipt without settlement",
       "Entrega já concluída. Comprovante recuperado." in workshop)
 check("server read-only outcome query",
@@ -143,8 +143,22 @@ check("credited repair state recoverable", "function DataService.GetRepairReceip
 check("server uses guarded repair credit", "DataService.CreditRepairOnce(player, jobId, session.Token" in workshop)
 check("server attaches receipt to credited entry",
       "DataService.AttachRepairReceipt(player, jobId, session.Token" in workshop)
-check("server attempts save before notification",
-      workshop.find("DataService.Save(workshopOwner)") < workshop.find('eventSender(player, "RepairDone", receiptPayload)'))
+check("server gates repair delivery on both profile saves",
+      "SettlementDeliveryRules.Ready(entry)" in workshop
+      and 'SettlementDeliveryRules.MarkSaved(entry, "Owner", DataService.Save(entry.Owner))' in workshop
+      and "DataService.Save(entry.Worker)" in workshop
+      and 'eventSender(entry.Worker, "RepairDone", entry.Receipt)' in workshop)
+check("processing outcome takes priority over uncommitted in-memory receipt",
+      'if SettlementDeliveryRules.Matches(settling, jobId, token) then' in workshop
+      and workshop.index('if SettlementDeliveryRules.Matches(settling, jobId, token) then')
+      < workshop.index("RepairReceiptRules.Lookup(RepairReceipts[userId]"))
+check("failed persistence does not emit completed result",
+      'retryDelivery(entry)' in workshop and 'return false, "Pagamento em processamento' in workshop)
+check("missing profile does not claim saved",
+      'if not Profiles[userId] then' in data_service and "return false" in data_service)
+check("recovery state tests in runner",
+      '"SettlementDeliveryRulesTest"' in runner
+      and (TOOLS / "SettlementDeliveryRulesTest.luau").is_file())
 check("ledger test is registered", '"SettlementLedgerTest"' in runner
       and (TOOLS / "SettlementLedgerTest.luau").is_file())
 # C9: financial statement in Orders shows credited values, without exposing tokens.

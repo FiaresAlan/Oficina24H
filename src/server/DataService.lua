@@ -711,8 +711,12 @@ end
 
 function DataService.Save(player: Player): boolean
 	local userId = player.UserId
-	if MemoryMode or not Profiles[userId] then
-		return true
+	if not Profiles[userId] then
+		-- Perfil descarregado NÃO significa que o crédito foi persistido.
+		return false
+	end
+	if MemoryMode then
+		return true -- ambiente Studio sem DataStore: confirmação só em memória
 	end
 	while Saving[userId] do
 		task.wait(0.1)

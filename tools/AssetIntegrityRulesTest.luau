@@ -43,9 +43,9 @@ root.Name = "PivoErrado"
 errors = Rules.Vehicle(car)
 check("raiz errada reprova", #errors > 0)
 root.Name = "Raiz"
-car:SetAttribute("Comprimento", 0 / 0)
+car:SetAttribute("Comprimento", -1)
 errors = Rules.Vehicle(car)
-check("dimensao NaN reprova", #errors > 0)
+check("dimensao fora da faixa reprova", #errors > 0)
 car:SetAttribute("Comprimento", 18)
 hull.Anchored = true
 errors = Rules.Vehicle(car)

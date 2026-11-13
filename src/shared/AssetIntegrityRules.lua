@@ -28,12 +28,13 @@ function Rules.Vehicle(instance: Instance?): ({ string }, { string })
 		table.insert(errors, "Casco sem CanCollide; jogadores atravessariam o carro")
 	end
 
-	for key, low, high in ipairs({ "Largura", "Comprimento", "Altura" }) do
-		local minValues = { 4, 8, 2 }
-		local maxValues = { 14, 32, 9 }
-		local v = model:GetAttribute(key)
-		if not finite(v) or v < minValues[low] or v > maxValues[low] then
-			table.insert(errors, key .. " ausente ou fora do intervalo " .. minValues[low] .. "-" .. maxValues[low])
+	local minValues = { 4, 8, 2 }
+	local maxValues = { 14, 32, 9 }
+	for index, key in ipairs({ "Largura", "Comprimento", "Altura" }) do
+		local value = model:GetAttribute(key)
+		if not finite(value) or value < minValues[index] or value > maxValues[index] then
+			table.insert(errors, key .. " ausente ou fora do intervalo "
+				.. tostring(minValues[index]) .. "-" .. tostring(maxValues[index]))
 		end
 	end
 	if typeof(model:GetAttribute("Motorista")) ~= "Vector3" then

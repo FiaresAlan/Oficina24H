@@ -15,6 +15,7 @@ local PanelKit = require(script.Parent.Parent.PanelKit)
 local Stations = require(script.Parent.Parent.Stations)
 local ServiceFocusRules = require(ReplicatedStorage.Shared.ServiceFocusRules)
 local RepairStatementRules = require(ReplicatedStorage.Shared.RepairStatementRules)
+local V2ManagementSummaryRules = require(ReplicatedStorage.Shared.V2ManagementSummaryRules)
 
 local t = Kit.t
 local Orders = {}
@@ -361,6 +362,8 @@ function Orders.new(parent: Instance)
 		end
 		table.insert(parts, HttpService:JSONEncode({ snapshot.Profile.Parts, snapshot.Profile.Equipment, snapshot.SkillLevels }))
 		table.insert(parts, tostring(#(snapshot.Profile.OrderHistory or {})))
+		table.insert(parts, table.concat({ tostring(snapshot.Profile.Coins), tostring(snapshot.Profile.Employees),
+			tostring(snapshot.Profile.WorkshopLevel) }, ":"))
 		table.insert(parts, HttpService:JSONEncode(snapshot.RecentSettlements or {}))
 		table.insert(parts, HttpService:JSONEncode(snapshot.PendingClaimSummary or {}))
 		return table.concat(parts, "|")
@@ -414,7 +417,34 @@ function Orders.new(parent: Instance)
 		end
 
 		if id == "open" then
-			local top = stack(scroll, 10, true, 0)
+            -- V2-02: visão gerencial apenas de leitura, sem exibir margem inventada.
+            local summary = V2ManagementSummaryRules.Build(snapshot)
+            local cardV2 = PanelKit.card(scroll, "V2ManagementOverview")
+            cardV2.Size = UDim2.new(1, -10, 0, compact and 128 or 114)
+            cardV2.LayoutOrder = -10
+            HudParts.text(cardV2,
+                string.format("OPERAÇÃO · %d aguardando · %d/%d boxes · %d mecânico(s)",
+                    summary.Waiting, summary.Working, summary.Bays, summary.Employees),
+                compact and 18 or 21, {
+                    Font = Theme.FontSemi, TextColor3 = Theme.Accent,
+                    Position = UDim2.fromOffset(14, 12),
+                    Size = UDim2.new(1, -28, 0, 28), TextWrapped = true,
+                })
+            HudParts.text(cardV2, string.format(
+                "Caixa: %d · Histórico bruto (%d OS): %d · Lucro líquido: a calcular na V2-08",
+                    summary.Coins, summary.RecentCount, summary.RecentGross),
+                compact and 16 or 18, {
+                    Font = Theme.FontSemi, TextColor3 = Theme.Muted,
+                    Position = UDim2.fromOffset(14, 42),
+                    Size = UDim2.new(1, -28, 0, compact and 47 or 37),
+                    TextWrapped = true,
+                })
+            HudParts.text(cardV2, summary.NextAction, compact and 17 or 19, {
+                Font = Theme.FontSemi, TextColor3 = Theme.Accent,
+                Position = UDim2.fromOffset(14, compact and 94 or 85),
+                Size = UDim2.new(1, -28, 0, 24), TextWrapped = true,
+            })
+            local top = stack(scroll, 10, true, 0)
 			local flyers = PanelKit.button(top, t("orders_new_customer"), "orange", Vector2.new(240, 48), function()
 				Store.Act("GenerateCustomer")
 			end)

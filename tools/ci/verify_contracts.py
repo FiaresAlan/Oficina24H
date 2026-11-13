@@ -532,6 +532,27 @@ check("C31: suite nao destrutiva registrada",
       '"AssetIntegrityRulesTest"' in runner
       and (TOOLS / "AssetIntegrityRulesTest.luau").is_file())
 
+# V2-00/01/02: contratos minimos de integração e suítes registradas.
+v2_compatibility = text(SHARED / "V2CompatibilityRules.lua")
+v2_pilots = text(SHARED / "V2VehiclePilotRules.lua")
+v2_management = text(SHARED / "V2ManagementSummaryRules.lua")
+check("V2-00 preflight sem alterar schema ou perfis",
+      "function Rules.Profile" in v2_compatibility and "Rules.MinSchema = 11" in v2_compatibility
+      and "function Rules.Snapshot" in v2_compatibility)
+check("V2-00 nao replica segredos", all(k in v2_compatibility for k in
+      ("RepairLedger", "PendingClaims", "WorkerPaidTombstones", "OwnerSettlementProofs")))
+check("V2-01 tres pilotos no catalogo V1", all(k in v2_pilots for k in
+      ("Veiculo_Hatch_MG3", "Veiculo_Sedan_Civic", "Veiculo_Picape_S10",
+       "AssetIntegrityRules", "V2Pivot_Hood", "function Rules.Resolve")))
+check("V2-01 auditoria Studio disponivel", (TOOLS / "V2PilotPlaceAudit.luau").is_file()
+      and (ROOT / "docs" / "GUIA_UNICO_ASSETS_V2.md").is_file())
+check("V2-02 resumo nao inventa lucro", "NetProfitAvailable = false" in v2_management
+      and "OrderHistory" in v2_management
+      and "V2ManagementSummaryRules.Build(snapshot)" in text(CLIENT / "UI" / "Panels" / "Orders.lua"))
+check("V2-00/01/02 suites Luau registradas",
+      all(f'"{name}"' in runner and (TOOLS / (name + ".luau")).is_file()
+          for name in ("V2FoundationTest", "V2PilotRigTest", "V2ManagementSummaryTest")))
+
 print(f"\nStatic checks: {passed} passed, {len(failures)} failed")
 if failures:
     raise SystemExit(1)

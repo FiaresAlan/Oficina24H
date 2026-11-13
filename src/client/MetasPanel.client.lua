@@ -372,6 +372,9 @@ local function fit()
 	local camera = workspace.CurrentCamera
 	local v = camera and camera.ViewportSize or Vector2.new(1280, 720)
 	scale.Scale = math.clamp(math.min(v.X / 620, v.Y / 640), 0.55, 1.15)
+	-- Homologação V1 (G4): o UIScale encolhe o painel no celular; o "X" mantém alvo de toque efetivo >= 44 px.
+	local side = math.max(36, math.ceil(44 / scale.Scale))
+	close.Size = UDim2.fromOffset(side, side)
 end
 
 local function show(visible: boolean)
@@ -415,7 +418,9 @@ Store.Changed.Event:Connect(function(snap: any)
 		render()
 	end
 	-- ao entrar, com a diária disponível, a tela abre sozinha uma vez (lembrete de voltar todo dia)
-	if not autoOpened and progress and progress.Daily.CanClaim and snap.HasWorkshop then
+	-- Homologação V1 (G4): não cobre o guia do 1º atendimento; abre uma vez depois que ele termina.
+	local onboardingDone = snap and snap.Profile and snap.Profile.Onboarding and snap.Profile.Onboarding.Done == true
+	if not autoOpened and progress and progress.Daily.CanClaim and snap.HasWorkshop and onboardingDone then
 		autoOpened = true
 		task.delay(4, function()
 			show(true)

@@ -1,6 +1,6 @@
 # CHECK_LIST_MESTRE_V2 — OFICINA 24H
 
-**Versão:** 2.1, 13/11/2026. **Situação:** planejamento e guia de assets finalizados; **nenhuma mecânica V2 implementada**, aguardando OK explícito para código.  
+**Versão:** 2.2, 13/11/2026. **Situação:** V2-00/01/02 implementadas em engenharia na PR #27; falta reconciliação com main/QA V1 e validação de modelos/Studio. V2-03–16 continuam planejadas. **Nenhuma homologação Studio presumida.**  
 **Direção aprovada pelo proprietário:** híbrida — estilização legível do mundo + reparos visualmente mecânicos + gestão de negócio.  
 **Código base de referência:** main em C31 (`2690f082` antes dos commits exclusivamente documentais da V2). **Atenção:** o Claude Code está homologando/corrigindo a V1 em paralelo; sempre ler novo HEAD e reconciliar diffs antes de programar V2. Preservar Issue #15 V1 como histórico.  
 **Documentos de referência:** DIRECAO_JOGO_V2_2026-11-13.md, PESQUISA_MERCADO_V2_2026-11-13.md, AUDITORIA_V2_BASE_CODIGO_2026-11-13.md (auditoria histórica até C17), [GUIA_UNICO_ASSETS_V2.md](GUIA_UNICO_ASSETS_V2.md) e GUIA_UNICO_ASSETS_V1.md.
@@ -9,7 +9,7 @@
 - [C] = código e teste de regressão escritos e integrados.
 - [A] = verificações automáticas e Rojo executados com sucesso no commit final.
 - [S] = jogo **realmente** testado no Roblox Studio / dispositivo.
-- Nada é marcado [x] por ter sido planejado. **Todas as fases V2 abaixo começam pendentes.**
+- Nada é marcado [x] por ter sido planejado. **Código implementado está em branch V2, ainda não na main**; checkboxes [C] históricos de integração seguem pendentes do merge/reconciliação. Ver quadro de execução abaixo.
 - O proprietário pretende executar a homologação Studio ao final. Isso não dispensa testes de código em cada etapa e mantém riscos de integração abertos.
 - Implementar **o máximo de fases completas e seguras possível por rodada**. Agrupar somente quando dependências, revisão, testes e CI permitirem; sem limite arbitrário de quantidade nem redução de qualidade.
 
@@ -17,7 +17,7 @@
 
 | ID | Entrega | Natureza | Depende de |
 |---|---|---|---|
-| V2-00 | Auditoria e reforço da fundação C1–C17 | P0 | main atual |
+| V2-00 | Auditoria e compatibilidade com a fundação C1–C31 | P0 | main atual |
 | V2-01 | Bible visual híbrida + 3 carros piloto | P0 | V2-00 |
 | V2-02 | Recepção e gestão visível da fila/negócio | P0 | V2-00 |
 | V2-03 | Carros interativos, capô/portas/rodas | P0 | V2-01 |
@@ -38,6 +38,21 @@
 P0 = prioridade para o núcleo de lançamento. P1 = opcional condicionado a viabilidade/qualidade; P2/P3 não bloqueia publicação. Test-drive é FUTURO, não antecipar no começo.
 
 ---
+
+## V2 — Engenharia desenvolvida na PR #27, sem interferir na V1
+
+**Autorização do proprietário recebida.** O código das primeiras fases está na branch `work/v2-00-02-fundacao-pilotos-gestao-2026-11-13`, documentado no [relatório de engenharia V2](V2_RODADA_01_ENGENHARIA.md).
+
+- [x] **V2-00 código na branch:** migração aditiva schema v11→v12, lista de compra e marcos anônimos, preservação de claims/ledger/recibos, testes de migração e reconexão escritos.
+- [x] **V2-01 código na branch:** três pilotos V1, pivôs autoráveis por script Studio, perfis de materiais, LOD seletivo, prevenção de modelos e sockets inválidos, suítes de regressão escritas.
+- [x] **V2-02 código na branch:** recepção física, controles server-authoritative de prioridade, agenda, descontos, estoque/loja, wishlist de múltiplas OS, orçamento e dashboard, com testes de contratos escritos.
+- [x] **Automação de engenharia na branch:** verificações estáticas e build Rojo aprovados [no último build anterior a esta revisão documental](https://github.com/FiaresAlan/Oficina24H/actions/runs/43496196905).
+- [ ] **Merge na main:** depende de comparar, revisar e conciliar as correções V1 do Claude e refazer CI.
+- [ ] **Arte real:** revisar/importar os três modelos piloto, ajustar malhas móveis, pivôs, licença, áudio e LOD reais.
+- [ ] **Studio:** executar RunAllTests, V2PilotPlaceAudit, 15 serviços, multiplayer, mobile/PC/gamepad e verificar efeitos reais.
+- [ ] **Demais V2-03–16:** implementar somente após as dependências, sem declarar V2 completa por CI verde.
+
+**Portão:** código escrito e integrado em branch não equivale a jogo homologado. Não há publicação automática.
 
 ## V2-00 — Integração segura com a V1 em homologação
 **Meta:** reconciliar o HEAD atualizado pelo Claude com a V1 C31, sem refazer correções C18–C31 nem interferir na homologação.

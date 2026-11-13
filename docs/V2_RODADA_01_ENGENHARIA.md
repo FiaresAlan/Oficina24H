@@ -49,18 +49,19 @@ A conclusão **de código** significa scripts, APIs, migrações, UI, testes esc
 - Fila ordenada por prioridade (-1, 0, +1) e tempo de espera. TV física da oficina acompanha a ordem real. `SetJobPriority` restringe dono da OS/estado Available e proximidade da recepção.
 - `ScheduleJob`: **uma** remarcação de 30/60/90 s por OS, depois de chegada física. Enquanto o cliente está agendado, `AcceptJob` é bloqueado; a paciência recebe o mesmo prazo, sem loops infinitos.
 - `DiscountJob`: somente **após diagnóstico**, dono presente, sem colaborador/mecânico/sessão de reparo. Calculado do `OriginalPrice` a cada tentativa, não acumula desconto duplo. A parcela/XP final continuam nos procedimentos de V1.
-- `RequestJobSupplies`: pedidos apenas de peças realmente ausentes e vinculadas a OS diagnosticada. Pedido salvo em perfil, mostrado no estoque, carregável no carrinho local da loja física, sem pagamento automático, não se perde na reconexão.
+- `RequestJobSupplies`: consolida a demanda de **todas as OS diagnosticadas e ativas** do mesmo dono, subtrai o estoque e evita subestimar peças compartilhadas por várias ordens. Pedido salvo, exibido no estoque, carregável no carrinho local da loja física, sem compra automática.
+- `ClearSupplyRequests`: permite descartar a lista na recepção/loja sem movimentar dinheiro ou estoque. Pedido só diminui após `FulfillSupplyRequest` por compra confirmada; `AddParts` de rollback jamais o cumpre.
 - Preço exato/serviço permanecem **ocultos antes do diagnóstico**. Antes: guia de faixa geral do catálogo, não preço específico da ordem. Depois: orçamento exato, custo estimado das peças e **contribuição antes de salários**, sem chamar isso de lucro líquido.
 - Dashboard: fila, alertas de impaciência, vagas realmente livres conforme o estado dos boxes, equipe, caixa, unidades de estoque, custo estimado da lista, total bruto dos últimos pedidos. O histórico financeiro v11 não traz todas as despesas; **lucro líquido fica explicitamente indisponível até V2-08**.
 - Orientação contextual para a primeira expansão após serviço concluído; eventos anônimos de primeiro upgrade/primeira contratação marcados uma única vez pelo servidor.
 - Respostas server-authoritative: a UI só solicita ações, não informa preço ou custo para o servidor. Remotes estão na whitelist, rate-limited pela infraestrutura V1, e verificam ator/proximidade/estado.
-- Testes escritos: acesso por proprietário, valores inválidos, dois percentuais de desconto, idempotência de wishlist, estágio/estoque, prioridade, status, valor antes/depois do diagnóstico e migração.
+- Testes escritos: acesso por proprietário, valores inválidos, dois percentuais de desconto, idempotência de wishlist, concorrência de duas OS com peça compartilhada, estágio/estoque, prioridade, status, valor antes/depois do diagnóstico e migração.
 
 ## Procedimento de revisão e aceite externo
 
 1. Antes de merge, comparar branch V2 com o HEAD atualizado da `main` de homologação da V1. Se Claude alterou `DataService`, `WorkshopService`, `Orders` ou `RunAllTests`, integrar manualmente as duas evoluções e repetir CI. **Não fazer force-push** ou sobrescrever trabalho da V1.
 2. No place original com backup, importar/conferir os três carros (se já estiverem lá, **não baixar outra vez**), usar `tools/V2AuthorPilotRigs.luau` apenas se fizer sentido autorar os pivôs e executar `tools/V2PilotPlaceAudit.luau` (somente auditoria).
-3. Rodar `tools/RunAllTests.luau` no Studio Edit; inclui seis suites V2 e `PersistenceTest` (DataStore simulado).
+3. Rodar `tools/RunAllTests.luau` no Studio Edit; inclui sete suites V2 e `PersistenceTest` (DataStore simulado).
 4. Teste de recepção no Studio: 0/1/3 ordens, cliente chegando, prioridade, agendamento, 5% e 10% de desconto, colaborador, funcionário, compra na loja, desconexão/reconexão, 1/2/4/6 boxes e toque/gamepad.
 5. Confirmar licenças, imagens HUD, som e performance; publicação somente por autorização explícita.
 

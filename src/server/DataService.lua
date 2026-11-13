@@ -1,5 +1,5 @@
 --!strict
--- DataService: perfil persistente do jogador (schema v2).
+-- DataService: perfil persistente do jogador (schema v13).
 -- Garantias: retentativas com backoff, trava de sessão (um servidor por jogador), migração por reconcile,
 -- histórico de transações limitado, salvamento só quando houve mudança (ou para renovar a trava),
 -- liberação da trava ao sair, BindToClose paralelo. Em falha de leitura fora do Studio o jogador é expulso

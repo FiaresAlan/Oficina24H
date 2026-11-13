@@ -785,6 +785,12 @@ check("V2-05: suites for policy, 0/1/2 worker dispatch and persistence",
     and (TOOLS / "V2StaffDispatchTest.luau").is_file()
     and '"V2StaffRulesTest"' in runner and '"V2StaffDispatchTest"' in runner)
 
+check("V2-05: Studio auditoria de avatar e zonas registrada",
+    (TOOLS / "V2StaffPlaceAudit.luau").is_file()
+    and '"V2StaffPlaceAudit"' in runner
+    and "function CustomerNpcService.Position" in text(ROOT / "src" / "server" / "CustomerNpcService.lua")
+    and 'profileView.StaffSlots = nil' in workshop
+    and 'profileView.StaffPayroll = nil' in workshop)
 print(f"\nStatic checks: {passed} passed, {len(failures)} failed")
 if failures:
     raise SystemExit(1)

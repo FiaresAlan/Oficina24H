@@ -596,6 +596,8 @@ function WorkshopService.GetSnapshot(player: Player)
         profileView.OwnerSettlementProofs = nil -- arquivo de provas não replicado
         profileView.WorkerSettlementProofs = nil -- quitações privadas C23: não expor tokens
         profileView.WorkerPaidTombstones = nil -- C24: identificadores financeiros privados
+        profileView.StaffSlots = nil -- V2-05: registros internos e JobIds ficam no servidor
+        profileView.StaffPayroll = nil -- resumo sanitizado aparece apenas no campo Staff
     end
     return {
         Ranking = CustomerRules.Rank(ranking),

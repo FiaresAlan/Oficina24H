@@ -124,16 +124,15 @@ end
 
 -- Solta a peça do conjunto SÓ no cliente (para podermos girar/mover): remove a solda e ancora localmente.
 local function detach(root: BasePart, p: BasePart)
-	for _, w in ipairs(root:GetChildren()) do
-		if w:IsA("WeldConstraint") and (w.Part1 == p or w.Part0 == p) then
-			w:Destroy()
-		end
-	end
-	for _, w in ipairs(p:GetChildren()) do
-		if w:IsA("WeldConstraint") then
-			w:Destroy()
-		end
-	end
+	local car = root:FindFirstAncestorWhichIsA("Model")
+    if car then
+        for _, w in ipairs(car:GetDescendants()) do
+            if (w:IsA("WeldConstraint") or w:IsA("Weld") or w:IsA("Motor6D")
+                or w:IsA("RigidConstraint")) and (w.Part1 == p or w.Part0 == p) then
+                w:Destroy() -- somente no cliente: desliga malha visual para animar
+            end
+        end
+    end
 	p.Anchored = true
     p.CanCollide = false -- o Casco invisível mantém a colisão autoritativa do veículo
 end

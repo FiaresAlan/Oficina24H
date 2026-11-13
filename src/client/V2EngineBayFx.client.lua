@@ -3,8 +3,6 @@
 -- O cliente nunca cria/remova estoque, defeitos, valores ou flags de reparo.
 -- Substituir proxies por BaseParts com V2EngineBayRole nas malhas importadas.
 local RunService = game:GetService("RunService")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local Players = game:GetService("Players")
 
 type Component = { Part: BasePart, Offset: CFrame }
 type Tracked = { Root: BasePart, Parts: { Component }, Generated: { Instance } }
@@ -113,7 +111,7 @@ RunService.Heartbeat:Connect(function(dt: number)
             and (camera.CFrame.Position - entry.Root.Position).Magnitude <= MAX_DISTANCE
         for _, component in ipairs(entry.Parts) do
             if component.Part.Parent then
-                component.Part.CFrame = entry.Root.CFrame * component.Offset
+                if visible then component.Part.CFrame = entry.Root.CFrame * component.Offset end
                 component.Part.Transparency = visible and 0 or 1
             end
         end

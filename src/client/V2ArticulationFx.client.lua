@@ -48,12 +48,13 @@ end
 
 local function detachOnClient(root: BasePart, part: BasePart)
     -- Nunca destrói a junta do servidor: alterações locais de apresentação.
-    for _, parent in ipairs({ root, part }) do
-        for _, joint in ipairs(parent:GetChildren()) do
-            if joint:IsA("WeldConstraint") and (joint.Part0 == part or joint.Part1 == part) then
-                joint:Destroy()
-            elseif joint:IsA("Weld") and (joint.Part0 == part or joint.Part1 == part) then
-                joint:Destroy()
+    local model = root:FindFirstAncestorWhichIsA("Model")
+    if model then
+        for _, joint in ipairs(model:GetDescendants()) do
+            if (joint:IsA("WeldConstraint") or joint:IsA("Weld")
+                or joint:IsA("Motor6D") or joint:IsA("RigidConstraint"))
+                and (joint.Part0 == part or joint.Part1 == part) then
+                joint:Destroy() -- desconecta esta peça somente na simulação do cliente
             end
         end
     end
@@ -80,9 +81,11 @@ local function setup(car: Model)
         for _, child in ipairs(car:GetDescendants()) do
             if child:IsA("BasePart") and child ~= root
                 and child:GetAttribute("V2MovingComponent") == id
-                and not child:FindFirstAncestorOfClass("Humanoid")
                 and not child:GetAttribute("V2GeneratedVisual") then
-                table.insert(native, child)
+                local owner = child:FindFirstAncestorWhichIsA("Model")
+                if owner == car or (owner and not owner:FindFirstChildOfClass("Humanoid")) then
+                    table.insert(native, child)
+                end
             end
         end
         local side = id == "DoorLeft" and -1 or 1

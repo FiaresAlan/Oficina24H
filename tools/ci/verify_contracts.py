@@ -1042,7 +1042,7 @@ check("V2-10: UID conservado em vitrines com reputação que não repete",
         'operation == "Recall"',
         'operation == "SellExhibit"',
         'Appearance.Spent(exhibit)',
-        'Appearance.SaleBonus(car)')
+        'Appearance.SaleBonus(car)'))
     and 'planned.ReputationAward > 0' in data_service
     and 'DataService.AddReputation(player, planned.ReputationAward)' in data_service
     and 'profile.UsedMarket = planned.Market' in data_service)

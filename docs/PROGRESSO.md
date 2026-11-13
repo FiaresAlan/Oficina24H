@@ -723,3 +723,20 @@ Detalhes em `docs/AUDITORIA_GERAL.md`. Resumo:
 - **Regressões:** `RepairReceiptTest.luau` cobre cópia do payload, repetição, expiração, limites e isolamento por token; registrado em `RunAllTests`, com invariantes no CI.
 - **QA:** `docs/TESTE_C7_COMPROVANTES_ENTREGA_2026-11-12.md` documenta cenários críticos de entrega, falha e privacidade.
 - **Limite:** os comprovantes são **efêmeros**; não constituem um livro-caixa durável entre servidores. Para isso, seria necessária contabilização idempotente persistida no DataStore. O Studio e os testes com jogadores permanecem por validar.
+
+## 2026-11-12 — C8 + C9: ledger persistente e extrato verificável (duas fases nesta rodada)
+
+### C8 — ledger de reparos por jogador, integrado à main via PR #24
+- `SettlementLedgerRules`: chave de crédito `JobId + token`, limitação a 64 entradas, recibos anexados uma vez, saneamento de perfil e listagem pública sem GUID.
+- `DataService` schema v5: moedas e marca de crédito vivem no **mesmo perfil**; `CreditRepairOnce` impede novo crédito da mesma sessão, `AttachRepairReceipt` registra os resultados, `GetRepairReceipt` funciona após recarga. `Save` é tentado imediatamente após o serviço.
+- `WorkshopService`: créditos do dono e do contratado separados por perfil, com comprovantes; lookup de C7 passa a ler também recibos persistidos.
+- `SettlementLedgerTest` e `PersistenceTest` ampliados; contratos C8 no CI.
+- **Limite:** dois jogadores têm chaves DataStore distintas; sem transação atômica entre perfis, sem garantia de persistência se a gravação falhar. QA real pendente.
+
+### C9 — extrato financeiro da HUD e privacidade, PR #25
+- `WorkshopService.GetSnapshot` remove `RepairLedger` bruto (tokens) do perfil replicado e envia somente `RecentSettlements` saneado.
+- `RepairStatementRules` calcula últimos créditos, receita da própria oficina x trabalho contratado, média de qualidade e ordem cronológica, sem campos privados.
+- `Orders` > Concluídas: extrato dos últimos créditos acima do histórico de clientes, com layout compacto vertical.
+- `RepairStatementTest` com 23 casos escritos, runner e CI atualizados.
+- **Limite:** ainda é código versionado, não testado visualmente no Roblox Studio. O preço do histórico de clientes não representa necessariamente o valor do extrato recebido.
+- Checklist [Issue #15](https://github.com/FiaresAlan/Oficina24H/issues/15) acompanha implementação versus testes reais e publicação.

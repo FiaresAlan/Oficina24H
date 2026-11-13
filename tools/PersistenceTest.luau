@@ -820,6 +820,102 @@ do
 		A.Save(owner) and #store.data["u_2231"].OwnerSettlementProofs == 0)
 end
 
+-- C23: comprovante de pagamento do trabalhador não gira junto com o
+-- extrato de 64; pode liberar prova do proprietário após desconexão.
+do
+	local Ledger = require(game.ReplicatedStorage.Shared.SettlementLedgerRules)
+	local Paid = require(game.ReplicatedStorage.Shared.WorkerSettlementProofRules)
+	local store = newStore()
+	local A = server(store, "workerPaidC23-A")
+	local owner, worker = fakePlayer(2301), fakePlayer(2302)
+	local token = "c23aaaaa-1111-2222-3333-ffffffffffff"
+	A.Load(owner) A.Load(worker)
+	local startBalance = A.Get(worker).Coins
+	check("C23: dados novos iniciam arquivo de quitação vazio",
+		type(A.Get(worker).WorkerSettlementProofs) == "table"
+		and #A.Get(worker).WorkerSettlementProofs == 0
+		and A.Get(worker).SchemaVersion == 9)
+	check("C23: dono registra prova", A.CreditRepairOnce(owner, "job_old", token,
+		90, "Owner", "Freios", "Hatch", worker.UserId, 200))
+	A.Get(owner).OwnerSettlementProofs[1].At = os.time() - 1200
+	check("C23: contratado recebe crédito e comprovante do mesmo perfil",
+		A.CreditRepairOnce(worker, "job_old", token, 200,
+			"Worker", "Freios", "Hatch")
+		and Paid.Find(A.Get(worker).WorkerSettlementProofs, "job_old", token) ~= nil
+		and A.Save(worker) and A.Save(owner))
+	for i = 1, 70 do
+		local tk = string.format("c23bbbbb-1111-2222-3333-%012d", i)
+		A.CreditRepairOnce(worker, "other_" .. i, tk, 2, "Worker", "Freios", "Hatch")
+	end
+	check("C23: extrato Worker de 64 já perdeu crédito antigo",
+		Ledger.Find(A.Get(worker).RepairLedger, "job_old", token) == nil)
+	local beforeReplay = A.Get(worker).Coins
+	check("C23: tentar pagar token antigo não duplica dinheiro",
+		A.HasRepairCredit(worker, "job_old", token)
+		and not A.CreditRepairOnce(worker, "job_old", token,
+			200, "Worker", "Freios", "Hatch")
+		and A.Get(worker).Coins == beforeReplay)
+	check("C23: pagamentos novos persistem juntamente com arquivo durável",
+		A.Save(worker) and #store.data["u_2302"].WorkerSettlementProofs == 71)
+	check("C23: dono reconhece pagamento offline apesar do ledger rotacionado",
+		A.ReconcileOwnerProofs(owner) == 1
+		and #store.data["u_2301"].OwnerSettlementProofs == 0)
+	A.Remove(worker) A.Remove(owner)
+	local B = server(store, "workerPaidC23-B")
+	B.Load(worker)
+	check("C23: reconexão mantém crédito antigo e saldo correto",
+		B.Get(worker).Coins == startBalance + 200 + 70 * 2
+		and B.HasRepairCredit(worker, "job_old", token))
+	check("C23: replay após reconexão continua bloqueado",
+		not B.CreditRepairOnce(worker, "job_old", token,
+			200, "Worker", "Freios", "Hatch"))
+end
+
+-- C23: perfis antigos (v8) recuperam as provas ainda existentes no ledger;
+-- operações anteriores à rotação não podem ser reconstruídas retroativamente.
+do
+	local store = newStore()
+	local tk = "c23ccccc-1111-2222-3333-aaaaaaaaaaaa"
+	store.data["u_2310"] = { SchemaVersion = 8, Coins = 130,
+		RepairLedger = {
+			{ JobId = "legacy_paid", Token = tk, Amount = 75, Role = "Worker",
+				At = 1790000000, Service = "Freios", Vehicle = "Hatch" },
+		},
+	}
+	local A = server(store, "workerPaidC23-migration")
+	local player = fakePlayer(2310)
+	A.Load(player)
+	check("C23: migração v8->v9 conserva crédito antigo visível",
+		A.Get(player).SchemaVersion == 9
+		and A.HasRepairCredit(player, "legacy_paid", tk)
+		and #A.Get(player).WorkerSettlementProofs == 1)
+	check("C23: save conserva marcador migrado", A.Save(player)
+		and #store.data["u_2310"].WorkerSettlementProofs == 1)
+end
+
+-- C23: com 2048 confirmações em aberto não se concede mais crédito sem
+-- registro durável; saldo, ledger e reivindicação permanecem íntegros.
+do
+	local Paid = require(game.ReplicatedStorage.Shared.WorkerSettlementProofRules)
+	local store = newStore()
+	local A = server(store, "workerPaidC23-full")
+	local worker = fakePlayer(2320)
+	A.Load(worker)
+	for i = 1, Paid.MaxEntries do
+		local token = string.format("c23ddddd-1111-2222-3333-%012d", i)
+		Paid.Add(A.Get(worker).WorkerSettlementProofs,
+			Paid.Make("paid_" .. i, token, 3, 1790000000, "Freios", "Hatch"))
+	end
+	local before = A.Get(worker).Coins
+	local token = "c23eeeee-1111-2222-3333-eeeeeeeeeeee"
+	check("C23: capacidade lotada é identificada",
+		not A.HasWorkerProofCapacity(worker))
+	check("C23: falta de espaço recusa crédito sem tocar saldo e ledger",
+		not A.CreditRepairOnce(worker, "new_paid", token, 50, "Worker", "Freios", "Hatch")
+		and A.Get(worker).Coins == before
+		and not A.HasRepairCredit(worker, "new_paid", token))
+end
+
 for _, c in ipairs(clones) do c:Destroy() end
 table.insert(results, failures == 0 and "TODOS OS TESTES PASSARAM" or (failures .. " TESTE(S) FALHARAM"))
 return table.concat(results, "\n")

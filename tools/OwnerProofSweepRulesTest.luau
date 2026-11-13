@@ -35,6 +35,22 @@ account.RepairLedger[1].Role = "Worker"
 check("C22: restaura verificação após corrigir ledger", Sweep.CanRelease(proof, account, 2202))
 account.RepairLedger = {} -- simula giro do extrato de 64 reparos
 check("C22: ledger rotacionado mantém prova", not Sweep.CanRelease(proof, account, 2202))
+local Paid = require(game.ReplicatedStorage.Shared.WorkerSettlementProofRules)
+account.WorkerSettlementProofs = {
+	Paid.Make("job_22", token, 250, at, "Freios", "Hatch"),
+}
+check("C23: marcador persistente libera prova depois de girar ledger",
+	Sweep.CanRelease(proof, account, 2202))
+account.PendingClaims = { c }
+check("C23: marcador não substitui a remoção da claim",
+	not Sweep.CanRelease(proof, account, 2202))
+account.PendingClaims = {}
+account.WorkerSettlementProofs[1].Amount = 251
+check("C23: marcador com valor adulterado não libera",
+	not Sweep.CanRelease(proof, account, 2202))
+account.WorkerSettlementProofs[1].Amount = 250
+check("C23: marcador correto volta a liberar", Sweep.CanRelease(proof, account, 2202))
+account.WorkerSettlementProofs = {}
 local all = {}
 for i = 1, 11 do
 	local tk = string.format("aabbccdd-1111-2222-3333-%012d", i)

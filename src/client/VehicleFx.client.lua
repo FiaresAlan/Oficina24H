@@ -150,15 +150,21 @@ local function detectWheels(model: Model, root: BasePart, parts: { BasePart }): 
 	for _, p in ipairs(parts) do
 		local rel = root.CFrame:ToObjectSpace(p.CFrame)
 		local pos = rel.Position
-		if pos.Y < H * 0.45 and math.abs(pos.X) > W * 0.15 and math.abs(pos.Z) > L * 0.15 then
-			local ext = extents(rel, p.Size)
-			local big = math.max(ext.Y, ext.Z)
-			if ext.Y > 0.6 and ext.Z > 0.6 and math.abs(ext.Y - ext.Z) < big * 0.35 and ext.X < W * 0.35 and big < H * 0.7 then
-				local key = (pos.X > 0 and "R" or "L") .. (pos.Z > 0 and "B" or "F")
-				buckets[key] = buckets[key] or {}
-				table.insert(buckets[key], { Part = p, Rel = rel, Ext = ext })
-			end
-		end
+        local tagged = p:GetAttribute("V2MovingComponent")
+        local explicit = ({ WheelFL = "LF", WheelFR = "RF", WheelRL = "LB", WheelRR = "RB" })[tagged]
+        if explicit or (pos.Y < H * 0.45 and math.abs(pos.X) > W * 0.15
+            and math.abs(pos.Z) > L * 0.15) then
+            local ext = extents(rel, p.Size)
+            local big = math.max(ext.Y, ext.Z)
+            local geometryWheel = ext.Y > 0.6 and ext.Z > 0.6
+                and math.abs(ext.Y - ext.Z) < big * 0.35
+                and ext.X < W * 0.35 and big < H * 0.7
+            if explicit or geometryWheel then
+                local key = explicit or ((pos.X > 0 and "R" or "L") .. (pos.Z > 0 and "B" or "F"))
+                buckets[key] = buckets[key] or {}
+                table.insert(buckets[key], { Part = p, Rel = rel, Ext = ext })
+            end
+        end
 	end
 	local groups: { WheelGroup } = {}
 	for key, list in pairs(buckets) do

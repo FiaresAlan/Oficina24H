@@ -15,6 +15,7 @@ local CustomerRules = require(ReplicatedStorage.Shared.CustomerRules)
 local SettlementLedgerRules = require(ReplicatedStorage.Shared.SettlementLedgerRules)
 local SettlementClaimRules = require(ReplicatedStorage.Shared.SettlementClaimRules)
 local OwnerSettlementProofRules = require(ReplicatedStorage.Shared.OwnerSettlementProofRules)
+local OwnerProofSweepRules = require(ReplicatedStorage.Shared.OwnerProofSweepRules)
 local EquipmentUpgradeRules = require(ReplicatedStorage.Shared.EquipmentUpgradeRules)
 
 local DataService = {}
@@ -34,6 +35,9 @@ local Removing: { [number]: boolean } = {} -- saída em andamento (grava e solta
 local Reconciling: { [number]: boolean } = {}
 local ClaimCursor: { [number]: number } = {}
 local LastClaimAlert: { [number]: number } = {}
+local OwnerProofSweepRunning: { [number]: boolean } = {}
+local OwnerProofSweepCursor: { [number]: number } = {}
+local OwnerProofSweepLastAt: { [number]: number } = {}
 local Store: any = nil
 local JobId: string = game.JobId ~= "" and game.JobId or "studio"
 local MemoryMode = false
@@ -626,6 +630,61 @@ function DataService.ReconcileWorkerClaims(worker: Player): number
 	return recovered
 end
 
+-- C22: sweep CONSERVADOR de comprovantes de antigos contratados (inclusive
+-- offline). Nunca ler o perfil do trabalhador em memória: só o GetAsync do
+-- DataStore pode comprovar que o crédito já foi gravado e a claim removida.
+-- O número de consultas é limitado, rodando com intervalo mínimo por dono.
+function DataService.ReconcileOwnerProofs(owner: Player): number
+	local userId = owner.UserId
+	local profile = Profiles[userId]
+	if not profile or OwnerProofSweepRunning[userId] or MemoryMode or not Store
+		or type(Store.GetAsync) ~= "function" or Removing[userId] then return 0 end
+	local now = os.time()
+	if now - (OwnerProofSweepLastAt[userId] or 0) < OwnerProofSweepRules.MinIntervalSeconds then
+		return 0
+	end
+	OwnerProofSweepLastAt[userId] = now
+	OwnerProofSweepRunning[userId] = true
+	local proofs = profile.OwnerSettlementProofs
+	local candidates, nextCursor = OwnerProofSweepRules.Batch(
+		proofs, OwnerProofSweepCursor[userId] or 1, now)
+	OwnerProofSweepCursor[userId] = nextCursor
+	local removed = 0
+	for _, proof in ipairs(candidates) do
+		if Profiles[userId] ~= profile or Removing[userId] or owner.Parent ~= Players then break end
+		local ok, workerRaw = pcall(function()
+			return Store:GetAsync(keyFor(proof.WorkerUserId))
+		end)
+		if ok and OwnerProofSweepRules.CanRelease(proof, workerRaw, proof.WorkerUserId)
+			and Profiles[userId] == profile and owner.Parent == Players and not Removing[userId] then
+			-- GetAsync pode ceder a execução; conferir que a prova ainda é
+			-- a mesma e não foi modificada durante a espera.
+			local current = OwnerSettlementProofRules.Find(proofs, proof.JobId, proof.Token)
+			if current and current.WorkerUserId == proof.WorkerUserId
+				and current.At == proof.At and current.OwnerPay == proof.OwnerPay
+				and current.WorkerPay == proof.WorkerPay
+				and current.Service == proof.Service and current.Vehicle == proof.Vehicle
+				and OwnerSettlementProofRules.Remove(proofs, proof.JobId, proof.Token, proof.WorkerUserId) then
+				Dirty[userId] = true
+				removed += 1
+			end
+		elseif not ok then
+			warn("[DataService] C22: leitura da conta do contratado falhou; prova preservada:", userId)
+		end
+	end
+	-- Se a gravação falhar, a prova ainda existe no perfil persistido. No
+	-- próximo login/salvamento a limpeza poderá ser retomada sem perda.
+	local persisted = true
+	if removed > 0 and Profiles[userId] == profile and not Removing[userId] then
+		persisted = DataService.Save(owner)
+		if not persisted then
+			warn("[DataService] C22: limpeza de provas ainda não persistida:", userId)
+		end
+	end
+	OwnerProofSweepRunning[userId] = nil
+	return persisted and removed or 0
+end
+
 -- Encerra o guia do 1º atendimento. Com `bonus` (serviço concluído de verdade) paga uma única vez; pular não paga.
 -- Retorna as moedas pagas (0 se já estava encerrado).
 function DataService.CompleteOnboarding(player: Player, bonus: number): number
@@ -938,6 +997,14 @@ function DataService.Load(player: Player)
 	if #profile.PendingClaims > 0 then
 		task.spawn(DataService.ReconcileWorkerClaims, player)
 	end
+	if #profile.OwnerSettlementProofs > 0 then
+		-- Tempo para o join/estado inicial estabilizar; não esperar sweep para jogar.
+		task.delay(15, function()
+			if Profiles[userId] == profile and player.Parent == Players then
+				DataService.ReconcileOwnerProofs(player)
+			end
+		end)
+	end
 end
 
 function DataService.Save(player: Player): boolean
@@ -979,6 +1046,8 @@ function DataService.Remove(player: Player)
 		Dirty[userId] = nil
 		ClaimCursor[userId] = nil
 		LastClaimAlert[userId] = nil
+		OwnerProofSweepCursor[userId] = nil
+		OwnerProofSweepLastAt[userId] = nil
 	end
 	Removing[userId] = nil
 end
@@ -997,6 +1066,7 @@ function DataService.Start()
 			for _, player in ipairs(Players:GetPlayers()) do
 				task.spawn(DataService.Save, player) -- sempre grava: renova a trava de sessão
 				task.spawn(DataService.ReconcileWorkerClaims, player) -- recuperação C13 sob trava da própria conta
+				task.spawn(DataService.ReconcileOwnerProofs, player) -- C22: comprovantes de ex-colaboradores
 			end
 		end
 	end)
@@ -1025,6 +1095,12 @@ function DataService._setStoreForTesting(store: any, jobId: string, lockWaitMax:
 	if lockWaitMax then
 		LOCK_WAIT_MAX = lockWaitMax
 	end
+end
+
+-- Apenas para a suíte de persistência: simular passagem do intervalo entre sweeps.
+function DataService._resetProofSweepForTesting(userId: number)
+	OwnerProofSweepLastAt[userId] = nil
+	OwnerProofSweepCursor[userId] = nil
 end
 
 function DataService._peekProfile(userId: number): any

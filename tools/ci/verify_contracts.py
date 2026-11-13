@@ -263,6 +263,22 @@ check("pending claims only expose aggregate counts",
 check("archive tests registered",
       '"OwnerSettlementProofRulesTest"' in runner
       and (TOOLS / "OwnerSettlementProofRulesTest.luau").is_file())
+sweep = text(SHARED / "OwnerProofSweepRules.lua")
+check("C22: owner cleanup requires saved worker ledger and absent pending claim",
+      "function Sweep.CanRelease" in sweep
+      and 'credit.Role == "Worker"' in sweep
+      and "Claims.Find(workerRaw.PendingClaims, proof.JobId, proof.Token)" in sweep
+      and "credit.Amount == proof.WorkerPay" in sweep)
+check("C22: offline sweep reads only persisted worker profile and limits rate",
+      "Store:GetAsync(keyFor(proof.WorkerUserId))" in data_service
+      and "OwnerProofSweepRules.MinIntervalSeconds" in data_service
+      and "Sweep.MaxReadsPerPass = 4" in sweep)
+check("C22: owner sweep runs after load and autosave",
+      "task.delay(15, function()" in data_service
+      and "task.spawn(DataService.ReconcileOwnerProofs, player)" in data_service)
+check("C22: sweep tests in runner",
+      '"OwnerProofSweepRulesTest"' in runner
+      and (TOOLS / "OwnerProofSweepRulesTest.luau").is_file())
 # C16/C17: upgrades persistentes e pads físicos autorizados no servidor.
 equipment_rules = text(SHARED / "EquipmentUpgradeRules.lua")
 pad_service = text(ROOT / "src" / "server" / "EquipmentUpgradePads.lua")

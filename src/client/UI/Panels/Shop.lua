@@ -328,8 +328,44 @@ function Shop.new(parent: Instance)
 		renderSidebar(kind)
 		local list = products(kind)
 		local shown = 0
-		for _, p in ipairs(list) do
-			if categoryFilter == "all" or p.Category == categoryFilter then
+		-- V2-02: lista persistida da recepção entra no carrinho LOCAL;
+        -- cobrança continua sendo validada na loja física, pelo servidor V1.
+        local requests = snapshot.Profile.SupplyRequests or {}
+        if kind == "parts" and categoryFilter == "all" and next(requests) ~= nil then
+            local requestCard = PanelKit.card(gridScroll, "V2SupplyList")
+            requestCard.LayoutOrder = -100
+            HudParts.text(requestCard, "LISTA DA OFICINA", 19, {
+                Font = Theme.FontTitle, TextColor3 = Theme.Accent,
+                Position = UDim2.fromOffset(10, 10), Size = UDim2.new(1, -20, 0, 55),
+                TextWrapped = true,
+            })
+            local sum, count = 0, 0
+            for partId, qty in pairs(requests) do
+                if Catalog.Parts[partId] and type(qty) == "number" and qty > 0 then
+                    sum += Catalog.Parts[partId].Cost * qty
+                    count += 1
+                end
+            end
+            HudParts.text(requestCard, string.format("%d tipo(s) · %d moedas", count, sum), 17, {
+                Font = Theme.FontSemi, Position = UDim2.fromOffset(8, 67),
+                Size = UDim2.new(1, -16, 0, 38), TextWrapped = true,
+            })
+            local load = PanelKit.button(requestCard, "CARREGAR LISTA", "blue",
+                Vector2.new(130, 44), function()
+                    for partId, qty in pairs(requests) do
+                        if Catalog.Parts[partId] and type(qty) == "number" then
+                            local key = "Part:" .. partId
+                            cart[key] = math.min(Catalog.MaxPartPurchase,
+                                math.max(cart[key] or 0, math.max(0, math.floor(qty))))
+                        end
+                    end
+                    cartOpen = true
+                    refresh()
+                end)
+            load.Position = UDim2.fromOffset(10, 130)
+        end
+        for _, p in ipairs(list) do
+            if categoryFilter == "all" or p.Category == categoryFilter then
 				shown += 1
 				local owned = p.Kind == "Equipment" and (snapshot.Profile.Equipment or {})[p.Id] == true
 				local card = PanelKit.card(gridScroll, "Product_" .. p.Id)
@@ -445,7 +481,7 @@ function Shop.new(parent: Instance)
 	local lastKey = ""
 	Store.Changed.Event:Connect(function(snapshot: any)
 		if window.IsOpen() then
-			local key = game:GetService("HttpService"):JSONEncode(snapshot.Profile.Coins, snapshot.Profile.Parts, snapshot.Profile.Equipment)
+			local key = game:GetService("HttpService"):JSONEncode({snapshot.Profile.Coins, snapshot.Profile.Parts, snapshot.Profile.Equipment, snapshot.Profile.SupplyRequests})
 			if key ~= lastKey then
 				lastKey = key
 				refresh()

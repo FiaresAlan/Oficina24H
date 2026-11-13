@@ -491,6 +491,27 @@ check("V1 asset guide exists and covers Roblox storage paths",
       and "StudioPlaceAudit" in text(ROOT / "docs" / "GUIA_UNICO_ASSETS_V1.md"))
 check("readme links project checklist", "issues/15" in text(ROOT / "README.md"))
 
+# C30 / G1: clones de assets importados devem ser sanitizados antes de entrar no mundo.
+asset_safety = text(SHARED / "AssetSafetyRules.lua")
+check("C30: sanitizacao nao deixa Script, LocalScript ou ModuleScript",
+      'function AssetSafetyRules.StripScripts' in asset_safety
+      and 'item:IsA("Script")' in asset_safety
+      and 'item:IsA("LocalScript")' in asset_safety
+      and 'item:IsA("ModuleScript")' in asset_safety)
+for relative, cloned_name in (
+    ("src/server/CustomerArrivalService.lua", "car"),
+    ("src/server/NpcKit.lua", "npc"),
+    ("src/server/EquipmentModels.lua", "copy"),
+    ("src/server/VehicleService.lua", "copy"),
+):
+    content = text(ROOT / relative)
+    check(f"C30: {relative} sanitiza clone antes do Parent",
+          f"AssetSafetyRules.StripScripts({cloned_name})" in content
+          and content.index(f"AssetSafetyRules.StripScripts({cloned_name})") > content.index(f"local {cloned_name} = ")
+          and "AssetSafetyRules" in content)
+check("C30: regressao de sanitizacao registrada no runner",
+      '"AssetSafetyRulesTest"' in runner and (TOOLS / "AssetSafetyRulesTest.luau").is_file())
+
 print(f"\nStatic checks: {passed} passed, {len(failures)} failed")
 if failures:
     raise SystemExit(1)

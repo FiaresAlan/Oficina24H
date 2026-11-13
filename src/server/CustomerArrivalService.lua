@@ -14,6 +14,7 @@ local PlotService = require(script.Parent.PlotService)
 local NpcKit = require(script.Parent.NpcKit)
 local LotPath = require(script.Parent.LotPath)
 local VehicleSceneRules = require(game:GetService("ReplicatedStorage").Shared.VehicleSceneRules)
+local AssetSafetyRules = require(game:GetService("ReplicatedStorage").Shared.AssetSafetyRules)
 
 local CustomerArrivalService = {}
 
@@ -156,6 +157,7 @@ function CustomerArrivalService.BuildCar(job: any, cf: CFrame, name: string): (M
 		return nil, nil, nil
 	end
 	local car = template:Clone()
+	AssetSafetyRules.StripScripts(car) -- impedir execução de scripts de terceiros antes de inserir no Workspace
 	car.Name = name
 	car:PivotTo(cf)
 	car:SetAttribute("JobId", job.Id)

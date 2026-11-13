@@ -8,6 +8,7 @@ local ServerStorage = game:GetService("ServerStorage")
 local TweenService = game:GetService("TweenService")
 
 local NpcAnimations = require(game:GetService("ReplicatedStorage").Shared.NpcAnimations)
+local AssetSafetyRules = require(game:GetService("ReplicatedStorage").Shared.AssetSafetyRules)
 
 local NpcKit = {}
 
@@ -55,6 +56,7 @@ function NpcKit.Clone(gender: string?, customerName: string, name: string): Mode
 		return nil
 	end
 	local npc = template:Clone()
+	AssetSafetyRules.StripScripts(npc)
 	npc.Name = name
 	for _, d in ipairs(npc:GetDescendants()) do
 		if d:IsA("BasePart") then

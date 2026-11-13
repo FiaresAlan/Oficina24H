@@ -11,6 +11,7 @@ local Catalog = require(game:GetService("ReplicatedStorage").Shared.Catalog)
 local InspectionPointRules = require(game:GetService("ReplicatedStorage").Shared.InspectionPointRules)
 local RepairPrepRules = require(game:GetService("ReplicatedStorage").Shared.RepairPrepRules)
 local RepairSocketRules = require(game:GetService("ReplicatedStorage").Shared.RepairSocketRules)
+local AssetSafetyRules = require(game:GetService("ReplicatedStorage").Shared.AssetSafetyRules)
 local PlotService = require(script.Parent.PlotService)
 local CustomerNpcService = require(script.Parent.CustomerNpcService)
 local CustomerArrivalService = require(script.Parent.CustomerArrivalService)
@@ -47,6 +48,7 @@ function VehicleService.PublishPreviews()
 	for _, model in ipairs(source:GetChildren()) do
 		if model:IsA("Model") then
 			local copy = model:Clone()
+			AssetSafetyRules.StripScripts(copy) -- também proteger as miniaturas replicadas ao cliente
 			local hull = copy:FindFirstChild("Casco")
 			if hull then
 				hull:Destroy()

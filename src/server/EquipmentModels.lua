@@ -2,6 +2,7 @@
 -- Modelos procedurais (Parts) dos equipamentos do Catalog. Sem upload, sem licença, versionados em código.
 -- Cada função devolve um Model com PrimaryPart "Base" apoiado no piso (origem no centro da base, base em y=0).
 local ServerStorage = game:GetService("ServerStorage")
+local AssetSafetyRules = require(game:GetService("ReplicatedStorage").Shared.AssetSafetyRules)
 local EquipmentModels = {}
 
 -- Modelo 3D real (pacote de oficina CC0, tratado no Blender) em ServerStorage.Assets.Equipamentos["Eq_<Id>"], se existir.
@@ -170,6 +171,7 @@ function EquipmentModels.Build(equipmentId: string): Model?
 	local real = realModel(equipmentId)
 	if real then
 		local copy = real:Clone()
+		AssetSafetyRules.StripScripts(copy)
 		copy.Name = "Eq_" .. equipmentId
 		copy:PivotTo(CFrame.Angles(0, math.pi, 0))
 		copy.WorldPivot = CFrame.new()

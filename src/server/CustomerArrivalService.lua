@@ -53,6 +53,9 @@ end
 
 -- Carros que já saíram do controle desta cena mas ainda estão parados no meio-fio (cliente voltando ao volante).
 local lingering: { [string]: { Car: Model, At: Vector3, OwnerUserId: number, Npc: Model? } } = {}
+-- C29: uma vaga pode ser reutilizada antes que o antigo carro termine
+-- de sair. Guardar o carro em movimento independentemente de lingering.
+local curbDeparting: { [Model]: { OwnerUserId: number, Npc: Model? } } = {}
 
 local function linger(state: State)
 	local car = state.Car
@@ -298,6 +301,9 @@ function CustomerArrivalService.Depart(jobId: string)
 		return
 	end
 	linger(state)
+	if car then
+		curbDeparting[car] = { OwnerUserId = state.OwnerUserId, Npc = npc }
+	end
 	task.spawn(function()
 		if npc and npc.Parent and car and car.Parent then
 			NpcKit.Say(npc, "Que pena... até mais!", 2.5)
@@ -313,6 +319,12 @@ function CustomerArrivalService.Depart(jobId: string)
 		end
 		if npc and npc.Parent then
 			npc:Destroy()
+		end
+		if car then
+			curbDeparting[car] = nil
+			local key = state.OwnerUserId .. ":" .. state.Slot
+			local old = lingering[key]
+			if old and old.Car == car then lingering[key] = nil end
 		end
 	end)
 end
@@ -336,6 +348,15 @@ function CustomerArrivalService.Clear(ownerUserId: number)
 			if arrivals and entry.Car.Parent == arrivals then
 				entry.Car:Destroy()
 			end
+		end
+	end
+	-- Mesmo após freeSlot liberar o meio-fio, a animação de despedida
+	-- ainda pode estar ativa. Não deixar carros de ex-jogadores na rua.
+	for car, scene in pairs(curbDeparting) do
+		if VehicleSceneRules.IsOwnedBy(scene, ownerUserId) then
+			curbDeparting[car] = nil
+			if scene.Npc and scene.Npc.Parent then scene.Npc:Destroy() end
+			if car.Parent then car:Destroy() end
 		end
 	end
 end

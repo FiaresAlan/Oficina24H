@@ -8,6 +8,8 @@ Simulador social de oficina mecânica para Roblox: o jogador atende clientes, di
 
 **[CHECKLIST MESTRE V2 — direção híbrida aprovada, ainda não implementada (Issue #26)](https://github.com/FiaresAlan/Oficina24H/issues/26)**
 
+**[Checklist Mestre V2 atualizado — fases, dependências, qualidade](docs/CHECK_LIST_MESTRE_V2.md)** · **[Guia de assets V2 — onde baixar, licenças e importação](docs/GUIA_UNICO_ASSETS_V2.md)**
+
 **[Direção oficial do jogo V2](docs/DIRECAO_JOGO_V2_2026-11-13.md)** · **[Checklist completo V2](docs/CHECK_LIST_MESTRE_V2.md)** · **[Pesquisa de mercado V2](docs/PESQUISA_MERCADO_V2_2026-11-13.md)** · **[Auditoria do código C1–C17](docs/AUDITORIA_V2_BASE_CODIGO_2026-11-13.md)** · **[Test-drive futuro (especificação)](docs/PROPOSTA_TEST_DRIVE_V2_FUTURO.md)**
 
 **Status da V2:** direção aprovada, apenas documentos. **Nenhuma nova mecânica V2 implementada.** A V1 (Issue #15) continua sendo o desenvolvimento ativo das fases A1–C31, não uma garantia de QA no Studio. A implementação das fases V2 depende de nova autorização do proprietário.

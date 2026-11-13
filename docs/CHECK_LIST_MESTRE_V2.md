@@ -1,9 +1,9 @@
 # CHECK_LIST_MESTRE_V2 — OFICINA 24H
 
-**Versão:** 2.0, 13/11/2026. **Situação:** planejamento, aguardando autorização para executar gameplay V2.  
+**Versão:** 2.1, 13/11/2026. **Situação:** planejamento e guia de assets finalizados; **nenhuma mecânica V2 implementada**, aguardando OK explícito para código.  
 **Direção aprovada pelo proprietário:** híbrida — estilização legível do mundo + reparos visualmente mecânicos + gestão de negócio.  
-**Código base:** main df3f1a66 (C1–C17). **Preservar:** Issue #15 V1 como histórico.  
-**Documentos de referência:** DIRECAO_JOGO_V2_2026-11-13.md, PESQUISA_MERCADO_V2_2026-11-13.md, AUDITORIA_V2_BASE_CODIGO_2026-11-13.md.
+**Código base de referência:** main em C31 (`2690f082` antes dos commits exclusivamente documentais da V2). **Atenção:** o Claude Code está homologando/corrigindo a V1 em paralelo; sempre ler novo HEAD e reconciliar diffs antes de programar V2. Preservar Issue #15 V1 como histórico.  
+**Documentos de referência:** DIRECAO_JOGO_V2_2026-11-13.md, PESQUISA_MERCADO_V2_2026-11-13.md, AUDITORIA_V2_BASE_CODIGO_2026-11-13.md (auditoria histórica até C17), [GUIA_UNICO_ASSETS_V2.md](GUIA_UNICO_ASSETS_V2.md) e GUIA_UNICO_ASSETS_V1.md.
 
 ## Regra de preenchimento
 - [C] = código e teste de regressão escritos e integrados.
@@ -11,7 +11,7 @@
 - [S] = jogo **realmente** testado no Roblox Studio / dispositivo.
 - Nada é marcado [x] por ter sido planejado. **Todas as fases V2 abaixo começam pendentes.**
 - O proprietário pretende executar a homologação Studio ao final. Isso não dispensa testes de código em cada etapa e mantém riscos de integração abertos.
-- Implementar **uma fase inteira por rodada**. Duas fases apenas quando independentes e com CI verde.
+- Implementar **o máximo de fases completas e seguras possível por rodada**. Agrupar somente quando dependências, revisão, testes e CI permitirem; sem limite arbitrário de quantidade nem redução de qualidade.
 
 ## Sequência e bloqueios
 
@@ -39,18 +39,18 @@ P0 = prioridade para o núcleo de lançamento. P1 = opcional condicionado a viab
 
 ---
 
-## V2-00 — Integridade pré-V2
-**Meta:** não expandir um código com contas ou serviços inconsistentes.
-- [ ] [C] Reauditar DataService/WorkshopService, 15 reparos, NPC, loja e plataformas, incluindo todas as alterações C1–C17.
-- [ ] [C] Resolver/mitigar fluxo legacy timing sem recibo durável, conta de NPC, provas finitas de repasses e claims órfãs.
-- [ ] [C] Provar idempotência do débito/compra/upgrade, cancelamento, fraude de remotes, desconexão, reconexão e rollback.
-- [ ] [C] Inventariar assets, licenças e integração no place real; listar substituições necessárias e fallbacks.
-- [ ] [C] Escrever testes adversos e revisão das migrações schema v1–v8.
-- [ ] [A] CI Rojo, contratos e verificações disponíveis aprovados, logs registrados.
-- [ ] [S] RunAllTests, StudioPlaceAudit, duas contas e 15 serviços no place (a ser feito pelo usuário).
+## V2-00 — Integração segura com a V1 em homologação
+**Meta:** reconciliar o HEAD atualizado pelo Claude com a V1 C31, sem refazer correções C18–C31 nem interferir na homologação.
+- [ ] [C] Comparar HEAD atual com C31; mapear módulos e riscos alterados pelo QA V1, classificados na Issue #15.
+- [ ] [C] Reauditar DataService, WorkshopService e schema atual (v11 em C31), 15 serviços, NPC, compras, upgrades, recibos, claims e reconciliação entre perfis.
+- [ ] [C] Revisar limites residuais de atomicidade financeira entre contas e ledger/arquivo de provas, sem afirmar segurança já comprovada em Studio.
+- [ ] [C] Definir política de trabalho isolado em branch V2, integração revisada e testes para não sobrescrever a main da V1.
+- [ ] [C] Definir novos contratos e migração reversível compatível com dados existentes; inventário real de assets/licenças e fallbacks.
+- [ ] [C] Escrever testes adversos de idempotência/replay, duas compras, duas OS, desconexão/rollback e compatibilidade do código tocado.
+- [ ] [A] Rodar contratos, validações e build Rojo; registrar links de CI efetivamente aprovados.
+- [ ] [S] Suites Luau, 15 serviços e dois jogadores no Studio continuam com Claude/proprietário; não usar CI como substituto.
 
-**Aceite de código:** não há P0 desconhecido sem plano; erros conhecidos ficam registrados; sem alegação de atomicidade multi-chave.
-
+**Aceite de engenharia:** nenhuma regressão conhecida sem plano, baseline registrado, integração sem force-push ou sobrescrever correções da V1.
 ## V2-01 — Pipeline visual híbrido e 3 carros de referência
 - [ ] [C] Definir paleta, iluminação, materiais e densidade de cena: bairro leve + oficina industrial + reparo técnico.
 - [ ] [C] Preservar a rua atual; fazer protótipo visual em um quarteirão, não remodelagem geral.
@@ -214,4 +214,62 @@ P0 = prioridade para o núcleo de lançamento. P1 = opcional condicionado a viab
 - [ ] Não fingir testes Studio feitos; deixar [S] pendente até evidência.
 - [ ] Avançar só na próxima fase aprovada.
 
-**PORTÃO DE AUTORIZAÇÃO:** aguardando a ordem explícita do proprietário para iniciar **V2-00**. Publicar esta documentação não significa autorização de gameplay.
+**PORTÃO DE AUTORIZAÇÃO:** aguardando a ordem explícita do proprietário para iniciar **V2-00**. Publicar esta documentação não significa autorização de gameplay; nenhuma fase recebe [C]/[A]/[S] por ser apenas planejada.
+
+
+---
+
+## Anexo 2.1 — Matriz operacional de entrega e revisão
+
+**Separação de responsabilidade:** o assistente entrega arquitetura, serviços Luau, UI, interações, regras de economia, testes, segurança, pipelines, CI e documentação. O proprietário/Claude faz a importação dos assets no place original, testes Studio, multiplayer real, performance em dispositivos e decisão de publicação. Correções da V1 originadas pelo QA pertencem à Issue #15, sem inflar a conclusão da V2.
+
+**Planejamento das fases:** 00–08 e 15 formam o núcleo P0; 09–14 são hipóteses P1 e só entram na implementação quando há justificativa de produto e viabilidade; 16 é homologação. As fases não são contadas como concluídas antes de evidências de código, automação ou Studio.
+
+### Aceite e dependências por fase
+
+| Fase | Entrega mensurável de engenharia | Asset/arte necessário | Prova mínima antes de dar [C]/[A] |
+|---|---|---|---|
+| 00 | Compatibilidade V1→V2, idempotência/finanças e proteção contra sobrescrita | Inventário V1 + manifesto V2 | Contratos e CI após reconciliação com QA V1 |
+| 01 | 3 carros (hatch/sedã/picape) com LOD, sockets, materiais e pipeline | V1 21 carros + PBR opcional | Contrato/fallback dos três rigs e teste de carga estático |
+| 02 | Fila/recepção, OS com estados, dashboard e onboarding | Recepção/quadros do pack V1 | Não vazar defeito; snapshots coerentes; UI navegável |
+| 03 | Capô/portas/rodas, pivôs, interação e bloqueio de movimento | Componentes A03, carros V1 normalizados | Validação servidor, cancelamentos, replay e estados |
+| 04 | Representação física de 15 serviços, feedback antes/depois | Ferramentas/partes A02/A03, efeitos/áudio | Matriz 15/15 e não duplicar pagamento |
+| 05 | Mecânicos com delegação, rota, performance e salário | R15 V1, máquinas A02 | Fila sem corrida, remuneração só após conclusão |
+| 06 | Expansões e upgrades com ROI/feedback e compra segura | Oficina/equipamentos V1 | Saldo/compra dupla/entrada acidental cobertos |
+| 07 | Pedestres/trânsito leve por distância e pool | Cenário V1, LOD de carros existentes | Despawn/logout/streaming e orçamento de NPC |
+| 08 | Gestão de caixa, margem, preço, reposição e estoque | Ícones/recepção V1 | Testes econômicos, migração, extrato coerente |
+| 09 | Compra/restauração/revenda em um slice | Variação danificada dos 3 pilotos | Compra/venda idempotente, não substituir OS |
+| 10 | Pintura/rodas/showroom limitado | Variantes A13 | Persistência, cancelamento, performance do showroom |
+| 11 | Carro da OS dirigível com servidor validando estado | Carro piloto; sem kit novo obrigatório | Recuperação após respawn/logout e anti-fraude |
+| 12 | Test-drive contextual com sintoma/seed | Som/indicadores reutilizados | Elegibilidade, timeout e replay seguros |
+| 13 | Verificação pós-reparo e retrabalho justo | Mesmo carro A14 | Não cobrar/pagar duas vezes; falha de rede justa |
+| 14 | Frota, contratos e reputação | V1 carros + HUD | Contratos e repartição sem crédito duplicado |
+| 15 | Revisão transversal e congelamento candidato | Manifesto completo de licença | CI final, segurança, documentação, migrações |
+| 16 | QA Studio/beta/aprovação do proprietário | Place com assets reais importados | Evidências [S] e autorização de release |
+
+### Sequência sugerida de rodadas — maximizar entregas sem perder qualidade
+- Rodada 1: V2-00; avançar a V2-01 apenas se o diagnóstico da base estiver estabilizado.
+- Rodada 2: V2-01 + V2-02 quando independentes e com verificações próprias.
+- Rodada 3: V2-03 (três carros piloto), seguido da V2-04 se os protocolos de rig e estado já estiverem comprovados em código.
+- Rodada 4: V2-05 + V2-06; depois V2-07 + V2-08 se o servidor, HUD e economia estiverem isolados.
+- Rodadas opcionais: V2-09→V2-14 após análise do custo de diversão e da viabilidade, sem ampliar todo o escopo sem vertical slice.
+- Encerramento: V2-15 engenharia e V2-16 homologação. **A quantidade não é compromisso fixo; só contam fases completas e verificadas.**
+
+### Regra de engenharia de cada rodada
+- [ ] Registrar SHA base e mudanças simultâneas do Claude Code; evitar editar o mesmo módulo às cegas.
+- [ ] Revisar regras e assets existentes antes de escrever novos serviços; evitar duplicação de sistemas.
+- [ ] Entregar interface, estados, servidor, rollback, feedback, mocks/fallback e testes em cada fase.
+- [ ] Confirmar autoridade do servidor para dinheiro/OS/reparo/estoque e compatibilidade do DataStore.
+- [ ] Executar verificador real e build Rojo, registrar link do CI; não afirmar teste Studio sem evidência.
+- [ ] Registrar cada commit, pendência e risco nas docs e na Issue #26, deixando [S] separadamente pendente.
+- [ ] Não usar force-push para substituir a V1; reconciliar conflitos e preservar o cenário original.
+- [ ] Conferir licença, localização e necessidade real de qualquer novo asset no [Guia V2](GUIA_UNICO_ASSETS_V2.md).
+
+### Prioridade de assets para começar
+1. Verificar se o Claude já importou os cinco pacotes V1 e onde estão 21 carros, 11 equipamentos e rigs R15; **não baixar duplicados**.
+2. V2-01 começa com um hatch, um sedã e uma picape **do catálogo V1**, sem trocar a rua.
+3. Na V2-03, se faltar malha de freio, motor ou bateria, usar apenas as peças necessárias do pack CC0 **Survivor Vehicle Maintenance** (A03).
+4. Materiais Poly Haven, efeitos Kenney e ícones Lucide são opcionais e entram só quando melhorarem legibilidade/qualidade; conferir licença.
+5. Nenhum arquivo externo GLB será solicitado pelo código em runtime Roblox: importar ao Studio/Creator Hub e usar as referências autorizadas.
+
+**Não autorizado nesta etapa:** código V2, download automático, importação no place, publicação ou marcação de fases concluídas. Aguardando OK explícito.

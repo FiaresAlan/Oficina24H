@@ -143,14 +143,6 @@ P0 = prioridade para o núcleo de lançamento. P1 = opcional condicionado a viab
 - [ ] [S] Studio: animações/caminhadas, 0/1/2 empregados, 1/2/3 OS, fluxo financeiro e performance real.
 
 
-- [ ] [C] Melhorar pathfinding e recomputação; NPC caminha entre estoque, box, cliente e descanso.
-- [ ] [C] Gerente escolhe OS, prioridade e especialização do funcionário; fila evita disputa pelo mesmo carro.
-- [ ] [C] Mostrar produtividade, qualidade, salário, tempo e histórico de trabalho.
-- [ ] [C] NPC usa peça/salário/equipamento e gera receita apenas após serviço concluído.
-- [ ] [C] Proteger demissão/cancelamento/desconexão e despesa duplicada.
-- [ ] [A] Testes simultâneos com 0/1/2 funcionários e 1/2/3 OS.
-- [ ] [S] Observar caminhada/animações e carga de servidor em Studio.
-
 **Aceite:** a equipe trabalha de maneira crível e não substitui o dono de imediato.
 
 ## V2-06 — Upgrade físico de negócio sem compras acidentais

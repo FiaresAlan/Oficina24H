@@ -35,6 +35,11 @@ ok("manual nao escolhe auto",#S.Order(jobs,slots[1],100)==1)
 local badRecord=S.Record(slots,1,"job01","Troca de pneus",125,75,50,1777777777)
 ok("registro apos liquidacao",badRecord and slots[1].Completed==1 and slots[1].Gross==125)
 ok("registro rejeita valores invalidos",not S.Record(slots,1,"job02","Falso",-1,120,1,1))
+ok("registro rejeita NaN/inf sem alterar indicadores",
+    not S.Record(slots,1,"nan","Serviço",0/0,80,50,1777777777)
+    and not S.Record(slots,1,"inf","Serviço",math.huge,80,50,1777777777)
+    and not S.Record(slots,1,"time","Serviço",40,80,math.huge,1777777777)
+    and slots[1].Completed==1)
 ok("replay financeiro nao duplica historico", not S.Record(slots,1,"job01","Troca de pneus",125,75,50,1777777777))
 for i=1,19 do S.Record(slots,1,"job"..tostring(i+1),"Serviço",30,70,25,1777777777) end
 ok("historico limitado 12",#slots[1].Recent==S.MaxHistory and slots[1].Completed==20)

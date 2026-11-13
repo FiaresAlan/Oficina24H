@@ -797,6 +797,13 @@ check("V2-05: waypoint no plano horizontal e prioridade com sinal",
     and "local function signedPriority" in text(SHARED/"V2StaffRules.lua")
     and 'ranked[3].Id=="low"' in text(TOOLS/"V2StaffRulesTest.luau"))
 
+check("V2-05: rejeita telemetria não finita sem contaminar estatísticas",
+    "local function finite" in text(SHARED/"V2StaffRules.lua")
+    and "not finite(gross)" in text(SHARED/"V2StaffRules.lua")
+    and "not finite(quality)" in text(SHARED/"V2StaffRules.lua")
+    and "not finite(seconds)" in text(SHARED/"V2StaffRules.lua")
+    and "rejeita NaN/inf" in text(TOOLS/"V2StaffRulesTest.luau"))
+
 print(f"\nStatic checks: {passed} passed, {len(failures)} failed")
 if failures:
     raise SystemExit(1)

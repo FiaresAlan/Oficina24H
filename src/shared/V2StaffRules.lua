@@ -17,6 +17,11 @@ local function signedPriority(value: any): number
     return math.floor(math.clamp(value,-1,1))
 end
 
+local function finite(value: any): boolean
+    return type(value)=="number" and value==value
+        and value~=math.huge and value~=-math.huge
+end
+
 local function bounded(value: any, max: number): number
     if type(value) ~= "number" or value ~= value or value == math.huge or value == -math.huge then
         return 0
@@ -87,9 +92,10 @@ function Rules.Record(slots: any, slot: any, jobId: any, service: any,
         or slot < 1 or slot > Rules.MaxEmployees or type(slots[slot]) ~= "table"
         or type(jobId) ~= "string" or #jobId < 1 or #jobId > 80
         or type(service) ~= "string" or #service < 1 or #service > 80
-        or type(gross) ~= "number" or gross < 0
-        or type(quality) ~= "number" or quality < 0 or quality > 100
-        or type(seconds) ~= "number" or seconds < 0 then return false end
+        or not finite(gross) or gross < 0 or gross > 100000000
+        or not finite(quality) or quality < 0 or quality > 100
+        or not finite(seconds) or seconds < 0 or seconds > 3600
+        or not finite(at) or at < 0 or at > 4102444800 then return false end
     local s = slots[slot]
     for _, entry in ipairs(s.Recent) do
         if entry.JobId == jobId then return false end -- replay de recibo não contabiliza duas vezes

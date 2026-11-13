@@ -85,8 +85,14 @@ close.TextSize = 18
 close.Parent = frame
 corner(close, 10)
 
-local body = Instance.new("Frame")
+local body = Instance.new("ScrollingFrame")
+body.Name = "ConstructionBenefits"
 body.BackgroundTransparency = 1
+body.BorderSizePixel = 0
+body.ScrollBarThickness = 4
+body.CanvasSize = UDim2.new(0,0,0,0)
+body.AutomaticCanvasSize = Enum.AutomaticSize.Y
+body.ScrollingDirection = Enum.ScrollingDirection.Y
 body.Size = UDim2.new(1, 0, 1, -70)
 body.LayoutOrder = 1
 body.Parent = inner

@@ -14,6 +14,7 @@ local TweenService = game:GetService("TweenService")
 
 local Layout = require(ReplicatedStorage.Shared.Layout)
 local WorkshopLevels = require(ReplicatedStorage.Shared.WorkshopLevels)
+local V2ExpansionVisuals = require(script.Parent.V2ExpansionVisuals)
 local Config = require(ReplicatedStorage.Shared.Config)
 local LocationRules = require(ReplicatedStorage.Shared.LocationRules)
 
@@ -540,6 +541,7 @@ function StationService.ApplyLevel(plot: Instance, level: number, ownerName: str
 	buildBuilding(plot, root, level, ownerName)
 	rebuildBays(plot, root, level)
 	buildStations(plot, root, level)
+    V2ExpansionVisuals.Apply(plot, root, level)
 	syncOwner(plot)
 end
 

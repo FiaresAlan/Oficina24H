@@ -1506,14 +1506,15 @@ function WorkshopService.SkipOnboarding(player: Player)
     return true, ""
 end
 
-function WorkshopService.UpgradeOwnedEquipment(player: Player, equipmentId: string, sourcePlot: Instance): (boolean, string)
+function WorkshopService.UpgradeOwnedEquipment(player: Player, equipmentId: string,
+    sourcePlot: Instance, expectedTarget: number?, expectedCost: number?): (boolean, string)
 	local workshop = getWorkshop(player)
 	if not workshop or PlotService.GetPlot(player) ~= sourcePlot
 		or sourcePlot:GetAttribute("OwnerUserId") ~= player.UserId then
 		return false, "Melhorias só podem ser compradas na sua oficina."
 	end
 	if workshop.Equipment[equipmentId] ~= true then return false, "Equipamento não instalado." end
-	return DataService.UpgradeOwnedEquipment(player, equipmentId)
+	return DataService.UpgradeOwnedEquipment(player, equipmentId, expectedTarget, expectedCost)
 end
 
 function WorkshopService.BuyEquipment(player: Player, equipmentId: string)

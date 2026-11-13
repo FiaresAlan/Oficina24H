@@ -14,10 +14,10 @@ local StationService=require(script.Parent.StationService)
 
 local Pads={}
 local live: {[number]: any}={}
-local onPurchase: ((Player,string,Instance)->())?=nil
+local onPurchase: ((Player,string,Instance,number,number)->())?=nil
 local onNotice: ((Player,string,boolean)->())?=nil
 
-function Pads.SetPurchaseHandler(callback: (Player,string,Instance)->())
+function Pads.SetPurchaseHandler(callback: (Player,string,Instance,number,number)->())
     onPurchase=callback
 end
 function Pads.SetNoticeHandler(callback: (Player,string,boolean)->())
@@ -116,7 +116,7 @@ function Pads.Interact(player: Player,id: string,plot: Instance)
         end
         return
     end
-    if onPurchase then onPurchase(player,id,plot) end
+    if onPurchase then onPurchase(player,id,plot,target,price) end
 end
 
 function Pads.Sync(player: Player,owned: any,upgrades: any)

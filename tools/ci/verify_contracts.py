@@ -847,6 +847,13 @@ check("V2-06: suites Luau para compras e visual no runner",
     all((TOOLS/(p+".luau")).is_file() and ('"'+p+'"') in runner
        for p in ("V2UpgradePurchaseRulesTest","V2ExpansionVisualsTest")))
 
+check("V2-06: compra de maquina revalida nivel/preco no mesmo perfil debitado",
+    "onPurchase(player,id,plot,target,price)" in pad_service
+    and "expectedTarget: number" in server_v2
+    and "expectedTarget, expectedCost)" in workshop
+    and "expectedTarget ~= current + 1" in data_service
+    and "expectedCost ~= cost" in data_service)
+
 print(f"\nStatic checks: {passed} passed, {len(failures)} failed")
 if failures:
     raise SystemExit(1)

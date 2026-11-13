@@ -108,8 +108,10 @@ EquipmentUpgradePads.SetNoticeHandler(function(player: Player,message: string,ok
         actionEvent:FireClient(player,"Notice",{Message=message,Success=ok})
     end
 end)
-EquipmentUpgradePads.SetPurchaseHandler(function(player: Player, equipmentId: string, plot: Instance)
-    local ok, message = WorkshopService.UpgradeOwnedEquipment(player, equipmentId, plot)
+EquipmentUpgradePads.SetPurchaseHandler(function(player: Player, equipmentId: string,
+    plot: Instance, expectedTarget: number, expectedCost: number)
+    local ok, message = WorkshopService.UpgradeOwnedEquipment(
+        player, equipmentId, plot, expectedTarget, expectedCost)
     if ok then
         invalidateSnapshot(player.UserId)
         local profile = DataService.Get(player)

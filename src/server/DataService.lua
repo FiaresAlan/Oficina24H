@@ -875,14 +875,23 @@ end
 
 -- C16: troca dinheiro por um upgrade da própria máquina, sem yield entre
 -- checagem de nível/saldo e débito. Não há RemoteEvent de compra do pad.
-function DataService.UpgradeOwnedEquipment(player: Player, equipmentId: string): (boolean, string)
+function DataService.UpgradeOwnedEquipment(player: Player, equipmentId: string,
+    expectedTarget: number?, expectedCost: number?): (boolean, string)
 	local profile = Profiles[player.UserId]
 	if not profile or not Catalog.Equipment[equipmentId] then return false, "Equipamento inválido." end
 	local current = EquipmentUpgradeRules.Level(profile.EquipmentLevels, profile.Equipment, equipmentId)
 	if current == 0 then return false, "Você precisa comprar e instalar este equipamento primeiro." end
 	local cost = EquipmentUpgradeRules.NextCost(equipmentId, current)
-	if not cost then return false, "Equipamento já está no nível máximo." end
-	if profile.Coins < cost then return false, "Moedas insuficientes para esta melhoria." end
+    if not cost then return false, "Equipamento já está no nível máximo." end
+    -- Cotação de máquina precisa coincidir exatamente com o perfil debitado.
+    -- Alterações concorrentes ou replays nunca adiantam um segundo nível.
+    if expectedTarget ~= nil or expectedCost ~= nil then
+        if type(expectedTarget) ~= "number" or expectedTarget ~= current + 1
+            or type(expectedCost) ~= "number" or expectedCost ~= cost then
+            return false, "Cotação alterada: confira o preço e o nível novamente."
+        end
+    end
+    if profile.Coins < cost then return false, "Moedas insuficientes para esta melhoria." end
 	DataService.AddCoins(player, -cost, "Melhoria: " .. Catalog.Equipment[equipmentId].DisplayName .. " N" .. (current + 1))
 	profile.EquipmentLevels[equipmentId] = current + 1
 	Dirty[player.UserId] = true

@@ -14,6 +14,7 @@ local RepairSocketRules = require(game:GetService("ReplicatedStorage").Shared.Re
 local PlotService = require(script.Parent.PlotService)
 local CustomerNpcService = require(script.Parent.CustomerNpcService)
 local CustomerArrivalService = require(script.Parent.CustomerArrivalService)
+local VehicleSceneRules = require(game:GetService("ReplicatedStorage").Shared.VehicleSceneRules)
 local NpcKit = require(script.Parent.NpcKit)
 local LotPath = require(script.Parent.LotPath)
 local StationService = require(script.Parent.StationService)
@@ -58,6 +59,9 @@ end
 
 local vehiclesFolder: Folder? = nil
 local byJob: { [string]: Model } = {}
+-- C29: após completar uma OS, o carro deixa byJob enquanto sai da oficina.
+-- Manter rastreio separado até a animação acabar, inclusive se o dono sair.
+local departing: { [Model]: { OwnerUserId: number, Bay: BasePart, Mark: string, Npc: Model? } } = {}
 -- Quem usa o prompt é decidido pelo servidor (Triggered só dispara se o jogador estiver dentro da distância).
 local interactionHandler: ((Player, string, string) -> ())? = nil
 
@@ -617,6 +621,10 @@ function VehicleService.Despawn(jobId: string, instant: boolean?)
 	local theBay = bay :: BasePart
 	local theFrame = frame :: CFrame
 	theBay:SetAttribute("JobId", mark)
+	departing[car] = {
+		OwnerUserId = tonumber(car:GetAttribute("OwnerUserId")) or 0,
+		Bay = theBay, Mark = mark, Npc = npc,
+	}
 	local function release()
 		if theBay:GetAttribute("JobId") == mark then
 			theBay:SetAttribute("JobId", nil)
@@ -641,6 +649,7 @@ function VehicleService.Despawn(jobId: string, instant: boolean?)
 		end
 		if not car.Parent then
 			release()
+			departing[car] = nil
 			return
 		end
 		task.wait(0.4)
@@ -654,6 +663,7 @@ function VehicleService.Despawn(jobId: string, instant: boolean?)
 			LotPath.Drive(root, LotPath.DriveOff(theFrame, offFromX), LotPath.StreetSpeed)
 		end
 		car:Destroy()
+		departing[car] = nil
 	end)
 end
 
@@ -661,6 +671,17 @@ function VehicleService.DespawnOwner(userId: number)
 	for jobId, car in pairs(byJob) do
 		if car:GetAttribute("OwnerUserId") == userId then
 			VehicleService.Despawn(jobId, true)
+		end
+	end
+	-- Carros em animação de saída não estão mais em byJob.
+	for car, scene in pairs(departing) do
+		if VehicleSceneRules.IsOwnedBy(scene, userId) then
+			departing[car] = nil
+			if scene.Bay:GetAttribute("JobId") == scene.Mark then
+				scene.Bay:SetAttribute("JobId", nil)
+			end
+			if scene.Npc and scene.Npc.Parent then scene.Npc:Destroy() end
+			if car.Parent then car:Destroy() end
 		end
 	end
 end

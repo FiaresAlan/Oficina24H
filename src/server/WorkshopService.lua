@@ -1559,7 +1559,7 @@ function WorkshopService.UsedMarketAction(player: Player, operation: any,
     itemId: any, style: any?): (boolean, string)
     if type(operation) ~= "string" or type(itemId) ~= "string"
         or #operation > 16 or #itemId > 64 or (style ~= nil and
-        (type(style) ~= "string" or #style > 12)) then
+        (type(style) ~= "string" or #style > 32)) then
         return false, "Operação inválida."
     end
     if not getWorkshop(player) then return false, "Registre sua oficina primeiro." end

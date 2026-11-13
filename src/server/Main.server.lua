@@ -327,7 +327,7 @@ actionEvent.OnServerEvent:Connect(function(player: Player, action: any, payload:
     elseif action == "RedeemCode" and type(payload.Code) == "string" then
         success, message = ProgressService.RedeemCode(player, payload.Code)
     elseif action == "UpgradeWorkshop" then
-        success, message = WorkshopService.UpgradeWorkshop(player)
+        success, message = WorkshopService.UpgradeWorkshop(player, payload.Confirm == true)
     elseif action == "MoveBag" and type(payload.PartId) == "string" and type(payload.Quantity) == "number" and type(payload.ToBag) == "boolean" then
         success, message = WorkshopService.MoveBag(player, payload.PartId, payload.Quantity, payload.ToBag)
     elseif action == "Checkout" and type(payload.Items) == "table" then

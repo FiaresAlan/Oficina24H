@@ -2102,7 +2102,7 @@ end)
 
 -- Construtora do bairro: amplia o prédio para o próximo nível (WorkshopLevels.Check: moedas, nível, reputação, XP e
 -- equipamentos). Só com os boxes vazios (a obra não derruba carro de cliente) e estando na Construtora.
-function WorkshopService.UpgradeWorkshop(player: Player)
+function WorkshopService.UpgradeWorkshop(player: Player, confirm: boolean?)
     local profile = DataService.Get(player)
     local plot = PlotService.GetPlot(player)
     if not profile or not plot or not getWorkshop(player) then
@@ -2141,7 +2141,7 @@ function WorkshopService.UpgradeWorkshop(player: Player)
         Target = level + 1, Cost = next.Cost,
     }
     local confirmed, pending, message = V2UpgradePurchaseRules.Step(
-        pendingBuildings[player.UserId], quote, os.clock())
+        confirm == true and pendingBuildings[player.UserId] or nil, quote, os.clock())
     pendingBuildings[player.UserId] = pending
     if not confirmed then return false, message end
     -- Após o segundo ato, débito e nível mudam juntos no mesmo perfil, sem yield.

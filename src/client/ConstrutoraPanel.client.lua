@@ -8,6 +8,9 @@ local ProximityPromptService = game:GetService("ProximityPromptService")
 local Store = require(script.Parent:WaitForChild("UI"):WaitForChild("Store"))
 
 local player = Players.LocalPlayer
+local confirmationKey: string? = nil
+local confirmationExpires = 0
+local lastBuyAt = -math.huge
 local gui = Instance.new("ScreenGui")
 gui.Name = "Construtora"
 gui.ResetOnSpawn = false
@@ -101,6 +104,10 @@ buy.TextColor3 = Color3.new(1, 1, 1)
 buy.Parent = inner
 corner(buy, 12)
 
+local function offerKey(info: any): string
+    return tostring(info.Level)..":"..tostring(info.Name)..":"..tostring(info.Cost)
+end
+
 local function render()
 	for _, c in ipairs(body:GetChildren()) do
 		if not c:IsA("UIListLayout") then
@@ -124,6 +131,12 @@ local function render()
 	end
 	label(body, string.format("Próxima obra: %s · %d boxes%s", nextInfo.Name, nextInfo.Bays,
 		nextInfo.MaxEmployees > 0 and string.format(" · até %d mecânico(s)", nextInfo.MaxEmployees) or ""), 20, Color3.new(1, 1, 1), Enum.Font.GothamBlack, 3)
+    local benefits = nextInfo.Benefits or {}
+    label(body, string.format("BENEFÍCIOS: +%d box(es) · +%d mecânico(s) · +%d vaga(s) de máquina",
+        benefits.ExtraBays or 0, benefits.ExtraStaff or 0, benefits.ExtraEquipment or 0),
+        16, GREEN, Enum.Font.GothamBold, 4)
+    label(body,"CAPACIDADE REAL · O retorno depende dos serviços e despesas.",
+        14, Color3.fromRGB(196,205,220), Enum.Font.GothamBold, 5)
 	for i, row in ipairs(nextInfo.Rows or {}) do
 		local line = Instance.new("Frame")
 		line.Size = UDim2.new(1, 0, 0, 34)
@@ -143,19 +156,38 @@ local function render()
 		t.Parent = line
 	end
 	buy.Visible = true
-	buy.Text = nextInfo.CanBuy and string.format("Ampliar por %d moedas", nextInfo.Cost) or "Ainda faltam requisitos"
+    local confirm = confirmationKey == offerKey(nextInfo) and os.clock() <= confirmationExpires
+    buy.Text = nextInfo.CanBuy and
+        (confirm and string.format("CONFIRMAR %d moedas · nível %d", nextInfo.Cost,nextInfo.Level)
+        or string.format("VER OBRA · %d moedas (confirmar 2x)", nextInfo.Cost))
+        or "Ainda faltam requisitos"
 	buy.BackgroundColor3 = nextInfo.CanBuy and Color3.fromRGB(40, 160, 80) or Color3.fromRGB(70, 76, 90)
 	buy.AutoButtonColor = nextInfo.CanBuy
 end
 
 buy.Activated:Connect(function()
-	local info = Store.Snapshot and Store.Snapshot.Workshop
-	if info and info.Next and info.Next.CanBuy then
-		Store.Act("UpgradeWorkshop", {})
-	end
+    local info = Store.Snapshot and Store.Snapshot.Workshop
+    local now = os.clock()
+    if now-lastBuyAt<0.65 then return end
+    if info and info.Next and info.Next.CanBuy then
+        lastBuyAt=now
+        local key=offerKey(info.Next)
+        local confirmed=confirmationKey==key and now<=confirmationExpires
+        if confirmed then
+            confirmationKey=nil
+            confirmationExpires=0
+        else
+            confirmationKey=key
+            confirmationExpires=now+14
+        end
+        Store.Act("UpgradeWorkshop",{Confirm=confirmed})
+        render()
+    end
 end)
 close.Activated:Connect(function()
-	gui.Enabled = false
+    gui.Enabled = false
+    confirmationKey=nil
+    confirmationExpires=0
 end)
 
 local function fit()
@@ -165,7 +197,9 @@ local function fit()
 end
 
 local function open()
-	fit()
+    confirmationKey=nil
+    confirmationExpires=0
+    fit()
 	Store.Refresh()
 	render()
 	gui.Enabled = true
@@ -197,7 +231,9 @@ task.spawn(function()
 			local areas = workspace:FindFirstChild("PublicAreas")
 			local block = areas and areas:FindFirstChild("DistribuidoraEquipamentos")
 			if hrp and hrp:IsA("BasePart") and block and block:IsA("BasePart") and (hrp.Position - block.Position).Magnitude > 90 then
-				gui.Enabled = false
+                gui.Enabled = false
+                confirmationKey=nil
+                confirmationExpires=0
 			end
 		end
 	end

@@ -12,10 +12,11 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Config = require(ReplicatedStorage.Shared.Config)
 local Catalog = require(ReplicatedStorage.Shared.Catalog)
 local CustomerRules = require(ReplicatedStorage.Shared.CustomerRules)
+local SettlementLedgerRules = require(ReplicatedStorage.Shared.SettlementLedgerRules)
 
 local DataService = {}
 
-local SCHEMA_VERSION = 4 -- 3: níveis do prédio, mochila, funcionários, retenção (diária/missões/conquistas); 4: liga semanal
+local SCHEMA_VERSION = 5 -- 5: ledger de serviços (crédito e recibo no mesmo perfil)
 local MAX_ATTEMPTS = 4
 local LOCK_TIMEOUT = 360 -- s; maior que 2 autosaves, para um servidor que caiu não prender o jogador para sempre
 local LOCK_WAIT_STEP = 3
@@ -81,6 +82,7 @@ local function makeDefaultData(): any
 		RatingSum = 0,
 		RecentRatings = {}, -- últimas 10: { Stars, Service, At, CommentKey, Customer }
 		OrderHistory = {}, -- últimos serviços concluídos: { At, Vehicle, Customer, Service, Price, Stars }
+		RepairLedger = {}, -- C8: crédito e comprovante por JobId+token, no mesmo perfil persistido
 		Onboarding = { Done = false }, -- guia do 1º atendimento (servidor decide; salvo por jogador)
 		Bag = {}, -- peças na mochila do jogador (o resto fica na prateleira da oficina = Parts)
 		Expansion = 0, -- (antigo: anexo; migrado para WorkshopLevel)
@@ -191,6 +193,7 @@ local function reconcile(data: any): any
 		table.remove(cleanHistory, 1)
 	end
 	data.OrderHistory = cleanHistory
+	data.RepairLedger = SettlementLedgerRules.Sanitize(data.RepairLedger)
 	if type(data.Parts) ~= "table" then
 		data.Parts = {}
 	end
@@ -432,6 +435,44 @@ function DataService.AddCoins(player: Player, amount: number, reason: string?)
 		end
 	end
 	Dirty[player.UserId] = true
+end
+
+-- Registro idempotente: saldo e chave de crédito mudam no MESMO perfil sem yield.
+-- Não resolve pagamento multi-conta de modo transacional (cada usuário tem uma chave DataStore).
+function DataService.CreditRepairOnce(player: Player, jobId: string, token: string,
+	amount: number, role: string, serviceName: string, vehicleName: string): boolean
+	local profile = Profiles[player.UserId]
+	if not profile then return false end
+	profile.RepairLedger = profile.RepairLedger or {}
+	if not SettlementLedgerRules.Record(profile.RepairLedger, jobId, token, amount, role,
+		os.time(), serviceName, vehicleName) then return false end
+	DataService.AddCoins(player, amount, "Liquidação de OS: " .. serviceName)
+	Dirty[player.UserId] = true
+	return true
+end
+
+function DataService.HasRepairCredit(player: Player, jobId: any, token: any): boolean
+	local profile = Profiles[player.UserId]
+	return profile ~= nil and SettlementLedgerRules.Find(profile.RepairLedger, jobId, token) ~= nil
+end
+
+function DataService.AttachRepairReceipt(player: Player, jobId: string, token: string,
+	payload: any): boolean
+	local profile = Profiles[player.UserId]
+	if not profile then return false end
+	if not SettlementLedgerRules.Attach(profile.RepairLedger, jobId, token, payload) then return false end
+	Dirty[player.UserId] = true
+	return true
+end
+
+function DataService.GetRepairReceipt(player: Player, jobId: any, token: any): any?
+	local profile = Profiles[player.UserId]
+	return profile and SettlementLedgerRules.Receipt(profile.RepairLedger, jobId, token) or nil
+end
+
+function DataService.RecentRepairSettlements(player: Player, limit: number?): { any }
+	local profile = Profiles[player.UserId]
+	return profile and SettlementLedgerRules.Public(profile.RepairLedger, limit) or {}
 end
 
 -- Encerra o guia do 1º atendimento. Com `bonus` (serviço concluído de verdade) paga uma única vez; pular não paga.

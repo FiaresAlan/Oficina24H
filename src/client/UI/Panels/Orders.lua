@@ -16,6 +16,7 @@ local Stations = require(script.Parent.Parent.Stations)
 local ServiceFocusRules = require(ReplicatedStorage.Shared.ServiceFocusRules)
 local RepairStatementRules = require(ReplicatedStorage.Shared.RepairStatementRules)
 local V2ManagementSummaryRules = require(ReplicatedStorage.Shared.V2ManagementSummaryRules)
+local V2ReceptionRules = require(ReplicatedStorage.Shared.V2ReceptionRules)
 
 local t = Kit.t
 local Orders = {}
@@ -223,6 +224,14 @@ function Orders.new(parent: Instance)
 		info.Name = "Info"
 		HudParts.text(info, t("or_customer", (job.Vip and "★ VIP " or (job.Regular and "♥ " or (job.Fleet and "📋 " or ""))) .. (job.CustomerName or "?")), 30, { Font = Theme.FontTitle, LayoutOrder = 1 })
 		HudParts.text(info, job.VehicleName, 26, { Font = Theme.FontSemi, LayoutOrder = 2 })
+        local reception = job.Reception or {}
+        HudParts.text(info, (reception.Stage or "Aguardando") .. string.format(
+            " · Faixa geral (estimativa): %d–%d moedas",
+                reception.PriceGuideMin or 0, reception.PriceGuideMax or 0), 18, {
+            Font = Theme.FontSemi, TextColor3 = Theme.Muted, LayoutOrder = 2,
+            TextWrapped = true, AutomaticSize = Enum.AutomaticSize.Y,
+            Size = UDim2.new(1, 0, 0, 0),
+        })
 		local status = stack(info, 8, true, 3)
 		HudParts.sprite(status, "pn_o_clock", Vector2.new(28, 28))
 		HudParts.text(status, t("or_waiting"), 24, { Font = Theme.FontSemi, LayoutOrder = 2 })
@@ -253,6 +262,32 @@ function Orders.new(parent: Instance)
 			Store.Act("DeclineJob", { JobId = job.Id })
 		end)
 		decline.LayoutOrder = 3
+        local priority = PanelKit.button(actions,
+            reception.Priority == 1 and "PRIORIDADE ALTA" or reception.Priority == -1
+                and "PRIORIDADE BAIXA" or "PRIORIZAR FILA",
+            "blue", Vector2.new(200, 42), function()
+                if not Stations.IsNear("orders") then
+                    Store.Message:Fire(Stations.FarText.orders, false, "")
+                    Stations.Guide("orders")
+                    return
+                end
+                local nextValue = reception.Priority == 1 and -1 or
+                    reception.Priority == -1 and 0 or 1
+                Store.Act("SetJobPriority", { JobId = job.Id, Priority = nextValue })
+            end)
+        priority.LayoutOrder = 4
+        if reception.CanSchedule then
+            local schedule = PanelKit.button(actions, "ATENDER EM 60 S", "dark",
+                Vector2.new(200, 42), function()
+                    if not Stations.IsNear("orders") then
+                        Store.Message:Fire(Stations.FarText.orders, false, "")
+                        Stations.Guide("orders")
+                        return
+                    end
+                    Store.Act("ScheduleJob", { JobId = job.Id, Seconds = 60 })
+                end)
+            schedule.LayoutOrder = 5
+        end
 	end
 
 	local function progressCard(scroll: ScrollingFrame, snapshot: any, job: any, order: number, compact: boolean)
@@ -280,6 +315,14 @@ function Orders.new(parent: Instance)
 			LayoutOrder = 2,
 		})
 		requirement(info, job, snapshot, 4)
+        local reception = job.Reception or {}
+        HudParts.text(info, "Etapa: " .. (reception.Stage or "Em andamento")
+            .. ((reception.DiscountPercent or 0) > 0 and
+                (" · desconto " .. tostring(reception.DiscountPercent) .. "%") or ""), 19, {
+                Font = Theme.FontSemi, TextColor3 = Theme.Muted, LayoutOrder = 5,
+                TextWrapped = true, AutomaticSize = Enum.AutomaticSize.Y,
+                Size = UDim2.new(1, 0, 0, 0),
+            })
 		local actions = stack(content, 8, false, 3)
 		actions.Name = "Actions"
 		if goal.Kind == "Delegated" then
@@ -310,7 +353,31 @@ function Orders.new(parent: Instance)
 			go.LayoutOrder = 1
 		end
 		if job.Diagnosed and not job.CollaboratorUserId then
-			local npc = PanelKit.button(actions, t("orders_hire_npc"), "dark", Vector2.new(210, 42), function()
+            for _, pct in ipairs({5, 10}) do
+                local discount = PanelKit.button(actions, "OFERECER " .. pct .. "% DESCONTO",
+                    "dark", Vector2.new(210, 42), function()
+                        if not Stations.IsNear("orders") then
+                            Store.Message:Fire(Stations.FarText.orders, false, "")
+                            Stations.Guide("orders")
+                            return
+                        end
+                        Store.Act("DiscountJob", { JobId = job.Id, Percent = pct })
+                    end)
+                discount.LayoutOrder = 5 + pct
+            end
+            if reception.MissingParts and next(reception.MissingParts) ~= nil then
+                local supplies = PanelKit.button(actions, "ADICIONAR PEÇAS À LISTA",
+                    "blue", Vector2.new(210, 42), function()
+                        if not Stations.IsNear("orders") then
+                            Store.Message:Fire(Stations.FarText.orders, false, "")
+                            Stations.Guide("orders")
+                            return
+                        end
+                        Store.Act("RequestJobSupplies", { JobId = job.Id })
+                    end)
+                supplies.LayoutOrder = 8
+            end
+            local npc = PanelKit.button(actions, t("orders_hire_npc"), "dark", Vector2.new(210, 42), function()
 				Store.Act("HireNpc", { JobId = job.Id })
 			end)
 			npc.LayoutOrder = 2
@@ -354,13 +421,18 @@ function Orders.new(parent: Instance)
 		local parts = { tabs.Current(), tostring(inviteJobId), tostring(snapshot.HasWorkshop) }
 		for _, job in ipairs(snapshot.Jobs) do
 			table.insert(parts, string.format("%s.%s.%s.%s.%s.%s",
-				job.Id, job.Status, tostring(job.Diagnosed), tostring(job.CollaboratorUserId),
-				tostring(job.PrepComplete), tostring(job.Requirement and job.Requirement.EquipmentId)))
+                job.Id, job.Status, tostring(job.Diagnosed), tostring(job.CollaboratorUserId),
+                tostring(job.PrepComplete), tostring(job.Requirement and job.Requirement.EquipmentId)))
+            local reception = job.Reception or {}
+            table.insert(parts, table.concat({
+                tostring(reception.Priority), tostring(reception.ScheduledUntil),
+                tostring(reception.DiscountPercent), tostring(reception.Stage),
+            }, ":"))
 		end
 		for _, job in ipairs(snapshot.CollabJobs or {}) do
 			table.insert(parts, "c" .. job.Id .. tostring(job.Diagnosed))
 		end
-		table.insert(parts, HttpService:JSONEncode({ snapshot.Profile.Parts, snapshot.Profile.Equipment, snapshot.SkillLevels }))
+		table.insert(parts, HttpService:JSONEncode({ snapshot.Profile.Parts, snapshot.Profile.Equipment, snapshot.Profile.SupplyRequests, snapshot.SkillLevels }))
 		table.insert(parts, tostring(#(snapshot.Profile.OrderHistory or {})))
 		table.insert(parts, table.concat({ tostring(snapshot.Profile.Coins), tostring(snapshot.Profile.Employees),
 			tostring(snapshot.Profile.WorkshopLevel) }, ":"))
@@ -398,9 +470,7 @@ function Orders.new(parent: Instance)
 				table.insert(progressJobs, job)
 			end
 		end
-		table.sort(openJobs, function(a, b)
-			return (a.WaitSeconds or 0) > (b.WaitSeconds or 0)
-		end)
+		table.sort(openJobs, V2ReceptionRules.QueueLess)
 		local history = snapshot.Profile.OrderHistory or {}
 		tabs.SetLabel("open", t("or_tab_open") .. (#openJobs > 0 and (" (" .. #openJobs .. ")") or ""))
 		tabs.SetLabel("progress", t("or_tab_progress") .. (#progressJobs > 0 and (" (" .. #progressJobs .. ")") or ""))
@@ -439,7 +509,9 @@ function Orders.new(parent: Instance)
                     Size = UDim2.new(1, -28, 0, compact and 47 or 37),
                     TextWrapped = true,
                 })
-            HudParts.text(cardV2, summary.NextAction, compact and 17 or 19, {
+            HudParts.text(cardV2, string.format("%s · estoque %d un. · pedidos %d tipo(s) (%d moedas)",
+                summary.NextAction, summary.StockUnits, summary.SupplyRequestKinds, summary.SupplyEstimatedCost),
+                compact and 15 or 18, {
                 Font = Theme.FontSemi, TextColor3 = Theme.Accent,
                 Position = UDim2.fromOffset(14, compact and 94 or 85),
                 Size = UDim2.new(1, -28, 0, 24), TextWrapped = true,

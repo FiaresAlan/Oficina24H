@@ -694,13 +694,30 @@ function Orders.new(parent: Instance)
                 end
                 if #lines==0 then table.insert(lines,"Nenhuma movimentação categorizada neste período.") end
                 financialCard(scroll,"FinanceCategories",3,"ORIGEM DAS MOVIMENTAÇÕES",lines)
+                local stockAdvice=finance.Restock or {}
+                local reorder={}
+                for _,entry in ipairs(stockAdvice.Items or {}) do
+                    table.insert(reorder,string.format(
+                        "%s · %d em estoque · %d reservado(s) para OS · sugerir +%d (%d moedas)",
+                        entry.Name,entry.OnHand,entry.Required,entry.Quantity,entry.Cost))
+                end
+                if #reorder==0 then
+                    table.insert(reorder,"Estoque suficiente para as OS diagnosticadas e a demanda recente conhecida.")
+                end
+                table.insert(reorder,string.format(
+                    "Falta para OS diagnosticadas: %d · reposição sugerida: %d · amostra: %d serviços",
+                    stockAdvice.UrgentCost or 0,stockAdvice.TotalCost or 0,
+                    stockAdvice.HistoryServices or 0))
+                table.insert(reorder,
+                    "Sugestão somente informativa. Nenhuma compra automática; use a loja física.")
+                financialCard(scroll,"FinanceReorder",4,"REPOSIÇÃO E DEMANDA DE PEÇAS",reorder)
                 local quotes={}
                 for _,q in ipairs(finance.Quotes or {}) do
                     table.insert(quotes,string.format("%s · preço-base %d · peça ref. %d · contribuição-base %+d",
                         q.Name,q.BasePrice,q.PartsReferenceCost,q.BeforeLabor))
                 end
                 table.insert(quotes,"Estimativas ANTES de salários, bonificações, variação de qualidade e outros custos.")
-                financialCard(scroll,"FinanceQuotes",4,"PREÇOS DOS 15 SERVIÇOS · REFERÊNCIA",quotes)
+                financialCard(scroll,"FinanceQuotes",5,"PREÇOS DOS 15 SERVIÇOS · REFERÊNCIA",quotes)
                 local last={}
                 local entries=finance.Recent or {}
                 for i=#entries,math.max(1,#entries-15),-1 do
@@ -710,7 +727,7 @@ function Orders.new(parent: Instance)
                         Color=e.Amount>=0 and Theme.Accent or rgb(255,150,120)})
                 end
                 if #last==0 then table.insert(last,"Sem movimentações recentes.") end
-                financialCard(scroll,"FinanceRecent",5,"ÚLTIMAS MOVIMENTAÇÕES",last)
+                financialCard(scroll,"FinanceRecent",6,"ÚLTIMAS MOVIMENTAÇÕES",last)
             end
         elseif id == "team" then
             -- V2-05: supervisionar até dois mecânicos sem UI sobreposta ou

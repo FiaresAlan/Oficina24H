@@ -37,7 +37,10 @@ function Rules.Category(reason: any,delta: any): string
     if string.find(r,"^Melhoria:") or string.find(r,"^Compra:") then return "Equipment" end
     if string.find(r,"^Ampliação da oficina:") then return "Building" end
     if string.find(r,"^Contratação de mecânico") then return "Hiring" end
-    if string.find(r,"^Bônus do primeiro serviço") then return "Rewards" end
+    if string.find(r,"^Bônus do primeiro serviço")
+        or string.find(r,"^Conquista:") or string.find(r,"^Missão:")
+        or string.find(r,"^Recompensa diária") or string.find(r,"^Liga semanal:")
+        or string.find(r,"^Código ") then return "Rewards" end
     return "Other"
 end
 function Rules.New(opening: number,at: number): any

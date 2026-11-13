@@ -27,6 +27,12 @@ test("estoque nao subtrai novamente do fluxo",
     report.StockReferenceValue==2*Catalog.Parts.TirePatch.Cost+Catalog.Parts.Battery.Cost)
 test("risco de folha detectado",report.AvailableAfterPayroll==44)
 test("categoria não estimada vira outros",report.Groups.Other.In==12)
+test("recompensas da V1 separadas de receita de serviços",
+    R.Category("Missão: Oficina",15)=="Rewards"
+    and R.Category("Recompensa diária (dia 1)",10)=="Rewards"
+    and R.Category("Conquista: Primeira OS",10)=="Rewards"
+    and R.Category("Liga semanal: Bronze",10)=="Rewards"
+    and R.Category("Código RESGATE",10)=="Rewards")
 test("não finge lucro",report.AccountingProfitAvailable==false)
 test("não conta replay de entrada inválida",R.Apply(b,0,"Liquidação de OS: X")==false
     and R.Apply(b,0/0,"Liquidação de OS: X")==false
@@ -51,4 +57,26 @@ end
 local warning=R.Snapshot(R.New(0,0),{Coins=8,Employees=1,Transactions={}},100,25)
 test("caixa insuficiente não é mascarado",warning.Warning:find("INSUFICIENTE")~=nil)
 test("saldo não negativo e fonte só no perfil",warning.Cash==8)
+local stock={Parts={Battery=0,TirePatch=1},OrderHistory={},
+    Coins=5,Employees=0,Transactions={}}
+local hidden={Status="InProgress",Diagnosed=false,
+    Requirement={Parts={Battery=99}}}
+local serviceable={Status="InProgress",Diagnosed=true,
+    Requirement={Parts={Battery=1,TirePatch=1}}}
+local recommendations=R.Restock(stock,{hidden,serviceable})
+test("não inferir defeito nem estoque de OS não diagnosticada",
+    recommendations.UrgentCost==Catalog.Parts.Battery.Cost
+    and #recommendations.Items==1
+    and recommendations.Items[1].Id=="Battery")
+test("reposição nunca debita estoque ou caixa",stock.Coins==5
+    and stock.Parts.Battery==0 and stock.Parts.TirePatch==1)
+local warningParts=R.Snapshot(R.New(5,0),stock,100,0,{hidden,serviceable})
+test("alerta de falta de caixa para OS diagnosticada",
+    warningParts.Warning=="FALTA CAIXA PARA PEÇAS DE ORDENS EM ANDAMENTO"
+    and warningParts.Restock.UrgentCost==Catalog.Parts.Battery.Cost)
+local past=R.Restock({Parts={},OrderHistory={
+    {Service="Reparar pneu"},{Service="Reparar pneu"},{Service="Substituir bateria"},
+}}, {})
+test("estoque de segurança depende somente de serviços passados",
+    past.HistoryServices==3 and past.TotalCost>0)
 return table.concat(out,"\n")

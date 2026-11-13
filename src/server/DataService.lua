@@ -22,10 +22,11 @@ local WorkerPaidTombstoneRules = require(ReplicatedStorage.Shared.WorkerPaidTomb
 local WorkerProofArchiveRules = require(ReplicatedStorage.Shared.WorkerProofArchiveRules)
 local EquipmentUpgradeRules = require(ReplicatedStorage.Shared.EquipmentUpgradeRules)
 local V2SupplyRules = require(ReplicatedStorage.Shared.V2SupplyRules)
+local V2StaffRules = require(ReplicatedStorage.Shared.V2StaffRules)
 
 local DataService = {}
 
-local SCHEMA_VERSION = 12 -- V2: adiciona somente lista de compras, preserva v11 e provas financeiras
+local SCHEMA_VERSION = 13 -- V2-05: escala, historico e folha de funcionarios; v11/v12 preservados
 local MAX_ATTEMPTS = 4
 local LOCK_TIMEOUT = 360 -- s; maior que 2 autosaves, para um servidor que caiu não prender o jogador para sempre
 local LOCK_WAIT_STEP = 3
@@ -122,6 +123,8 @@ local function makeDefaultData(): any
 		PendingVipReferral = false, -- um freguês indicou um VIP: o próximo cliente é VIP
 		League = { Week = -1, Points = 0, Badge = "", BadgeWeek = -1 }, -- liga semanal (shared/ProgressRules)
 		Employees = 0, -- mecânicos NPC contratados
+        StaffSlots = V2StaffRules.Sanitize(nil), -- V2-05: escala de dois mecânicos
+        StaffPayroll = { PaidCount=0, TotalPaid=0, LastDueAt=0 }, -- sem tokens privados novos
 	}
 end
 
@@ -315,6 +318,13 @@ local function reconcile(data: any): any
 	end
 	data.Expansion = 0
 	data.Employees = intIn(data.Employees, 0, Config.MaxEmployees)
+    data.StaffSlots = V2StaffRules.Sanitize(data.StaffSlots)
+    local payroll = type(data.StaffPayroll)=="table" and data.StaffPayroll or {}
+    data.StaffPayroll = {
+        PaidCount = intIn(payroll.PaidCount,0,100000000),
+        TotalPaid = intIn(payroll.TotalPaid,0,1000000000),
+        LastDueAt = intIn(payroll.LastDueAt,0,4102444800),
+    }
 	if type(data.Transactions) ~= "table" then
 		data.Transactions = {}
 	end
@@ -1122,6 +1132,47 @@ function DataService.SetEmployees(player: Player, count: number)
 		profile.Employees = math.clamp(math.floor(count), 0, Config.MaxEmployees)
 		DataService.MarkDirty(player)
 	end
+end
+
+-- V2-05: quadro de funcionários salvo no mesmo perfil com limites rígidos.
+function DataService.UpdateStaffPolicy(player: Player,index: any,key: any,value: any): (boolean,string)
+    local profile=Profiles[player.UserId]
+    if not profile or type(index)~="number" or index%1~=0 or index<1
+        or index>(profile.Employees or 0) then return false,"Mecânico não contratado." end
+    local ok,message=V2StaffRules.Update(profile.StaffSlots,index,key,value)
+    if ok then Dirty[player.UserId]=true end
+    return ok,message
+end
+
+function DataService.RecordStaffJob(player: Player,index: number,jobId: string,
+    service: string,amount: number,quality: number,seconds: number): boolean
+    local profile=Profiles[player.UserId]
+    if not profile then return false end
+    -- O caller chama somente após SettleNpcRepairOnce confirmar crédito e consumo no mesmo perfil.
+    local ok=V2StaffRules.Record(profile.StaffSlots,index,jobId,service,amount,
+        quality,seconds,os.time())
+    if ok then Dirty[player.UserId]=true end
+    return ok
+end
+
+-- Debita salário no mesmo perfil em que se avança a data de vencimento,
+-- sem yield. Chamadas repetidas com a mesma data são recusadas.
+function DataService.ChargeStaffPayrollOnce(player: Player,dueAt: any,count: any): (boolean,string)
+    local profile=Profiles[player.UserId]
+    if not profile or type(dueAt)~="number" or dueAt%1~=0 or dueAt<=0
+        or type(count)~="number" or count%1~=0 or count<1
+        or count>Config.MaxEmployees or profile.Employees~=count
+        or profile.NextPayAt~=dueAt or os.time()<dueAt then
+        return false,"Folha já executada ou prazo inválido."
+    end
+    local due=count*Config.EmployeeSalary
+    if profile.Coins<due then return false,"Saldo insuficiente para salários." end
+    profile.NextPayAt=os.time()+Config.PaydaySeconds
+    profile.StaffPayroll.PaidCount+=1
+    profile.StaffPayroll.TotalPaid+=due
+    profile.StaffPayroll.LastDueAt=dueAt
+    DataService.AddCoins(player,-due,"Salário dos funcionários")
+    return true,"Salários registrados no perfil."
 end
 
 -- Concedido uma unica vez por perfil; permite registrar funis sem identificadores pessoais.

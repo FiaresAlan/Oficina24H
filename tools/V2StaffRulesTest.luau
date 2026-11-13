@@ -24,10 +24,11 @@ jobs[1].Manual=true
 ok("manual tem precedencia",S.Order(jobs,slots[1],100)[1].Id=="j2")
 S.Update(slots,1,"Mode","Manual")
 ok("manual nao escolhe auto",#S.Order(jobs,slots[1],100)==1)
-local badRecord=S.Record(slots,1,"Troca de pneus",125,75,50,1777777777)
+local badRecord=S.Record(slots,1,"job01","Troca de pneus",125,75,50,1777777777)
 ok("registro apos liquidacao",badRecord and slots[1].Completed==1 and slots[1].Gross==125)
-ok("registro rejeita valores invalidos",not S.Record(slots,1,"Falso",-1,120,1,1))
-for i=1,19 do S.Record(slots,1,"Serviço",30,70,25,1777777777) end
+ok("registro rejeita valores invalidos",not S.Record(slots,1,"job02","Falso",-1,120,1,1))
+ok("replay financeiro nao duplica historico", not S.Record(slots,1,"job01","Troca de pneus",125,75,50,1777777777))
+for i=1,19 do S.Record(slots,1,"job"..tostring(i+1),"Serviço",30,70,25,1777777777) end
 ok("historico limitado 12",#slots[1].Recent==S.MaxHistory and slots[1].Completed==20)
 ok("sanitizacao de historico preserva quantidade",#S.Sanitize(slots)[1].Recent==S.MaxHistory)
 return table.concat(out,"\n")

@@ -35,6 +35,7 @@ function Rules.Sanitize(value: any): { any }
                 if type(log) == "table" and type(log.Service) == "string"
                     and #log.Service <= 80 and #log.Service > 0 then
                     table.insert(recent, {
+                        JobId = type(log.JobId)=="string" and string.sub(log.JobId,1,80) or "",
                         Service = log.Service, Gross = bounded(log.Gross, 100000000),
                         Quality = bounded(log.Quality, 100),
                         Seconds = bounded(log.Seconds, 3600),
@@ -74,21 +75,25 @@ function Rules.Update(slots: any, index: any, key: any, value: any): (boolean, s
     return true, "Escala de mecânico atualizada."
 end
 
-function Rules.Record(slots: any, slot: any, service: any,
+function Rules.Record(slots: any, slot: any, jobId: any, service: any,
     gross: any, quality: any, seconds: any, at: any): boolean
     if type(slots) ~= "table" or type(slot) ~= "number" or slot % 1 ~= 0
         or slot < 1 or slot > Rules.MaxEmployees or type(slots[slot]) ~= "table"
+        or type(jobId) ~= "string" or #jobId < 1 or #jobId > 80
         or type(service) ~= "string" or #service < 1 or #service > 80
         or type(gross) ~= "number" or gross < 0
         or type(quality) ~= "number" or quality < 0 or quality > 100
         or type(seconds) ~= "number" or seconds < 0 then return false end
     local s = slots[slot]
+    for _, entry in ipairs(s.Recent) do
+        if entry.JobId == jobId then return false end -- replay de recibo não contabiliza duas vezes
+    end
     s.Completed = bounded(s.Completed + 1, 100000000)
     s.Gross = bounded(s.Gross + gross, 1000000000)
     s.QualitySum = bounded(s.QualitySum + quality, 10000000000)
     s.TotalSeconds = bounded(s.TotalSeconds + seconds, 1000000000)
     table.insert(s.Recent, 1, {
-        Service = service, Gross = bounded(gross, 100000000),
+        JobId = jobId, Service = service, Gross = bounded(gross, 100000000),
         Quality = bounded(quality, 100), Seconds = bounded(seconds, 3600),
         At = bounded(at, 4102444800),
     })

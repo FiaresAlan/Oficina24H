@@ -21,6 +21,7 @@ check("C14: recusa valor fraudado apesar do ledger legado", not Claim.Authorized
 }, { Proof.Make("job_1", token, 902, 81, 275, "Freios", "Hatch", 1790000000) }, 902))
 check("C14: sanitize remove corrupção", #Proof.Sanitize({ v, v, { WorkerPay = math.huge } }) == 1)
 local recent = {}
+Ledger.Record(recent, "job_1", token, 80, "Owner", 1790000000, "Freios", "Hatch")
 for i = 1, Ledger.MaxEntries + 4 do
 	local tk = string.format("11111111-2222-3333-4444-%012d", i)
 	Ledger.Record(recent, "job_" .. i, tk, 10, "Owner", 1790000000, "Freios", "Hatch")

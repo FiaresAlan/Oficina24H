@@ -5,7 +5,7 @@ local Ledger = require(script.Parent.SettlementLedgerRules)
 local OwnerProofs = require(script.Parent.OwnerSettlementProofRules)
 local Claims = {}
 Claims.MaxPending = 64
-Claims.RecoveryGraceSeconds = 120 -- não recuperar enquanto o FinishRepair normal ainda pode estar em andamento
+Claims.RecoveryGraceSeconds = 600 -- não recuperar enquanto o FinishRepair normal ainda pode estar em andamento
 
 local function integer(x: any, low: number, high: number): boolean
 	return type(x) == "number" and x == x and x ~= math.huge and x ~= -math.huge

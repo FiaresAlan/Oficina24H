@@ -220,7 +220,7 @@ check("recovery verifies owner proof",
       "ownerRaw.OwnerSettlementProofs, userId)" in data_service
       and "OwnerProofs.Authorizes(proof, claim, workerId)" in claim)
 check("claim grace prevents in-flight double payment",
-      "Claims.RecoveryGraceSeconds = 120" in claim
+      "Claims.RecoveryGraceSeconds = 600" in claim
       and "SettlementClaimRules.Recoverable(claim, os.time())" in data_service)
 check("pending claims only expose aggregate counts",
       "function Claims.Summary" in claim

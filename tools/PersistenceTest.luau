@@ -407,12 +407,27 @@ do
 	check("C12: claim foi persistida sem saldo", #store.data["u_1101"].PendingClaims == 1
 		and store.data["u_1101"].Coins == workerInitial)
 	check("C12: dono recebe crédito uma vez", A.CreditRepairOnce(owner, "job_77",
-		token, 120, "Owner", "Freios", "Hatch"))
+		token, 120, "Owner", "Freios", "Hatch", worker.UserId, 280))
+	check("C14: dono guarda prova vinculada ao mecânico",
+		#A.Get(owner).OwnerSettlementProofs == 1)
+	-- O histórico comum gira, mas a prova de repasse C14 permanece no arquivo.
+	for i = 1, 70 do
+		local tk = string.format("11111111-3333-4444-5555-%012d", i)
+		A.CreditRepairOnce(owner, "other_" .. i, tk, 10, "Owner", "Freios", "Hatch")
+	end
+	check("C14: histórico comum não tem mais OS original",
+		not A.HasRepairCredit(owner, "job_77", token))
+	check("C14: arquivo retém prova da OS",
+		#A.Get(owner).OwnerSettlementProofs == 1
+		and A.Get(owner).OwnerSettlementProofs[1].WorkerUserId == worker.UserId)
 	check("C12: dono salva antes do executor", A.Save(owner))
-	A.Remove(worker) A.Remove(owner) -- simula novo servidor sem aplicar parcela do contratado
+	A.Remove(worker) A.Remove(owner)
+	-- Simula passagem do tempo após crash: recuperação nunca concorre com uma
+	-- liquidação normal que ainda está em execução no servidor de origem.
+	store.data["u_1101"].PendingClaims[1].At -= 900 -- simula novo servidor sem aplicar parcela do contratado
 	local B = server(store, "claimB")
 	B.Load(worker)
-	check("C13: migração do schema v6", B.Get(worker).SchemaVersion == 6)
+	check("C14: migração do schema v7", B.Get(worker).SchemaVersion == 7)
 	local recovered = B.ReconcileWorkerClaims(worker)
 	check("C13: parcela ausente recuperada", recovered == 1
 		or B.HasRepairCredit(worker, "job_77", token))
@@ -441,6 +456,7 @@ do
 		A.StageWorkerClaim(worker, 1202, "job_88", token, 80, 220, 32, 88,
 			"Freios", "Hatch", "Freios") and A.Save(worker))
 	A.Remove(worker)
+	store.data["u_1201"].PendingClaims[1].At -= 900
 	local B = server(store, "claimNoOwnerB")
 	B.Load(worker)
 	B.ReconcileWorkerClaims(worker)
@@ -456,6 +472,7 @@ do
 	check("C13: nova reivindicação preparada",
 		B.StageWorkerClaim(worker, 1202, "job_89", token2, 80, 220, 32, 88,
 			"Freios", "Hatch", "Freios") and B.Save(worker))
+	B.Get(worker).PendingClaims[2].At -= 900
 	check("C13: dono paga próxima OS", A.CreditRepairOnce(owner, "job_89", token2,
 		80, "Owner", "Freios", "Hatch") and A.Save(owner))
 	store.failGetNext = 2 -- duas claims pendentes; ambas precisam falhar neste ciclo
@@ -464,6 +481,8 @@ do
 	B.ReconcileWorkerClaims(worker)
 	check("C13: leitura recuperada paga", B.HasRepairCredit(worker, "job_89", token2)
 		and B.Get(worker).Coins == 470)
+	check("C15: apenas contagem pública de reivindicações", B.PendingClaimSummary(worker).Count == 1
+		and B.PendingClaimSummary(worker).Token == nil)
 end
 
 -- C13: dados corrompidos de reivindicação são descartados na migração.
@@ -476,6 +495,7 @@ do
 	local A = server(store, "claimCorruptA")
 	local p = fakePlayer(1301)
 	A.Load(p)
+	check("C14: schema atualizado ao carregar v5", A.Get(p).SchemaVersion == 7)
 	check("C13: sanitize de reivindicações corrompidas", #A.Get(p).PendingClaims == 0)
 	check("C13: mantém saldo antigo", A.Get(p).Coins == 300)
 end

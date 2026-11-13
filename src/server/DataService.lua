@@ -457,7 +457,8 @@ function DataService.CreditRepairOnce(player: Player, jobId: string, token: stri
 	profile.OwnerSettlementProofs = profile.OwnerSettlementProofs or {}
 	local proof = nil
 	if workerUserId ~= nil or workerPay ~= nil then
-		if role ~= "Owner" then return false end
+		if role ~= "Owner" or type(workerUserId) ~= "number"
+			or type(workerPay) ~= "number" then return false end
 		proof = OwnerSettlementProofRules.Make(jobId, token, workerUserId, amount,
 			workerPay, serviceName, vehicleName, os.time())
 		if not proof or OwnerSettlementProofRules.Find(profile.OwnerSettlementProofs, jobId, token) then

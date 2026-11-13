@@ -1175,6 +1175,16 @@ function DataService.ChargeStaffPayrollOnce(player: Player,dueAt: any,count: any
     return true,"Salários registrados no perfil."
 end
 
+-- Se não há saldo, registra somente novo prazo (nenhum pagamento presumido).
+function DataService.DeferStaffPayroll(player: Player,dueAt: any): boolean
+    local profile=Profiles[player.UserId]
+    if not profile or type(dueAt)~="number" or profile.NextPayAt~=dueAt
+        or os.time()<dueAt then return false end
+    profile.NextPayAt=os.time()+Config.PaydaySeconds
+    Dirty[player.UserId]=true
+    return true
+end
+
 -- Concedido uma unica vez por perfil; permite registrar funis sem identificadores pessoais.
 function DataService.ClaimTelemetryMilestone(player: Player, kind: string): boolean
     if kind ~= "FirstUpgrade" and kind ~= "FirstEmployee" then return false end

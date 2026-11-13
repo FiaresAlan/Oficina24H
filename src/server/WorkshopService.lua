@@ -29,6 +29,7 @@ local V2ReceptionRules = require(ReplicatedStorage.Shared.V2ReceptionRules)
 local V2ComponentRules = require(ReplicatedStorage.Shared.V2ComponentRules)
 local V2ServiceProcedureRules = require(ReplicatedStorage.Shared.V2ServiceProcedureRules)
 local V2ManagementSummaryRules = require(ReplicatedStorage.Shared.V2ManagementSummaryRules)
+local V2UpgradePurchaseRules = require(ReplicatedStorage.Shared.V2UpgradePurchaseRules)
 
 local WorkshopService = {}
 
@@ -2092,6 +2093,13 @@ function WorkshopService.MoveBag(player: Player, partId: string, quantity: numbe
     return DataService.MoveBag(player, partId, quantity, toBag)
 end
 
+-- Cotação efêmera: por jogador, nível EXATO e preço EXATO. Não grava tokens no perfil.
+-- O preço e o nível são recalculados no servidor ANTES de cada confirmação.
+local pendingBuildings: { [number]: any } = {}
+Players.PlayerRemoving:Connect(function(player: Player)
+    pendingBuildings[player.UserId] = nil
+end)
+
 -- Construtora do bairro: amplia o prédio para o próximo nível (WorkshopLevels.Check: moedas, nível, reputação, XP e
 -- equipamentos). Só com os boxes vazios (a obra não derruba carro de cliente) e estando na Construtora.
 function WorkshopService.UpgradeWorkshop(player: Player)
@@ -2128,6 +2136,16 @@ function WorkshopService.UpgradeWorkshop(player: Player)
         end
     end
     local next = WorkshopLevels.Levels[level + 1]
+    local quote = {
+        Kind = "Building", Id = next.Name, Source = "Construtora",
+        Target = level + 1, Cost = next.Cost,
+    }
+    local confirmed, pending, message = V2UpgradePurchaseRules.Step(
+        pendingBuildings[player.UserId], quote, os.clock())
+    pendingBuildings[player.UserId] = pending
+    if not confirmed then return false, message end
+    -- Após o segundo ato, débito e nível mudam juntos no mesmo perfil, sem yield.
+    -- Um clique subsequente para outro nível só monta uma NOVA cotação.
     DataService.AddCoins(player, -next.Cost, "Ampliação da oficina: " .. next.Name)
     DataService.SetWorkshopLevel(player, level + 1)
     if DataService.ClaimTelemetryMilestone(player, "FirstUpgrade") then funnel(player, "FirstUpgrade") end
@@ -2160,7 +2178,13 @@ local function upgradeInfo(player: Player, profile: any): any
             SkillTotal = skillTotal(player),
             Equipment = equipmentCount(profile.Equipment),
         })
-        info.Next = { Level = level + 1, Name = next.Name, Bays = #next.Bays, Cost = next.Cost, CanBuy = ok, Rows = rows, MaxEmployees = next.MaxEmployees }
+        info.Next = {
+            Level = level + 1, Name = next.Name, Bays = #next.Bays,
+            Cost = next.Cost, CanBuy = ok, Rows = rows, MaxEmployees = next.MaxEmployees,
+            Benefits = V2UpgradePurchaseRules.Benefits(
+                current, next, WorkshopLevels.MaxEquipment(level),
+                WorkshopLevels.MaxEquipment(level + 1)),
+        }
     end
     return info
 end

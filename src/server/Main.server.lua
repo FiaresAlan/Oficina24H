@@ -103,6 +103,11 @@ end
 VehicleService.PublishPreviews()
 EquipmentService.PublishPreviews()
 EquipmentUpgradePads.Start()
+EquipmentUpgradePads.SetNoticeHandler(function(player: Player,message: string,ok: boolean)
+    if player.Parent == Players then
+        actionEvent:FireClient(player,"Notice",{Message=message,Success=ok})
+    end
+end)
 EquipmentUpgradePads.SetPurchaseHandler(function(player: Player, equipmentId: string, plot: Instance)
     local ok, message = WorkshopService.UpgradeOwnedEquipment(player, equipmentId, plot)
     if ok then

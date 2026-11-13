@@ -48,8 +48,8 @@ check("catalogue defines 15 unique defects", len(ids) == len(set(ids)) == 15)
 
 evidence = text(SHARED / "DiagnosisEvidence.lua")
 inspection = text(SHARED / "InspectionPointRules.lua")
-procedures = text(SHARED / "WorkshopProcedures.lua")
-operations = text(SHARED / "RepairOperations.lua")
+procedures = text(ROOT / "src" / "server" / "WorkshopProcedures.lua")
+operations = text(ROOT / "src" / "server" / "RepairOperations.lua")
 ui = text(CLIENT / "UI" / "OperationRepairGame.lua")
 for defect in ids:
     check(f"{defect}: has diagnosis mapping", re.search(rf"\b{defect}\s*=", evidence) is not None)
@@ -67,6 +67,12 @@ for mode in ("Tire", "Battery", "Cooling", "Sequence", "Calibration", "Circuit",
 
 check("diagnosis must require evidence", "HasRelevantExam" in text(ROOT / "src" / "server" / "WorkshopService.lua"))
 check("server evaluates new repair families", "WorkshopProcedures.Evaluate" in operations)
+# Homologação V1: gabaritos dos minijogos não podem ficar em ReplicatedStorage (exploit lê o módulo).
+check("repair answer keys stay server-only (not in src/shared)",
+      not (SHARED / "WorkshopProcedures.lua").exists() and not (SHARED / "RepairOperations.lua").exists())
+check("client never requires the server answer-key modules",
+      all("WorkshopProcedures" not in f.read_text(encoding="utf-8") and "RepairOperations" not in f.read_text(encoding="utf-8")
+          for f in (ROOT / "src" / "client").rglob("*.lua")))
 check("unvalidated remote finish removed from Orders panel", 'Store.Act("CompleteJob"' not in text(CLIENT / "UI" / "Panels" / "Orders.lua"))
 runner = text(TOOLS / "RunAllTests.luau")
 suite_ids = re.findall(r'"([A-Za-z0-9_]+Test|StudioPlaceAudit)"', runner)
@@ -89,6 +95,13 @@ check("C27: prompts/actions/upgrades and logout invalidate snapshot",
 check("C27: snapshot coherence regression registered",
       '"SnapshotCacheRulesTest"' in runner
       and (TOOLS / "SnapshotCacheRulesTest.luau").is_file())
+check("V1 G5: RepairAction and snapshot rebuilds have per-second budgets, ACK echo sanitized",
+      "RequestBudgetRules.Take(repairActionBudget" in main_src
+      and "RequestBudgetRules.Take(snapshotBuildBudget" in main_src
+      and "RequestBudgetRules.EchoString(payload.JobId)" in main_src
+      and "RequestBudgetRules.Clear(repairActionBudget, player.UserId)" in main_src
+      and '"RequestBudgetRulesTest"' in runner
+      and (TOOLS / "RequestBudgetRulesTest.luau").is_file())
 guard = text(SHARED / "RepairCommitGuard.lua")
 workshop_c28 = text(ROOT / "src" / "server" / "WorkshopService.lua")
 check("C28: revalidate same job/actor after worker claim Save yield",

@@ -48,6 +48,18 @@ local WorkerArchiveLastAt: { [number]: number } = {}
 local Store: any = nil
 local JobId: string = game.JobId ~= "" and game.JobId or "studio"
 local MemoryMode = false
+-- DataStore real obtido na inicialização; os testes trocam Store por um simulado e nunca caem no modo memória.
+local RealStore: any = nil
+
+-- Mensagens do Roblox quando o place não pode usar DataStore no Studio (não publicado ou acesso às APIs
+-- desligado). Só usadas no Studio; em produção qualquer falha continua expulsando sem criar perfil vazio.
+local function isApiAccessError(message: any): boolean
+	local text = string.lower(tostring(message))
+	return string.find(text, "api services", 1, true) ~= nil
+		or string.find(text, "studio access", 1, true) ~= nil
+		or string.find(text, "publish this place", 1, true) ~= nil
+		or string.find(text, "403", 1, true) ~= nil
+end
 
 -- Inicialização do DataStore: falha em place não publicado. No Studio cai para modo memória (avisado).
 local function initStore()
@@ -57,6 +69,7 @@ local function initStore()
 	end)
 	if ok then
 		Store = result
+		RealStore = result
 		MemoryMode = false
 	else
 		Store = nil
@@ -1102,6 +1115,16 @@ function DataService.Load(player: Player)
 		task.wait(0.1) -- reentrada rápida: espera o salvamento anterior terminar (evita ler dado antigo)
 	end
 	local ok, result = acquire(userId)
+	if not ok and RunService:IsStudio() and Store == RealStore and isApiAccessError(result) then
+		-- Auditoria G5: no Studio com "Enable Studio Access to API Services" desligado, GetDataStore
+		-- funciona mas UpdateAsync falha. Em vez de expulsar o testador, cai para o modo memória (avisado).
+		MemoryMode = true
+		Store = nil
+		warn("[DataService] Studio sem acesso às APIs de dados:", result,
+			"- MODO MEMÓRIA: progresso NÃO será salvo nesta sessão de teste.")
+		Profiles[userId] = reconcile(nil)
+		return
+	end
 	if not ok then
 		warn("[DataService] Falha ao carregar dados de", userId, result)
 		player:Kick("Não foi possível carregar seus dados (" .. tostring(result) .. "). Tente entrar novamente.")

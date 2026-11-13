@@ -1,6 +1,6 @@
 -- Regressões de doze receitas especializadas, quatro famílias e contrato de rede.
-local P = require(game.ReplicatedStorage.Shared.WorkshopProcedures)
-local Ops = require(game.ReplicatedStorage.Shared.RepairOperations)
+local P = require(game:GetService("ServerScriptService").Server.WorkshopProcedures)
+local Ops = require(game:GetService("ServerScriptService").Server.RepairOperations)
 local Catalog = require(game.ReplicatedStorage.Shared.Catalog)
 local result = {}
 local function check(name, success)

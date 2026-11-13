@@ -1,7 +1,8 @@
 --!strict
 -- Quinze procedimentos com regras de avaliação do lado do servidor.
 -- Três pilotos específicos + doze receitas especializadas em quatro famílias.
-local RepairRules = require(script.Parent.RepairRules)
+-- Servidor apenas: contém a ordem correta da bateria e encaminha aos gabaritos de WorkshopProcedures.
+local RepairRules = require(game:GetService("ReplicatedStorage"):WaitForChild("Shared").RepairRules)
 local WorkshopProcedures = require(script.Parent.WorkshopProcedures)
 local RepairOperations = {}
 

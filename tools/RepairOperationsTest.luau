@@ -1,5 +1,5 @@
 -- Testes das operacoes piloto. Executar RunAllTests no Roblox Studio.
-local Rules = require(game.ReplicatedStorage.Shared.RepairOperations)
+local Rules = require(game:GetService("ServerScriptService").Server.RepairOperations)
 local mods = { Margin = 0, EquipmentEfficiency = 0, PartReliability = 1, DiagnosisAttempts = 1 }
 local result = {}
 local function check(name, ok)

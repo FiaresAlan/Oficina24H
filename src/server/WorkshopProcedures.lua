@@ -2,8 +2,10 @@
 -- Trabalho mecânico diversificado para os 12 defeitos que anteriormente só tinham o minijogo genérico.
 -- Quatro famílias de interação: montagem sequencial, calibragem, circuito e acabamento de carroceria.
 -- O cliente recebe apenas objetivos e controles; o servidor conserva os gabaritos.
-local Catalog = require(script.Parent.Catalog)
-local RepairRules = require(script.Parent.RepairRules)
+-- Fica em ServerScriptService (não em ReplicatedStorage): os gabaritos nunca são replicados ao cliente.
+local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
+local Catalog = require(Shared.Catalog)
+local RepairRules = require(Shared.RepairRules)
 local WorkshopProcedures = {}
 
 local sequence: { [string]: { Hint: string, Steps: { { Id: string, Name: string } } } } = {

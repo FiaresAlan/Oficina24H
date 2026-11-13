@@ -13,7 +13,7 @@ local RepairSessionRules = require(ReplicatedStorage.Shared.RepairSessionRules)
 local CollaborationRules = require(ReplicatedStorage.Shared.CollaborationRules)
 local JobExitRules = require(ReplicatedStorage.Shared.JobExitRules)
 local RepairCommitGuard = require(ReplicatedStorage.Shared.RepairCommitGuard)
-local RepairOperations = require(ReplicatedStorage.Shared.RepairOperations)
+local RepairOperations = require(script.Parent.RepairOperations)
 local RepairActionRules = require(ReplicatedStorage.Shared.RepairActionRules)
 local RepairReceiptRules = require(ReplicatedStorage.Shared.RepairReceiptRules)
 local SettlementDeliveryRules = require(ReplicatedStorage.Shared.SettlementDeliveryRules)
@@ -57,6 +57,15 @@ local function nearShop(player: Player): boolean
     return LocationRules.IsNearBlock(shop.CFrame, shop.Size, hrp.Position, Config.ShopDistance)
 end
 local SHOP_FAR = "Vá até a Loja de Autopeças do bairro para comprar."
+
+-- Estações físicas do lote (TV de ordens, prateleira). Auditoria G5: sem a pasta Estacoes o servidor
+-- não pode pular a checagem de distância; como na loja, a ausência só é tolerada no Studio.
+local function nearStation(player: Player, plot: Instance?, kind: string): boolean
+    if not plot or not plot:FindFirstChild("Estacoes") then
+        return LocationRules.MissingBlockAllowed(RunService:IsStudio())
+    end
+    return StationService.IsNear(player, plot, kind)
+end
 
 local DataService: any
 local updatePriceBoard: (Player) -> () -- definido adiante; declarado aqui porque ClaimWorkshop o usa
@@ -681,7 +690,7 @@ function WorkshopService.AcceptJob(player: Player, jobId: string)
         return false, "O cliente ainda está estacionando."
     end
     local plot = PlotService.GetPlot(player)
-    if plot and plot:FindFirstChild("Estacoes") and not StationService.IsNear(player, plot, "Orders") then
+    if not nearStation(player, plot, "Orders") then
         return false, "Aceite a ordem na TV de ordens, dentro da oficina."
     end
     -- O VehicleService assume o carro e o cliente da calçada (CustomerArrivalService.Claim) e entra na vaga.
@@ -1638,7 +1647,7 @@ function WorkshopService.HireNpc(player: Player, jobId: string)
         return false, "Um profissional convidado já está nesta ordem."
     end
     local hirePlot = PlotService.GetPlot(player)
-    if hirePlot and hirePlot:FindFirstChild("Estacoes") and not StationService.IsNear(player, hirePlot, "Orders") then
+    if not nearStation(player, hirePlot, "Orders") then
         return false, "Chame o mecânico avulso pela TV de ordens, dentro da oficina."
     end
 
@@ -1851,7 +1860,7 @@ function WorkshopService.MoveBag(player: Player, partId: string, quantity: numbe
     if not getWorkshop(player) or not plot then
         return false, "Registre sua oficina primeiro."
     end
-    if plot:FindFirstChild("Estacoes") and not StationService.IsNear(player, plot, "Stock") then
+    if not nearStation(player, plot, "Stock") then
         return false, "Vá até a prateleira do estoque, dentro da oficina."
     end
     return DataService.MoveBag(player, partId, quantity, toBag)
@@ -2361,6 +2370,23 @@ end
 WorkshopService.RefreshPlotDisplays = refreshPlotDisplays
 syncStaffRef = syncStaff
 rankingEntriesRef = rankingEntries
+
+-- Somente QA no Studio (Main expõe via ServerStorage.QA): cria uma OS com o defeito pedido para homologar os 15
+-- serviços sem depender do sorteio. Reclamação = sintoma real (sem reclamação enganosa) e preço da tabela.
+function WorkshopService._createJobForTesting(player: Player, defectId: string): string?
+    local defect = Catalog.Defects[defectId]
+    if not defect or not getWorkshop(player) then
+        return nil
+    end
+    local job = createJob(player.UserId)
+    job.DefectId = defectId
+    job.ComplaintDefectId = defectId
+    job.ServiceId = defect.ServiceId
+    job.Complaint = defect.Complaint
+    job.Vip, job.Regular, job.Fleet = false, false, nil
+    job.Price = math.max(1, Catalog.Services[defect.ServiceId].Reward)
+    return job.Id
+end
 
 -- Somente QA no Studio (Main expõe via ServerStorage.QA): envelhece as ordens abertas do jogador para testar a expiração.
 function WorkshopService._ageJobsForTesting(userId: number, seconds: number): number

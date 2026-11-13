@@ -607,7 +607,7 @@ function WorkshopService.GetSnapshot(player: Player)
         Profile = profileView,
         RecentSettlements = DataService.RecentRepairSettlements(player, 12),
         Finance = profile and V2FinancialRules.Snapshot(
-            profile.FinanceLedger,profile,os.time(),Config.EmployeeSalary) or nil,
+            profile.FinanceLedger,profile,os.time(),Config.EmployeeSalary,jobs) or nil,
         PendingClaimSummary = DataService.PendingClaimSummary(player),
         HasWorkshop = workshop ~= nil,
         Workshop = (workshop and profile) and upgradeInfoRef(player, profile) or nil,

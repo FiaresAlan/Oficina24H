@@ -719,8 +719,10 @@ function VehicleService.Despawn(jobId: string, instant: boolean?)
 	if not car then
 		return
 	end
-	byJob[jobId] = nil
-    resetComponents(car) -- nenhuma porta ou roda fica aberta durante a saída
+	local states = VehicleService.ComponentStates(jobId)
+    local needsSecuring = not V2ComponentRules.MayDrive(states)
+    byJob[jobId] = nil
+    resetComponents(car) -- recolhe rodas, portas e capô ANTES da partida
 	local npc, animator = CustomerNpcService.Take(jobId)
 	local bay = findBay(car)
 	local plot = bay and bay.Parent
@@ -765,6 +767,9 @@ function VehicleService.Despawn(jobId: string, instant: boolean?)
 	car:SetAttribute("PrepHoodOpen", false)
 	car:SetAttribute("Sintoma", "")
 	task.spawn(function()
+        -- Uma peça aberta só volta à posição fechada após o cliente ter tempo
+        -- de enxergar a recolocação; não dirigir com roda visualmente solta.
+        if needsSecuring then task.wait(0.75) end
 		if StationService.IsBusy(theBay) then
 			StationService.Lift(theBay, car.PrimaryPart, false) -- desce do elevador antes de sair
 		end

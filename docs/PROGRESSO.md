@@ -817,3 +817,13 @@ Detalhes em `docs/AUDITORIA_GERAL.md`. Resumo:
 - **Regressões escritas:** `OwnerProofSweepRulesTest`, `PersistenceTest` e `verify_contracts.py`; testes de integração/Studio não executados. [QA C22](TESTE_C22_LIMPEZA_PROVAS_OFFLINE_2026-11-13.md).
 - **Assets:** os cinco pacotes gratuitos já estão baixados e organizados pelo proprietário, **ainda não importados**. [Guia único](GUIA_UNICO_ASSETS_V1.md).
 - **V2:** ainda documental e não iniciada. Próxima pendência financeira P0: confirmações antigas já fora do ledger de 64 registros.
+
+
+## 2026-11-13 — V1 C23: quitação durável do trabalhador para além das 64 linhas
+- **Problema:** a C22 não podia liberar prova depois que o ledger de 64 operações do contratado girava; o mesmo token corria risco de novo crédito em reivindicação antiga.
+- **C23:** schema v9 e novo `WorkerSettlementProofRules` guardam até **2048** marcadores privados de quitação no perfil do trabalhador, sem expiração, junto com o saldo e as operações em `CreditRepairOnce`. `HasRepairCredit` evita pagamento duplicado mesmo quando a linha saiu do extrato.
+- **Recuperação:** `OwnerProofSweepRules` admite novo marcador persistido como evidência de pagamento, exigindo claim ausente, WorkerUserId correto, JobId/Token, valor, serviço e veículo iguais. `ReconcileWorkerClaims` só descarta claim se crédito foi registrado e Save confirmado.
+- **Compatibilidade:** perfis v8 migram marcadores apenas de pagamentos Worker ainda visíveis no ledger. Histórico já perdido antes da C23 não pode ser reconstruído automaticamente.
+- **Contenção:** arquivo cheio bloqueia novos créditos colaborativos (preflight antes de peças na OS), nunca substitui prova antiga por um pagamento novo. Não resolve atomicidade entre perfis.
+- **Testes escritos:** `WorkerSettlementProofRulesTest`, `OwnerProofSweepRulesTest`, `PersistenceTest`, `RunAllTests` e `verify_contracts.py`. Roteiro em [TESTE_C23_QUITACOES_TRABALHADORES_2026-11-13.md](TESTE_C23_QUITACOES_TRABALHADORES_2026-11-13.md). CI/Rojo não é teste de Studio.
+- **V2:** nenhuma implementação iniciada. Pacotes 3D permanecem baixados, mas não importados.

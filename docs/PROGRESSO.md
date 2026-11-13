@@ -887,3 +887,15 @@ Detalhes em `docs/AUDITORIA_GERAL.md`. Resumo:
 - C31: [commit 426b9665](https://github.com/FiaresAlan/Oficina24H/commit/426b9665f49555da191be35c011daf2d5c29669a), auditoria estrutural de 21 carros, NPC R15 e equipamentos; [correção de índice 0ef749b5](https://github.com/FiaresAlan/Oficina24H/commit/0ef749b5c56d769fac46c2bea9262d5f65e7efba). [CI final verde](https://github.com/FiaresAlan/Oficina24H/actions/runs/43479613749).
 - G1–G5: **todos pendentes**. Os testes escritos não foram executados no Studio; modelos 3D continuam baixados, não importados. Nenhum código V2 implementado.
 - Roteiros: `docs/TESTE_C30_SEGURANCA_ASSETS_V1_2026-11-13.md` e `docs/TESTE_C31_AUDITORIA_MODELOS_V1_2026-11-13.md`.
+
+## 13/11/2026 — Homologação V1, rodada 1 no Roblox Studio (place de QA só com código)
+
+- Ambiente: `rojo build` da `main` C31 aberto no Studio, mundo de `tools/BuildWorld.luau`, 21 carros e 6 clientes **placeholders**; paridade 144/144 scripts com o repositório. Place original **não aberto** (sem acesso de controle de tela ao Studio).
+- Primeira execução real das suítes Luau: 1593 OK / 60 falhas → correções → `RunAllTests` **PASSOU: 2014 OK, 0 falhas, 24 avisos** (avisos esperados de placeholders/licenças).
+- Testes que nunca tinham rodado: `PersistenceTest` usava `"Freios"` como especialização (C12–C25 não executavam); C20 dependia de tarefas de fundo; C22 contradizia a C23; `CompactHudTest` sem `Id`. Todos corrigidos mantendo a intenção (232/232).
+- **15 serviços jogados ao vivo** pelos remotes do HUD (`qa/drive_job.luau`): qualidade 100 em todos, replay do `FinishRepair` sem pagamento duplo, 0 carros/NPCs órfãos, 0 erros no console; ataques (NaN, fora do passo, revisão repetida, exame longe, ID gigante) recusados.
+- Auditoria independente de segurança (somente leitura): nenhum P0. Corrigidos: gabaritos dos minijogos movidos para o servidor (P1), `RequestBudgetRules` (30 ações/s, 8 snapshots/s, eco sanitizado), estações com falha fechada, cache de amizades, modo memória no Studio sem acesso às APIs.
+- G4 no simulador do Studio (jogo só paisagem): iPhone 14, Galaxy A06 e Xbox sem sobreposição; 568×320 sem nada fora da tela (guia cobre cartões de status só durante o guia, P3 aceito). Corrigidos: letreiros dos pads, METAS sobre o guia, alvos < 44 px, guia vazando.
+- Desempenho indicativo no place de QA: 59,9 Hz servidor / 59,9 fps cliente com 6 chegadas simultâneas. Não vale para o place real.
+- Portões: G2/G4 aprovados no nível de código/simulador; **G1, G3, G5 abertos**. Próximos passos na seção 8 de `docs/HOMOLOGACAO_V1_2026-11-13.md`.
+- Branch `work/oficina24h-v1-homologacao-2026-11-13`; CI verde.

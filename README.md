@@ -12,7 +12,7 @@ Simulador social de oficina mecânica para Roblox: o jogador atende clientes, di
 
 **Status da V2:** direção aprovada, apenas documentos. **Nenhuma nova mecânica V2 implementada.** A V1 (Issue #15) continua sendo o desenvolvimento ativo das fases A1–C31, não uma garantia de QA no Studio. A implementação das fases V2 depende de nova autorização do proprietário.
 
-**[Portões finais da V1 — o que ainda falta para homologar](docs/PORTOES_FINALIZACAO_V1_2026-11-13.md)**
+**[Portões finais da V1 — o que ainda falta para homologar](docs/PORTOES_FINALIZACAO_V1_2026-11-13.md)** · **[Homologação V1 — rodada 1 no Studio](docs/HOMOLOGACAO_V1_2026-11-13.md)**: `RunAllTests` passou (2014/0) e os 15 serviços rodaram ao vivo num place de QA só com código; place original, duas contas e publicação ainda pendentes.
 
 **[Guia único de assets V1 — o que baixar e onde colocar](docs/GUIA_UNICO_ASSETS_V1.md)** — 21 carros, 11 equipamentos, NPCs, cenário, sons e HUD. Pacotes CC0/CGTrader/Shuriken **já baixados pelo proprietário**, aguardando importação/configuração no Studio; conferir licenças e não refazer a rua existente.
 

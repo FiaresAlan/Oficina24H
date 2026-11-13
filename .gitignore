@@ -28,3 +28,5 @@ pipeline/asset_ids_antigos.json
 # Pacotes brutos de terceiros baixados pelo proprietário (licenças CGTrader/Shuriken não permitem redistribuir)
 assets/Assets v1 Baixados/
 qa/_manifest.json
+# Capturas de QA mostram sprites do HUD (licença a confirmar): ficam só na máquina do proprietário
+qa/evidencias/

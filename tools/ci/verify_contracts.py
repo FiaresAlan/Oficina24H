@@ -942,7 +942,7 @@ check("V2-08: recomendações de reposição só após diagnóstico",
     and 'job.Diagnosed==true' in finance
     and "job.Requirement.Parts" in finance
     and "UrgentCost" in finance
-    and "FINANCE" not in finance)
+    and "status financeiro" not in finance)
 check("V2-08: estudos de margem e risco de folha com custo referencial",
     "function Rules.ServiceQuotes" in finance
     and "function Rules.PartCost" in finance

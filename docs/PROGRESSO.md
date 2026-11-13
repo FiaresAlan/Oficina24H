@@ -846,3 +846,12 @@ Detalhes em `docs/AUDITORIA_GERAL.md`. Resumo:
 - **Privacidade:** snapshot elimina `PendingClaimAudits`; `PendingClaimSummary` agrega somente contagens `NeedsReview`, `LegacyUnverified`, `Conflicts`. Logs contêm agregados, sem token.
 - **Testes escritos:** `SettlementClaimAuditRulesTest`, `SettlementClaimRulesTest`, `PersistenceTest` atualizados para schema v11; runner e contratos estáticos. Detalhes e QA em [TESTE_C25_AUDITORIA_CLAIMS_LEGADAS_2026-11-13.md](TESTE_C25_AUDITORIA_CLAIMS_LEGADAS_2026-11-13.md).
 - **P0 remanescente:** casos históricos verdadeiros sem prova vinculada exigem auditoria humana com evidências verificáveis; não existe ferramenta de crédito manual auditada. CI/Rojo não equivale a teste Studio; V2 permanece só documental.
+
+
+## 2026-11-13 — V1 C26: ordem fantasma corrigida e matriz de regressão dos 15 serviços
+- **Bug concreto corrigido:** saída do proprietário deixava Jobs `InProgress` como `Available` mesmo depois de `VehicleService.DespawnOwner` remover o carro e NPC. `WorkshopService.PlayerLeft` passa a remover **todos** os jobs daquele dono, cancelar sessão ativa do colaborador (mesmo com atributo já limpo) e manter a OS do proprietário quando só o trabalhador sai.
+- **Regra isolada:** `JobExitRules.Action` define `RemoveOwner`/`ReturnToOwner`/`None` com suíte `JobExitRulesTest` para todos os estados.
+- **Cobertura de regras de reparo:** `AllServiceActionFlowTest` percorre os 15 defeitos em `Catalog.Defects` e valida plano, comandos incrementais, ACK/revisão, `FinalInput` server-side, avaliação de qualidade e ausência de gabarito público. Registrado em `RunAllTests`.
+- **CI/Rojo:** `verify_contracts.py` impede regressões óbvias de reconversão de jobs fantasmas e exige suites registradas; o CI não executa os testes Luau.
+- **Documento operacional:** [QA C26 — 15 serviços e ciclo de vida](TESTE_C26_CICLO_OS_15_SERVICOS_2026-11-13.md). Para homologação real ainda faltam assets importados, Studio Edit, gameplay cliente/servidor, 2 jogadores, DataStore, FPS e mobile.
+- **Escopo:** apenas V1; V2 não iniciada. Pacotes 3D baixados e organizados pelo usuário permanecem aguardando importação, sem modificação.

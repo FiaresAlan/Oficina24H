@@ -93,6 +93,10 @@ check("C26: gameplay and job-exit suites registered",
       '"AllServiceActionFlowTest"' in runner and '"JobExitRulesTest"' in runner
       and (TOOLS / "AllServiceActionFlowTest.luau").is_file()
       and (TOOLS / "JobExitRulesTest.luau").is_file())
+check("C26: real QA guide for all 15 service modes exists",
+      (ROOT / "docs" / "TESTE_C26_CICLO_OS_15_SERVICOS_2026-11-13.md").is_file()
+      and "| Overheating |" in text(ROOT / "docs" / "TESTE_C26_CICLO_OS_15_SERVICOS_2026-11-13.md")
+      and "| EngineOverhaul |" in text(ROOT / "docs" / "TESTE_C26_CICLO_OS_15_SERVICOS_2026-11-13.md"))
 # Repair C5: the operation UI must not pay from an unrecorded final form.
 action_rules = text(SHARED / "RepairActionRules.lua")
 workshop = text(ROOT / "src" / "server" / "WorkshopService.lua")

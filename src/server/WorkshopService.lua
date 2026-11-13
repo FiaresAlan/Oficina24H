@@ -31,6 +31,7 @@ local V2ServiceProcedureRules = require(ReplicatedStorage.Shared.V2ServiceProced
 local V2ManagementSummaryRules = require(ReplicatedStorage.Shared.V2ManagementSummaryRules)
 local V2UpgradePurchaseRules = require(ReplicatedStorage.Shared.V2UpgradePurchaseRules)
 local V2FinancialRules = require(ReplicatedStorage.Shared.V2FinancialRules)
+local V2UsedMarketRules = require(ReplicatedStorage.Shared.V2UsedMarketRules)
 
 local WorkshopService = {}
 
@@ -601,11 +602,13 @@ function WorkshopService.GetSnapshot(player: Player)
         profileView.StaffSlots = nil -- V2-05: registros internos e JobIds ficam no servidor
         profileView.StaffPayroll = nil -- resumo sanitizado aparece apenas no campo Staff
         profileView.FinanceLedger = nil -- V2-08: somente resumo financeiro saneado no snapshot
+        profileView.UsedMarket = nil -- V2-09: estado de transação privado; usar Public
     end
     return {
         Ranking = CustomerRules.Rank(ranking),
         Profile = profileView,
         RecentSettlements = DataService.RecentRepairSettlements(player, 12),
+        UsedMarket = profile and V2UsedMarketRules.Public(profile, os.time()) or nil,
         Finance = profile and V2FinancialRules.Snapshot(
             profile.FinanceLedger,profile,os.time(),Config.EmployeeSalary,jobs) or nil,
         PendingClaimSummary = DataService.PendingClaimSummary(player),
@@ -1543,6 +1546,31 @@ function WorkshopService.BuyEquipment(player: Player, equipmentId: string)
         if player.Parent == Players then EquipmentUpgradePads.Sync(player, profile.Equipment, profile.EquipmentLevels) end
     end)
     return true, equipment.DisplayName .. " comprado."
+end
+
+-- V2-09: mercado limitado de usados. Compra APENAS na loja física,
+-- inspeção/restauração/venda somente no próprio lote. Não consome bays de OS.
+function WorkshopService.UsedMarketAction(player: Player, operation: any,
+    itemId: any, style: any?): (boolean, string)
+    if type(operation) ~= "string" or type(itemId) ~= "string"
+        or #operation > 16 or #itemId > 64 or (style ~= nil and
+        (type(style) ~= "string" or #style > 12)) then
+        return false, "Operação inválida."
+    end
+    if not getWorkshop(player) then return false, "Registre sua oficina primeiro." end
+    if operation == "Buy" then
+        if not nearShop(player) then return false, SHOP_FAR end
+    else
+        local plot = PlotService.GetPlot(player)
+        local character = player.Character
+        local root = character and character:FindFirstChild("HumanoidRootPart")
+        if not plot or plot:GetAttribute("OwnerUserId") ~= player.UserId
+            or not root or not root:IsA("BasePart")
+            or not PlotService.IsInsidePlot(plot, root.Position) then
+            return false, "Volte à sua oficina para restaurar ou vender o veículo."
+        end
+    end
+    return DataService.TradeUsedCar(player, operation, itemId, style)
 end
 
 -- Loja de peças: compra em quantidade (1..MaxPartPurchase); o saldo e o estoque são decididos aqui.

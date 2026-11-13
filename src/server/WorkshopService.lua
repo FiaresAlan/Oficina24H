@@ -2556,82 +2556,111 @@ local function staffTick()
             end
             Staff[userId] = nil
         else
-            -- salário (o relógio só corre com alguém contratado)
-            if #entry.Npcs == 0 then
-                entry.NextPay = os.clock() + Config.PaydaySeconds
-                profile.NextPayAt = 0
-            elseif os.clock() >= entry.NextPay then
-                entry.NextPay = os.clock() + Config.PaydaySeconds
-                profile.NextPayAt = os.time() + Config.PaydaySeconds
-                local bill = #entry.Npcs * Config.EmployeeSalary
-                if profile.Coins >= bill then
-                    DataService.AddCoins(owner, -bill, "Salário dos funcionários")
+            -- Folha debitada UMA vez por vencimento, no mesmo perfil onde
+            -- o NextPayAt avança. O relógio local NÃO decide pagamento.
+            local dueAt=profile.NextPayAt or 0
+            if #entry.Npcs==0 then
+                if profile.Employees==0 and dueAt~=0 then
+                    profile.NextPayAt=0
+                    DataService.MarkDirty(owner)
+                end
+            elseif dueAt<=0 then
+                profile.NextPayAt=os.time()+Config.PaydaySeconds
+                DataService.MarkDirty(owner)
+            elseif os.time()>=dueAt then
+                local paid,reason=DataService.ChargeStaffPayrollOnce(owner,dueAt,#entry.Npcs)
+                if paid then
+                    entry.NextPay=os.clock()+Config.PaydaySeconds
                     if eventSender then
-                        eventSender(owner, "Notice", { Message = string.format("Salários pagos: -%d moedas.", bill), Success = true })
+                        eventSender(owner,"Notice",{Message=string.format(
+                            "Salários pagos: -%d moedas.",#entry.Npcs*Config.EmployeeSalary),
+                            Success=true})
                     end
-                else
-                    DataService.SetEmployees(owner, math.max(0, (profile.Employees or 0) - 1))
-                    syncStaff(owner)
+                elseif reason=="Saldo insuficiente para salários."
+                    and DataService.DeferStaffPayroll(owner,dueAt) then
+                    DataService.SetEmployees(owner,math.max(0,(profile.Employees or 0)-1))
+                    syncStaff(owner) -- cancela sem pagar qualquer serviço em andamento
                     if eventSender then
-                        eventSender(owner, "Notice", { Message = "Sem moedas para o salário: um mecânico pediu demissão.", Success = false })
+                        eventSender(owner,"Notice",{Message="Caixa insuficiente: um mecânico foi desligado sem cobrança de salário.",Success=false})
                     end
                 end
             end
-            -- trabalho: cada funcionário livre pega um carro estacionado sem ninguém trabalhando
-            local working = 0
-            for _ in pairs(entry.Busy) do
-                working += 1
-            end
-            -- O proprietário tem 25 s para assumir a primeira ordem; depois disso o
-            -- funcionário pode trabalhar mesmo com apenas um cliente esperando.
-            -- Isso permite automatizar enquanto o dono cuida de estoque e expansão.
-            -- A renda ainda requer carros, peças e pagamento de salário.
-            local waiting = 0
-            local oldestWait = 0
-            for jobId, job in pairs(Jobs) do
-                if job.OwnerUserId == userId and job.Status == "InProgress" and not entry.Busy[jobId] and not job.CollaboratorUserId
-                    and VehicleService.IsParked(jobId) and not (Repairs[userId] and Repairs[userId].JobId == jobId)
-                    and not (RepairPrepRules.Requires(job.DefectId) and (job.PreparationStep or 1) > 1) then
-                    waiting += 1
-                    oldestWait = math.max(oldestWait, os.time() - (job.AcceptedAt or os.time()))
+
+            -- Contagem e seleção determinísticas, inclusive prioridade de OS,
+            -- foco do funcionário e atribuições manuais. O dono conserva
+            -- 25s de preferência para a primeira OS se a escala for Auto.
+            local candidates={}
+            local waiting,oldestWait=0,0
+            for jobId,job in pairs(Jobs) do
+                if job.OwnerUserId==userId and job.Status=="InProgress"
+                    and not entry.Busy[jobId] and not job.CollaboratorUserId
+                    and VehicleService.IsParked(jobId)
+                    and not (Repairs[userId] and Repairs[userId].JobId==jobId)
+                    and not (RepairPrepRules.Requires(job.DefectId)
+                        and (job.PreparationStep or 1)>1)
+                    and os.time()>=(job.EmployeeRetryAt or 0) then
+                    local defect=Catalog.Defects[job.DefectId]
+                    if defect then
+                        local age=os.time()-(job.AcceptedAt or os.time())
+                        waiting+=1
+                        oldestWait=math.max(oldestWait,age)
+                        table.insert(candidates,{
+                            Id=jobId,Ready=true,
+                            Priority=job.Priority or 0,
+                            AcceptedAt=job.AcceptedAt or 0,
+                            Specialization=defect.Specialization,
+                            Assigned=job.EmployeeAssignedSlot,
+                            Age=age,
+                        })
+                    end
                 end
             end
-            if working < #entry.Npcs and StaffAssignmentRules.ShouldDispatch(waiting, oldestWait) then
-                for jobId, job in pairs(Jobs) do
-                    if working >= #entry.Npcs then
-                        break
-                    end
-                    if job.OwnerUserId == userId and job.Status == "InProgress" and not entry.Busy[jobId]
-                        and not job.CollaboratorUserId and VehicleService.IsParked(jobId)
-                        and not (Repairs[userId] and Repairs[userId].JobId == jobId)
-                        and not (RepairPrepRules.Requires(job.DefectId) and (job.PreparationStep or 1) > 1)
-                        and os.time() >= (job.EmployeeRetryAt or 0)
-                        and StaffAssignmentRules.EligibleJob(waiting, os.time() - (job.AcceptedAt or os.time())) then
-                        local free: Model? = nil
-                        for _, npc in ipairs(entry.Npcs) do
-                            if not npc:GetAttribute("Trabalhando") then
-                                free = npc
-                                break
+            for index,worker in ipairs(entry.Npcs) do
+                if not worker:GetAttribute("Trabalhando") then
+                    local slot=profile.StaffSlots and profile.StaffSlots[index]
+                    if slot and slot.Mode~="Paused" then
+                        local thisSlot={}
+                        for _,candidate in ipairs(candidates) do
+                            if candidate.Assigned==nil or candidate.Assigned==index then
+                                local c=table.clone(candidate)
+                                c.Manual=candidate.Assigned==index and true or nil
+                                table.insert(thisSlot,c)
                             end
                         end
-                        if free and StaffAssignmentRules.TryReserve(entry.Busy, jobId) then
-                            working += 1
-                            local worker = free :: Model
-                            worker:SetAttribute("Trabalhando", true)
-                            task.spawn(function()
-                                local ok, err = xpcall(function()
-                                    employeeWork(owner, job, worker)
-                                end, debug.traceback)
-                                if not ok then
-                                    warn("[WorkshopService] Mecânico NPC falhou:", jobId, err)
-                                    StaffAssignmentRules.Release(entry.Busy, jobId)
-                                    if Jobs[jobId] == job and job.Status == "InProgress" then
-                                        VehicleService.SetRepairing(jobId, false)
-                                        VehicleService.SetStage(jobId, "Repair")
+                        for _,candidate in ipairs(V2StaffRules.Order(thisSlot,slot,os.time())) do
+                            local manual=candidate.Manual==true
+                            local eligible=manual or
+                                (StaffAssignmentRules.ShouldDispatch(waiting,oldestWait)
+                                and StaffAssignmentRules.EligibleJob(waiting,candidate.Age))
+                            local job=Jobs[candidate.Id]
+                            if eligible and job and job.Status=="InProgress"
+                                and not worker:GetAttribute("Trabalhando")
+                                and StaffAssignmentRules.TryReserve(entry.Busy,candidate.Id) then
+                                worker:SetAttribute("Trabalhando",true)
+                                worker:SetAttribute("V2JobId",candidate.Id)
+                                worker:SetAttribute("V2WorkState","Preparando")
+                                job.V2EmployeeSlot=index
+                                task.spawn(function()
+                                    local ok,err=xpcall(function()
+                                        employeeWork(owner,job,worker)
+                                    end,debug.traceback)
+                                    if not ok then
+                                        warn("[WorkshopService] Mecânico NPC falhou:",candidate.Id,err)
+                                        StaffAssignmentRules.Release(entry.Busy,candidate.Id)
+                                        if Jobs[candidate.Id]==job and job.Status=="InProgress" then
+                                            job.EmployeeRetryAt=os.time()+30
+                                            VehicleService.SetRepairing(candidate.Id,false)
+                                            VehicleService.SetStage(candidate.Id,"Repair")
+                                        end
                                     end
-                                end
-                                worker:SetAttribute("Trabalhando", nil)
-                            end)
+                                    if worker.Parent then
+                                        worker:SetAttribute("V2JobId",nil)
+                                        worker:SetAttribute("V2WorkState","Descansando")
+                                        worker:SetAttribute("Trabalhando",nil)
+                                    end
+                                end)
+                                break
+                            end
                         end
                     end
                 end

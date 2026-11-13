@@ -483,7 +483,7 @@ function Orders.new(parent: Instance)
 						Font = Theme.FontTitle, TextWrapped = true, LayoutOrder = 1,
 						AutomaticSize = Enum.AutomaticSize.Y, Size = UDim2.new(1, 0, 0, 0),
 					})
-					local line = stack(info, 10, true, 2)
+					local line = stack(info, 8, not compact, 2)
 					HudParts.text(line, "+" .. receipt.Amount .. " moedas", 23, {
 						Font = Theme.FontTitle, TextColor3 = rgb(255, 200, 70), LayoutOrder = 1,
 					})

@@ -104,6 +104,27 @@ check("C28: orphan claim cleanup on save failure and removed owner",
 check("C28: guard unit suite registered",
       '"RepairCommitGuardTest"' in runner
       and (TOOLS / "RepairCommitGuardTest.luau").is_file())
+scene = text(SHARED / "VehicleSceneRules.lua")
+arrival_c29 = text(ROOT / "src" / "server" / "CustomerArrivalService.lua")
+vehicle_c29 = text(ROOT / "src" / "server" / "VehicleService.lua")
+check("C29: cancelled arrivals do not spawn late vehicles",
+      "function Rules.IsCurrentArrival" in scene
+      and "if not VehicleSceneRules.IsCurrentArrival(states, job.Id, state) then return end" in arrival_c29
+      and "if npc then npc:Destroy() end" in arrival_c29
+      and "car:Destroy()" in arrival_c29)
+check("C29: lingering curb scenes are cleared for owner on disconnect",
+      "for key, entry in pairs(lingering) do" in arrival_c29
+      and "VehicleSceneRules.IsOwnedBy(entry, ownerUserId)" in arrival_c29
+      and "entry.Car.Parent == arrivals" in arrival_c29)
+check("C29: departing workshop cars are tracked and cleared",
+      "local departing:" in vehicle_c29
+      and "departing[car] = {" in vehicle_c29
+      and "for car, scene in pairs(departing) do" in vehicle_c29
+      and "VehicleSceneRules.IsOwnedBy(scene, userId)" in vehicle_c29
+      and "scene.Bay:SetAttribute(\"JobId\", nil)" in vehicle_c29)
+check("C29: lifecycle regressions registered",
+      '"VehicleSceneRulesTest"' in runner
+      and (TOOLS / "VehicleSceneRulesTest.luau").is_file())
 check("C28: QA and release gates documented",
       (ROOT / "docs" / "TESTE_C28_GUARDA_REPARO_COLABORATIVO_2026-11-13.md").is_file()
       and (ROOT / "docs" / "PORTOES_FINALIZACAO_V1_2026-11-13.md").is_file())

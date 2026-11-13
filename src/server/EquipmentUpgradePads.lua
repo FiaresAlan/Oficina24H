@@ -35,7 +35,9 @@ local function create(plot: Instance, id: string): BasePart
 	pad.Parent = folder
 	local billboard = Instance.new("BillboardGui")
 	billboard.Name = "Price"
-	billboard.Size = UDim2.fromOffset(215, 88)
+	-- Homologação V1 (G4): tamanho em studs (largura do pad) em vez de pixels fixos. Com várias máquinas lado a
+	-- lado, letreiros de 215x88 px se sobrepunham a distância e ficavam ilegíveis; agora encolhem com a distância.
+	billboard.Size = UDim2.fromScale(5.4, 2.2) -- pads ficam a 6 studs: sem sobreposição
 	billboard.StudsOffsetWorldSpace = Vector3.new(0, 2.8, 0)
 	billboard.MaxDistance = 35
 	billboard.Parent = pad
@@ -84,7 +86,7 @@ function Pads.Sync(player: Player, owned: any, upgrades: any)
 						if not badge then
 							badge = Instance.new("BillboardGui")
 							badge.Name = "UpgradeTier"
-							badge.Size = UDim2.fromOffset(110, 28)
+							badge.Size = UDim2.fromScale(3.2, 0.8) -- em studs, como o letreiro do pad
 							badge.StudsOffsetWorldSpace = Vector3.new(0, 3.5, 0)
 							badge.MaxDistance = 35
 							badge.Parent = anchor

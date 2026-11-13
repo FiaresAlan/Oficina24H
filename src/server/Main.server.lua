@@ -79,7 +79,7 @@ end
 -- Limitador por JOGADOR e por AÇÃO (uma ação rápida não descarta outra diferente). Só ações conhecidas entram na tabela.
 local lastActionAt: {[number]: {[string]: number}} = {}
 local KNOWN_ACTIONS: {[string]: boolean} = {}
-for _, name in ipairs({ "ClaimWorkshop", "GenerateCustomer", "DeclineJob", "AcceptJob", "DiagnoseJob", "ExamineJob", "CompleteJob", "FinishRepair", "RepairPrefs", "CancelRepair", "SkipOnboarding", "BuyEquipment", "SetPrice", "BuyPart", "Checkout", "HireNpc", "InviteWorker", "CompleteCollaborativeJob", "RespondInvite", "MoveBag", "UpgradeWorkshop", "ClaimDaily", "ClaimMission", "RedeemCode" }) do
+for _, name in ipairs({ "ClaimWorkshop", "GenerateCustomer", "DeclineJob", "AcceptJob", "DiagnoseJob", "ExamineJob", "CompleteJob", "FinishRepair", "RepairAction", "RepairPrefs", "CancelRepair", "SkipOnboarding", "BuyEquipment", "SetPrice", "BuyPart", "Checkout", "HireNpc", "InviteWorker", "CompleteCollaborativeJob", "RespondInvite", "MoveBag", "UpgradeWorkshop", "ClaimDaily", "ClaimMission", "RedeemCode" }) do
     KNOWN_ACTIONS[name] = true
 end
 
@@ -223,6 +223,19 @@ actionEvent.OnServerEvent:Connect(function(player: Player, action: any, payload:
     if type(action) ~= "string" or type(payload) ~= "table" then return end
 
     if not KNOWN_ACTIONS[action] then return end
+    -- RepairAction tem confirmação de revisão e validação própria no WorkshopService.
+    -- Não deixa o throttling genérico descartar silenciosamente um clique do jogador.
+    if action == "RepairAction" then
+        local success, message, revision = false, "Comando inválido.", 0
+        if type(payload.JobId) == "string" and type(payload.Command) == "table" then
+            success, message, revision = WorkshopService.RepairAction(player, payload.JobId, payload.Token, payload.Command)
+        end
+        actionEvent:FireClient(player, "RepairActionAck", {
+            JobId = payload.JobId, Token = payload.Token, Accepted = success, Message = message,
+            Revision = revision,
+        })
+        return
+    end
     local now = os.clock()
     local perPlayer = lastActionAt[player.UserId]
     if not perPlayer then

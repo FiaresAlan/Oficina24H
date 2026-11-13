@@ -127,8 +127,15 @@ local function detach(root: BasePart, p: BasePart)
 	local car = root:FindFirstAncestorWhichIsA("Model")
     if car then
         for _, w in ipairs(car:GetDescendants()) do
-            if (w:IsA("WeldConstraint") or w:IsA("Weld") or w:IsA("Motor6D")
-                or w:IsA("RigidConstraint")) and (w.Part1 == p or w.Part0 == p) then
+            local attached = false
+            if w:IsA("WeldConstraint") or w:IsA("Weld") or w:IsA("Motor6D") then
+                attached = w.Part1 == p or w.Part0 == p
+            elseif w:IsA("RigidConstraint") then
+                local a0, a1 = w.Attachment0, w.Attachment1
+                attached = (a0 ~= nil and a0:IsDescendantOf(p))
+                    or (a1 ~= nil and a1:IsDescendantOf(p))
+            end
+            if attached then
                 w:Destroy() -- somente no cliente: desliga malha visual para animar
             end
         end

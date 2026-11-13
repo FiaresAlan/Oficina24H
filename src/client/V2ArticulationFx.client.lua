@@ -51,9 +51,15 @@ local function detachOnClient(root: BasePart, part: BasePart)
     local model = root:FindFirstAncestorWhichIsA("Model")
     if model then
         for _, joint in ipairs(model:GetDescendants()) do
-            if (joint:IsA("WeldConstraint") or joint:IsA("Weld")
-                or joint:IsA("Motor6D") or joint:IsA("RigidConstraint"))
-                and (joint.Part0 == part or joint.Part1 == part) then
+            local attached = false
+            if joint:IsA("WeldConstraint") or joint:IsA("Weld") or joint:IsA("Motor6D") then
+                attached = joint.Part0 == part or joint.Part1 == part
+            elseif joint:IsA("RigidConstraint") then
+                local a0, a1 = joint.Attachment0, joint.Attachment1
+                attached = (a0 ~= nil and a0:IsDescendantOf(part))
+                    or (a1 ~= nil and a1:IsDescendantOf(part))
+            end
+            if attached then
                 joint:Destroy() -- desconecta esta peça somente na simulação do cliente
             end
         end

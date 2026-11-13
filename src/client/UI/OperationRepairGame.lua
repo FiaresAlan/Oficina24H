@@ -84,6 +84,8 @@ function OperationRepairGame.new(gui: ScreenGui)
 	local revision = 0
 	local pendingAction: any = nil
 	local statusRef: TextLabel? = nil
+	local finishPacket: any = nil
+	local finishRetries, outcomeChecks = 0, 0
 	local startedAt = 0
 	local pressure, spot, sequence = 28, nil :: string?, {} :: { string }
 	local fluid, bleed, fan = 1.5, 0, false
@@ -105,6 +107,7 @@ function OperationRepairGame.new(gui: ScreenGui)
 		active, waiting, showingResult = false, false, false
 		pendingAction = nil
 		statusRef = nil
+		finishPacket = nil
 		if notify then
 			Store.Act("CancelRepair", { JobId = jobId, Token = sessionToken })
 		end
@@ -112,6 +115,25 @@ function OperationRepairGame.new(gui: ScreenGui)
 		task.delay(0.13, function()
 			if not active and not showingResult then
 				root.Visible = false
+			end
+		end)
+	end
+
+	-- Esta consulta nunca solicita pagamento: apenas lê o comprovante privado do servidor.
+	-- A UI permanece aberta enquanto o resultado estiver incerto.
+	local function queryOutcome(force: boolean?)
+		if not active or not waiting or sessionToken == "" then return end
+		if outcomeChecks >= 6 and not force then return end
+		outcomeChecks += 1
+		if statusRef then statusRef.Text = "Consultando a entrega no servidor..." end
+		Store.Act("CheckRepairResult", { JobId = jobId, Token = sessionToken })
+	end
+
+	local function requestAfter(seconds: number)
+		local token, requestedJob = sessionToken, jobId
+		task.delay(seconds, function()
+			if active and waiting and not showingResult and token == sessionToken and requestedJob == jobId then
+				queryOutcome(false)
 			end
 		end)
 	end
@@ -127,6 +149,8 @@ function OperationRepairGame.new(gui: ScreenGui)
 		sessionToken = tostring(payload.Token or "")
 		revision = 0
 		pendingAction = nil
+		finishPacket = nil
+		finishRetries, outcomeChecks = 0, 0
 		active, waiting, showingResult = true, false, false
 		startedAt = os.clock()
 		pressure, spot, sequence = 28, nil, {}
@@ -354,8 +378,13 @@ function OperationRepairGame.new(gui: ScreenGui)
 			return
 		end
 		update()
-		button(content, "CONCLUIR SERVIÇO", 316, 265, 286, 48, function()
-			if not active or waiting or pendingAction then return end
+		local finishButton: TextButton? = nil
+		finishButton = button(content, "CONCLUIR SERVIÇO", 316, 265, 286, 48, function()
+			if not active or pendingAction then return end
+			if waiting then
+				queryOutcome(true)
+				return
+			end
 			local input
 			if currentPlan.Mode == "Tire" then
 				if not spot then
@@ -397,15 +426,15 @@ function OperationRepairGame.new(gui: ScreenGui)
 				return
 			end
 			waiting = true
-			status.Text = "Verificando reparo com o servidor..."
+			status.Text = "Enviando entrega para validação..."
+			if finishButton then finishButton.Text = "VERIFICAR ENTREGA" end
 			input.Token = sessionToken
-			Store.Act("FinishRepair", { JobId = jobId, Presses = input })
-			task.delay(10, function()
-				if waiting and active and not showingResult then
-					Store.Message:Fire("O servidor não confirmou a entrega. Consulte a OS para verificar o resultado.", false, "FinishRepair")
-					close(true)
-				end
-			end)
+			finishPacket = { JobId = jobId, Presses = input }
+			finishRetries, outcomeChecks = 0, 0
+			Store.Act("FinishRepair", finishPacket)
+			-- Sem confirmação, primeiro consulte o resultado. Não cancele e não
+			-- faça novo pagamento simplesmente por perder um pacote de rede.
+			requestAfter(5)
 		end)
 		root.Visible = true
 		pop.Scale = 0.9
@@ -413,7 +442,8 @@ function OperationRepairGame.new(gui: ScreenGui)
 	end
 
 	local function showResult(payload: any)
-		if not active or not root.Visible then return end
+		if type(payload) ~= "table" or not active or not root.Visible
+			or payload.JobId ~= jobId or payload.Token ~= sessionToken then return end
 		active, waiting, showingResult = false, false, true
 		clear()
 		title.Text = "SERVIÇO ENTREGUE"
@@ -435,6 +465,31 @@ function OperationRepairGame.new(gui: ScreenGui)
 	closeButton.BackgroundColor3 = Color3.fromRGB(50, 55, 70)
 	Store.RepairStart.Event:Connect(start)
 	Store.RepairDone.Event:Connect(showResult)
+	Store.RepairOutcome.Event:Connect(function(payload: any)
+		if type(payload) ~= "table" or not active or not waiting
+			or payload.JobId ~= jobId or payload.Token ~= sessionToken then return end
+		if payload.Status == "Completed" and type(payload.Result) == "table" then
+			showResult(payload.Result)
+		elseif payload.Status == "Processing" then
+			if statusRef then statusRef.Text = "O servidor está finalizando a OS. Não reenvie o pagamento." end
+			requestAfter(2.5)
+		elseif payload.Status == "Active" then
+			-- A entrega ainda não foi recebida: repetir o MESMO pacote é seguro.
+			-- O servidor usa sessão única e comprovante para impedir pagamento duplo.
+			if finishPacket and finishRetries < 2 then
+				finishRetries += 1
+				if statusRef then statusRef.Text = "Reenviando entrega sem duplicar cobrança..." end
+				Store.Act("FinishRepair", finishPacket)
+				requestAfter(4)
+			else
+				if statusRef then statusRef.Text = "Serviço ainda em aberto. Toque em VERIFICAR ENTREGA." end
+			end
+		else
+			if statusRef then
+				statusRef.Text = "Sem confirmação desta sessão. Consulte Ordens antes de iniciar outro reparo."
+			end
+		end
+	end)
 	Store.RepairActionAck.Event:Connect(function(payload: any)
 		if type(payload) ~= "table" or not active or payload.JobId ~= jobId
 			or payload.Token ~= sessionToken or not pendingAction
@@ -456,8 +511,10 @@ function OperationRepairGame.new(gui: ScreenGui)
 		end
 	end)
 	Store.Message.Event:Connect(function(_text: string, success: boolean, action: string)
-		if action == "FinishRepair" and not success and active then
-			close(true)
+		if action == "FinishRepair" and not success and active and waiting then
+			-- Até um erro pode competir com uma conclusão em processamento:
+			-- verificar o comprovante antes de encerrar a janela.
+			requestAfter(0.35)
 		end
 	end)
 

@@ -16,6 +16,13 @@ type Entry = { Npc: Model, Animator: NpcKit.NpcAnimator? }
 local byJob: { [string]: Entry } = {}
 local talkHandler: ((Player, string) -> ())? = nil
 
+-- Posicao somente leitura para roteamento do mecanico, sem liberar dialogos.
+function CustomerNpcService.Position(jobId: string): Vector3?
+    local entry=byJob[jobId]
+    local root=entry and entry.Npc.PrimaryPart
+    return root and root.Position or nil
+end
+
 function CustomerNpcService.SetTalkHandler(handler: (Player, string) -> ())
 	talkHandler = handler
 end

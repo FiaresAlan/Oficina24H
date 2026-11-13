@@ -2335,6 +2335,9 @@ function WorkshopService.HireEmployee(player: Player)
     if profile.Coins < Config.EmployeeHireCost then
         return false, string.format("Contratar custa %d moedas.", Config.EmployeeHireCost)
     end
+    if not NpcKit.Pick(nil,"Mecanico") then
+        return false,"Importe primeiro um personagem NPC autorizado em ServerStorage.Assets.Clientes."
+    end
     DataService.AddCoins(player, -Config.EmployeeHireCost, "Contratação de mecânico")
     if (profile.Employees or 0) == 0 then
         profile.NextPayAt = os.time() + Config.PaydaySeconds
@@ -2452,6 +2455,18 @@ local function employeeWork(owner: Player, job: any, npc: Model)
         job.EmployeeRetryAt=os.time()+30
         release("Carro/rota da oficina indisponível; atribuição reagendada.")
         return
+    end
+    local customerPos=CustomerNpcService.Position(job.Id)
+    if customerPos then
+        npc:SetAttribute("V2WorkState","Conversando com cliente")
+        local greeting=customerPos+Vector3.new(2,0,2)
+        if not walkEmployee(npc,greeting,animator,valid) then
+            job.EmployeeRetryAt=os.time()+30
+            release("Mecânico não encontrou o cliente na oficina. Verifique os caminhos.")
+            return
+        end
+        if not valid() then release(nil);return end
+        NpcKit.Say(npc,"Vou cuidar do seu veículo.",3)
     end
     local level=WorkshopLevels.Levels[StationService.LevelOf(plot)] or WorkshopLevels.Levels[0]
     local shelf=frame*CFrame.new(level.X0+5,0.4,WorkshopLevels.EquipmentZ-1)

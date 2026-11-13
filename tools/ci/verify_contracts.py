@@ -234,7 +234,7 @@ check("client result correlated with job and token",
 ledger = text(SHARED / "SettlementLedgerRules.lua")
 data_service = text(ROOT / "src" / "server" / "DataService.lua")
 check("ledger bounded and sanitized", "SettlementLedgerRules.MaxEntries" in ledger and "function SettlementLedgerRules.Sanitize" in ledger)
-check("ledger persists across additive profile schema v12", "local SCHEMA_VERSION = 13" in data_service
+check("ledger persists across additive profile schema v12", "local SCHEMA_VERSION = 14" in data_service
       and "RepairLedger = {}" in data_service
       and "SettlementLedgerRules.Sanitize(data.RepairLedger)" in data_service)
 check("ledger credit idempotency", "function DataService.CreditRepairOnce" in data_service
@@ -392,7 +392,7 @@ check("C23: worker paid confirmation archive validates and never silently rotate
       and "function Paid.CanAdd" in paid and "function Paid.Matches" in paid
       and "while #raw > Paid.MaxEntries" not in paid)
 check("C23: worker confirmation survives schema v12",
-      "local SCHEMA_VERSION = 13" in data_service
+      "local SCHEMA_VERSION = 14" in data_service
       and "WorkerSettlementProofs = {}" in data_service
       and "WorkerSettlementProofRules.FromLedger" in data_service
       and "WorkerSettlementProofRules.Add(profile.WorkerSettlementProofs, workerProof)" in data_service
@@ -426,7 +426,7 @@ check("C24: verify durable owner data, with limited reads and two worker saves",
       and "Archive.MaxReadsPerPass = 4" in archive
       and "WorkerPaidTombstoneRules.Compact(proofs, profile.WorkerPaidTombstones," in data_service)
 check("C24: schema v12 preserves v11 private tombstones and schedules reconciliation",
-      "local SCHEMA_VERSION = 13" in data_service
+      "local SCHEMA_VERSION = 14" in data_service
       and "WorkerPaidTombstones = {}" in data_service
       and "WorkerPaidTombstoneRules.Sanitize(data.WorkerPaidTombstones)" in data_service
       and "data.RepairLedger, data.WorkerPaidTombstones)" in data_service
@@ -567,7 +567,7 @@ server = text(ROOT / "src" / "server" / "Main.server.lua")
 arrival = text(ROOT / "src" / "server" / "CustomerArrivalService.lua")
 ui_orders = text(CLIENT / "UI" / "Panels" / "Orders.lua")
 check("V2-00: migracao aditiva schema v12 com lista persistente",
-    "SCHEMA_VERSION = 13" in data_service and "V2SupplyRules.Sanitize" in data_service
+    "SCHEMA_VERSION = 14" in data_service and "V2SupplyRules.Sanitize" in data_service
     and "SupplyRequests = {}" in data_service and "SupplyRequests" in v2_compatibility)
 check("V2-02: compra no estoque desconta lista sem debitar pedido",
     "V2SupplyRules.OnPurchase" in data_service
@@ -743,7 +743,7 @@ nav_v2=text(ROOT / "src" / "server" / "V2StaffNavigator.lua")
 orders_v2=text(CLIENT / "UI" / "Panels" / "Orders.lua")
 server_v2=text(ROOT / "src" / "server" / "Main.server.lua")
 check("V2-05: schema v13 preserves all V1 financial evidence",
-    "SCHEMA_VERSION = 13" in data_service
+    "SCHEMA_VERSION = 14" in data_service
     and "StaffSlots = V2StaffRules.Sanitize(nil)" in data_service
     and "data.StaffSlots = V2StaffRules.Sanitize" in data_service
     and "RepairLedger = {}" in data_service and "PendingClaims = {}" in data_service)
@@ -905,6 +905,57 @@ check("V2-07: suite de rotas e auditoria Studio registradas",
         for name in ("V2NeighborhoodRulesTest","V2NeighborhoodPlaceAudit"))
     and "nenhuma rota repetida" in world_test and "fps baixo" in world_test
     and "WARN" in world_audit and "Map.Ground" in world_audit)
+
+# V2-08: cada atualização real de saldo produz uma única categoria
+# persistente; uma migração legada sempre indica cobertura parcial.
+finance=text(SHARED/"V2FinancialRules.lua")
+finance_test=text(TOOLS/"V2FinancialRulesTest.luau")
+finance_persistence=text(TOOLS/"PersistenceTest.luau")
+finance_ui=text(CLIENT/"UI"/"Panels"/"Orders.lua")
+check("V2-08: esquema 14 preserva o ledger existente e inicia caixa categorizado",
+    "SCHEMA_VERSION = 14" in data_service
+    and "FinanceLedger = V2FinancialRules.New" in data_service
+    and "V2FinancialRules.Bootstrap" in data_service
+    and "V2FinancialRules.Sanitize" in data_service
+    and "SettlementLedgerRules.Sanitize(data.RepairLedger)" in data_service)
+check("V2-08: só DataService.AddCoins escreve receita e despesa contabilizadas",
+    "V2FinancialRules.Apply(" in data_service
+    and 'profile.FinanceLedger.LegacyWindow=true' in data_service
+    and "Category = category" in data_service
+    and "FinanceLedger = nil" in workshop
+    and "V2FinancialRules.Snapshot" in workshop
+    and 'profile.FinanceLedger,profile,os.time(),Config.EmployeeSalary,jobs' in workshop)
+check("V2-08: compras mistas separadas em peças/capital sem dupla cobrança",
+    "local partSpend, equipmentSpend = 0, 0" in workshop
+    and 'if partSpend > 0 then DataService.AddCoins(player, -partSpend, "Loja de peças") end' in workshop
+    and 'if equipmentSpend > 0 then DataService.AddCoins(player, -equipmentSpend, "Compra: equipamentos na loja") end' in workshop
+    and "Rules.Category" in finance)
+check("V2-08: painel apresenta caixa sem alegar lucro contábil",
+    '{ Id = "finance", Label = "Caixa"' in finance_ui
+    and '"FINANCEIRO"' not in finance_ui
+    and "Fluxo operacional" in finance_ui
+    and "Não é lucro contábil" in finance_ui
+    and "AccountingProfitAvailable=false" in finance
+    and "Orders" in (CLIENT/"UI"/"Panels"/"Orders.lua").name)
+check("V2-08: recomendações de reposição só após diagnóstico",
+    "function Rules.Restock" in finance
+    and 'job.Diagnosed==true' in finance
+    and "job.Requirement.Parts" in finance
+    and "UrgentCost" in finance
+    and "FINANCE" not in finance)
+check("V2-08: estudos de margem e risco de folha com custo referencial",
+    "function Rules.ServiceQuotes" in finance
+    and "function Rules.PartCost" in finance
+    and "OperatingCash=operatingCash" in finance
+    and "AvailableAfterPayroll" in finance
+    and '"FinanceQuotes"' in finance_ui and '"FinanceReorder"' in finance_ui)
+check("V2-08: suites e migração/replay/reconexão cobertos",
+    (TOOLS/"V2FinancialRulesTest.luau").is_file()
+    and '"V2FinancialRulesTest"' in runner
+    and "liquidação comprova receita uma vez" in finance_persistence
+    and "migração v13 para v14" in finance_persistence
+    and "extrato limitado 50" in finance_persistence
+    and "não inferir defeito" in finance_test)
 
 print(f"\nStatic checks: {passed} passed, {len(failures)} failed")
 if failures:

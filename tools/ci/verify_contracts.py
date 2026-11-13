@@ -206,7 +206,7 @@ check("schema v6 keeps private pending claims",
 check("server persists worker claim before consuming inventory",
       'DataService.StageWorkerClaim(player, workshopOwner.UserId,' in workshop
       and workshop.index("DataService.StageWorkerClaim(player, workshopOwner.UserId,")
-      < workshop.index('DataService.TakeParts(workshopOwner, defect.Parts)'))
+      < workshop.index('DataService.SettleRepairOwnerOnce(workshopOwner, jobId, session.Token'))
 check("recovery requires saved owner evidence",
       "SettlementClaimRules.Authorized(claim, ownerRaw.RepairLedger," in data_service
       and "Store:GetAsync(keyFor(claim.OwnerUserId))" in data_service)

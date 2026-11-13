@@ -1,5 +1,5 @@
 --!strict
--- DataService: perfil persistente do jogador (schema v13).
+-- DataService: perfil persistente do jogador (schema v14).
 -- Garantias: retentativas com backoff, trava de sessão (um servidor por jogador), migração por reconcile,
 -- histórico de transações limitado, salvamento só quando houve mudança (ou para renovar a trava),
 -- liberação da trava ao sair, BindToClose paralelo. Em falha de leitura fora do Studio o jogador é expulso
@@ -23,10 +23,11 @@ local WorkerProofArchiveRules = require(ReplicatedStorage.Shared.WorkerProofArch
 local EquipmentUpgradeRules = require(ReplicatedStorage.Shared.EquipmentUpgradeRules)
 local V2SupplyRules = require(ReplicatedStorage.Shared.V2SupplyRules)
 local V2StaffRules = require(ReplicatedStorage.Shared.V2StaffRules)
+local V2FinancialRules = require(ReplicatedStorage.Shared.V2FinancialRules)
 
 local DataService = {}
 
-local SCHEMA_VERSION = 13 -- V2-05: escala, historico e folha de funcionarios; v11/v12 preservados
+local SCHEMA_VERSION = 14 -- V2-08: caixa categorizado aditivo; preserva recibos v11–v13
 local MAX_ATTEMPTS = 4
 local LOCK_TIMEOUT = 360 -- s; maior que 2 autosaves, para um servidor que caiu não prender o jogador para sempre
 local LOCK_WAIT_STEP = 3
@@ -98,6 +99,7 @@ local function makeDefaultData(): any
 		SupplyRequests = {}, -- V2-02: lista de peças a buscar na loja (NAO debita moedas)
         TelemetryV2 = { FirstUpgrade = false, FirstEmployee = false }, -- eventos anonimos de primeiro progresso
 		Transactions = {},
+        FinanceLedger = V2FinancialRules.New(Config.StartingCoins,os.time()), -- agregados desde a abertura
 		TotalEarned = 0,
 		PriceMultiplier = 1, -- preço da oficina em relação à tabela (0.7 a 1.5)
 		RatingCount = 0, -- avaliações recebidas dos clientes (1 a 5 estrelas)
@@ -134,6 +136,7 @@ local function reconcile(data: any): any
 	if type(data) ~= "table" then
 		return defaults
 	end
+    local hadFinanceLedger = type(data.FinanceLedger)=="table" and type(data.FinanceLedger.Groups)=="table"
 	if data.Onboarding == nil and ((type(data.RatingCount) == "number" and data.RatingCount > 0) or (type(data.TotalEarned) == "number" and data.TotalEarned > 0)) then
 		data.Onboarding = { Done = true } -- perfil antigo que já atendeu clientes não precisa do guia
 	end
@@ -326,8 +329,16 @@ local function reconcile(data: any): any
         LastDueAt = intIn(payroll.LastDueAt,0,4102444800),
     }
 	if type(data.Transactions) ~= "table" then
-		data.Transactions = {}
-	end
+        data.Transactions = {}
+    end
+    -- V2-08: transações anteriores são limitadas a 50; migração
+    -- conservadora marca o histórico como PARCIAL, sem inventar a vida toda.
+    data.Transactions=V2FinancialRules.CleanTransactions(data.Transactions)
+    if hadFinanceLedger then
+        data.FinanceLedger=V2FinancialRules.Sanitize(data.FinanceLedger,data.Coins,os.time())
+    else
+        data.FinanceLedger=V2FinancialRules.Bootstrap(data.Transactions,data.Coins,os.time())
+    end
 	if type(data.Onboarding) ~= "table" then
 		data.Onboarding = { Done = false }
 	end
@@ -475,11 +486,19 @@ function DataService.AddCoins(player: Player, amount: number, reason: string?)
 		profile.TotalEarned += applied
 	end
 	if applied ~= 0 then
+        local logged,category=V2FinancialRules.Apply(profile.FinanceLedger,applied,reason)
+        if not logged then
+            -- Um comprovante de crédito já pago não deve ser revertido por
+            -- falha de relatório; marca cobertura parcial para auditoria.
+            if profile.FinanceLedger then profile.FinanceLedger.LegacyWindow=true end
+            category=V2FinancialRules.Category(reason,applied)
+        end
 		table.insert(profile.Transactions, {
 			At = os.time(),
 			Amount = applied,
 			Balance = profile.Coins,
 			Reason = reason or (applied > 0 and "Receita" or "Despesa"),
+            Category = category,
 		})
 		while #profile.Transactions > MAX_TRANSACTIONS do
 			table.remove(profile.Transactions, 1)

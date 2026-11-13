@@ -30,6 +30,7 @@ local V2ComponentRules = require(ReplicatedStorage.Shared.V2ComponentRules)
 local V2ServiceProcedureRules = require(ReplicatedStorage.Shared.V2ServiceProcedureRules)
 local V2ManagementSummaryRules = require(ReplicatedStorage.Shared.V2ManagementSummaryRules)
 local V2UpgradePurchaseRules = require(ReplicatedStorage.Shared.V2UpgradePurchaseRules)
+local V2FinancialRules = require(ReplicatedStorage.Shared.V2FinancialRules)
 
 local WorkshopService = {}
 
@@ -599,11 +600,14 @@ function WorkshopService.GetSnapshot(player: Player)
         profileView.WorkerPaidTombstones = nil -- C24: identificadores financeiros privados
         profileView.StaffSlots = nil -- V2-05: registros internos e JobIds ficam no servidor
         profileView.StaffPayroll = nil -- resumo sanitizado aparece apenas no campo Staff
+        profileView.FinanceLedger = nil -- V2-08: somente resumo financeiro saneado no snapshot
     end
     return {
         Ranking = CustomerRules.Rank(ranking),
         Profile = profileView,
         RecentSettlements = DataService.RecentRepairSettlements(player, 12),
+        Finance = profile and V2FinancialRules.Snapshot(
+            profile.FinanceLedger,profile,os.time(),Config.EmployeeSalary) or nil,
         PendingClaimSummary = DataService.PendingClaimSummary(player),
         HasWorkshop = workshop ~= nil,
         Workshop = (workshop and profile) and upgradeInfoRef(player, profile) or nil,

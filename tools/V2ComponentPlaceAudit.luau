@@ -51,6 +51,22 @@ else
                         " sem malha nativa separada e marcada; cliente usará proxy visual")
                 end
             end
+            local engineRoles = { EngineBlock = false, Battery = false,
+                Coolant = false, Intake = false, Alternator = false }
+            for _, item in ipairs(copy:GetDescendants()) do
+                if item:IsA("BasePart") then
+                    local role = item:GetAttribute("V2EngineBayRole")
+                    if type(role) == "string" and engineRoles[role] ~= nil then
+                        engineRoles[role] = true
+                    end
+                end
+            end
+            for role, installed in pairs(engineRoles) do
+                if not installed then
+                    mark("WARN", spec.Id .. " / cofre do motor sem " .. role ..
+                        " nativo: efeito procedural ocupará o lugar")
+                end
+            end
             copy:Destroy()
         end
     end

@@ -1030,7 +1030,7 @@ check("V2-10: catálogo fechado com preço maior que bônus e limites do showroo
         'Rules.MaxShowroom = 2','Rules.MaxUniqueReputation = 3',
         'function Rules.ValidOption','function Rules.Parse','function Rules.Quote',
         'function Rules.SaleBonus','function Rules.Spent',
-        'Paint = {','Finish = {','Wheels = {')))
+        'Paint = {','Finish = {','Wheels = {'))
     and 'Appearance.Quote(category, choice, car)' in used_rules)
 check("V2-10: UID conservado em vitrines com reputação que não repete",
     all(k in used_rules for k in (
@@ -1042,7 +1042,7 @@ check("V2-10: UID conservado em vitrines com reputação que não repete",
         'operation == "Recall"',
         'operation == "SellExhibit"',
         'Appearance.Spent(exhibit)',
-        'Appearance.SaleBonus(car)'))
+        'Appearance.SaleBonus(car)')
     and 'planned.ReputationAward > 0' in data_service
     and 'DataService.AddReputation(player, planned.ReputationAward)' in data_service
     and 'profile.UsedMarket = planned.Market' in data_service)

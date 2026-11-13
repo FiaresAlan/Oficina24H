@@ -11,6 +11,8 @@ local Catalog = require(game:GetService("ReplicatedStorage").Shared.Catalog)
 local InspectionPointRules = require(game:GetService("ReplicatedStorage").Shared.InspectionPointRules)
 local RepairPrepRules = require(game:GetService("ReplicatedStorage").Shared.RepairPrepRules)
 local RepairSocketRules = require(game:GetService("ReplicatedStorage").Shared.RepairSocketRules)
+local V2ComponentRules = require(game:GetService("ReplicatedStorage").Shared.V2ComponentRules)
+local V2PilotRules = require(game:GetService("ReplicatedStorage").Shared.V2VehiclePilotRules)
 local AssetSafetyRules = require(game:GetService("ReplicatedStorage").Shared.AssetSafetyRules)
 local PlotService = require(script.Parent.PlotService)
 local CustomerNpcService = require(script.Parent.CustomerNpcService)
@@ -77,6 +79,111 @@ CustomerNpcService.SetTalkHandler(function(player: Player, jobId: string)
 		interactionHandler(player, jobId, "Diagnose")
 	end
 end)
+
+-- V2-03: oito pontos físicos criados apenas no clone dos carros piloto.
+-- Cada ponto acompanha a Raiz por WeldConstraint, inclusive durante o elevador.
+-- Só o servidor altera os estados replicados; o cliente só anima geometrias.
+local function addComponentPrompts(car: Model, job: any)
+    if type(car:GetAttribute("V2PilotId")) ~= "string" then return end
+    local root = car.PrimaryPart
+    if not root then return end
+    local folder = Instance.new("Folder")
+    folder.Name = "V2ComponentPoints"
+    folder.Parent = car
+    for _, component in ipairs(V2ComponentRules.Components) do
+        local pivot = V2PilotRules.Resolve(car, component.Pivot)
+        if pivot then
+            local anchor = Instance.new("Part")
+            anchor.Name = "V2Point_" .. component.Id
+            anchor.Size = Vector3.new(0.45, 0.45, 0.45)
+            anchor.Transparency = 1
+            anchor.CanCollide = false
+            anchor.CanTouch = false
+            anchor.CanQuery = false
+            anchor.Massless = true
+            anchor.Anchored = false
+            anchor.CFrame = pivot
+            anchor.Parent = folder
+            local joint = Instance.new("WeldConstraint")
+            joint.Part0, joint.Part1 = root, anchor
+            joint.Parent = anchor
+            local attr = V2ComponentRules.Attribute(component.Id) :: string
+            car:SetAttribute(attr, V2ComponentRules.Closed(component.Id))
+            local prompt = Instance.new("ProximityPrompt")
+            prompt.Name = "V2_" .. component.Id
+            prompt.ActionText = V2ComponentRules.Action(component.Id, car:GetAttribute(attr))
+            prompt.ObjectText = component.Label
+            prompt.HoldDuration = V2ComponentRules.HoldSeconds
+            prompt.MaxActivationDistance = V2ComponentRules.MaxDistance
+            prompt.RequiresLineOfSight = false
+            prompt.KeyboardKeyCode = Enum.KeyCode.E
+            prompt.GamepadKeyCode = Enum.KeyCode.ButtonX
+            prompt.Style = Enum.ProximityPromptStyle.Custom
+            prompt.Enabled = false
+            prompt.Parent = anchor
+            prompt.Triggered:Connect(function(player: Player)
+                if interactionHandler then interactionHandler(player, job.Id, prompt.Name) end
+            end)
+        end
+    end
+end
+
+function VehicleService.ComponentStates(jobId: string): ({ [string]: string }, string?)
+    local car = byJob[jobId]
+    local states: { [string]: string } = {}
+    if not car then return states, nil end
+    for _, component in ipairs(V2ComponentRules.Components) do
+        local attr = V2ComponentRules.Attribute(component.Id) :: string
+        states[component.Id] = tostring(car:GetAttribute(attr) or V2ComponentRules.Closed(component.Id))
+    end
+    local pilotId = car:GetAttribute("V2PilotId")
+    return states, (type(pilotId) == "string" and pilotId or nil)
+end
+
+function VehicleService.ToggleComponent(player: Player, jobId: string, id: string, context: V2ComponentRules.Context): (boolean, string)
+    local car = byJob[jobId]
+    local component = V2ComponentRules.ById[id]
+    if not car or not component or type(car:GetAttribute("V2PilotId")) ~= "string" then
+        return false, "Este veículo não possui a interação mecânica solicitada."
+    end
+    local folder = car:FindFirstChild("V2ComponentPoints")
+    local anchor = folder and folder:FindFirstChild("V2Point_" .. id)
+    local character = player.Character
+    local hrp = character and character:FindFirstChild("HumanoidRootPart")
+    if not anchor or not anchor:IsA("BasePart") or not hrp or not hrp:IsA("BasePart")
+        or not V2ComponentRules.IsNear(anchor.Position, hrp.Position, V2ComponentRules.MaxDistance)
+        or car:GetAttribute("Estacionado") ~= true then
+        return false, "Aproxime-se do componente com o veículo estacionado."
+    end
+    local attr = V2ComponentRules.Attribute(id) :: string
+    local nextState, message = V2ComponentRules.Next(id, car:GetAttribute(attr), context)
+    if not nextState then return false, message end
+    car:SetAttribute(attr, nextState)
+    -- Compatível com o efeito anterior do capô, agora derivado de estado autoritativo.
+    if id == "Hood" then car:SetAttribute("PrepHoodOpen", nextState == "Open") end
+    local prompt = anchor:FindFirstChild("V2_" .. id)
+    if prompt and prompt:IsA("ProximityPrompt") then
+        prompt.ActionText = V2ComponentRules.Action(id, nextState)
+    end
+    return true, (nextState == V2ComponentRules.Open(id)) and
+        (component.Label .. " aberto(a)/removido(a).") or (component.Label .. " fechado(a)/recolocado(a).")
+end
+
+local function resetComponents(car: Model)
+    local folder = car:FindFirstChild("V2ComponentPoints")
+    if folder then
+        for _, p in ipairs(folder:GetDescendants()) do
+            if p:IsA("ProximityPrompt") then p.Enabled = false end
+        end
+    end
+    for _, component in ipairs(V2ComponentRules.Components) do
+        local attr = V2ComponentRules.Attribute(component.Id) :: string
+        if car:GetAttribute(attr) ~= nil then
+            car:SetAttribute(attr, V2ComponentRules.Closed(component.Id))
+        end
+    end
+    car:SetAttribute("PrepHoodOpen", false)
+end
 
 local function addPrompts(car: Model, job: any)
 	local root = car.PrimaryPart :: BasePart
@@ -222,6 +329,20 @@ local function applyStage(car: Model)
 			if prompt then prompt.Enabled = point:GetAttribute("StepId") == active end
 		end
 	end
+    local components = car:FindFirstChild("V2ComponentPoints")
+    if components then
+        for _, point in ipairs(components:GetChildren()) do
+            local id = string.sub(point.Name, 9)
+            local part = V2ComponentRules.ById[id]
+            local prompt = point:FindFirstChildWhichIsA("ProximityPrompt")
+            if part and prompt then
+                local state = car:GetAttribute(V2ComponentRules.Attribute(id) :: string)
+                prompt.ActionText = V2ComponentRules.Action(id, state)
+                prompt.Enabled = parked and (stage == "Diagnose" or stage == "Repair")
+                    and (part.Kind ~= "Wheel" or stage == "Repair")
+            end
+        end
+    end
 	local inspectionFolder = car:FindFirstChild("InspectionPoints")
 	if inspectionFolder then
 		local enabled = parked and stage == "Diagnose" and car:GetAttribute("InspectionReady") == true
@@ -275,7 +396,12 @@ function VehicleService.SetRepairPrepProgress(jobId: string, defectId: string, s
 	local required = RepairPrepRules.Requires(defectId)
 	local stepId = RepairPrepRules.Current(defectId, stepIndex)
 	car:SetAttribute("PrepRequired", required)
-	car:SetAttribute("PrepStepId", stepId or "")
+    car:SetAttribute("PrepStepId", stepId or "")
+    if required and stepIndex > 1 and (defectId == "WeakBattery" or defectId == "Overheating") then
+        if car:GetAttribute("V2State_Hood") ~= nil then
+            car:SetAttribute("V2State_Hood", "Open")
+        end
+    end
 	car:SetAttribute("PrepComplete", RepairPrepRules.Ready(defectId, stepIndex))
 	-- A abertura do capô é um gesto persistente de preparação, não uma recompensa em dinheiro.
 	if required and stepIndex > 1 and (defectId == "WeakBattery" or defectId == "Overheating") then
@@ -542,6 +668,7 @@ function VehicleService.Spawn(owner: Player, job: any): (boolean, string)
 	theCar.Parent = folder()
 	byJob[job.Id] = theCar
 	addPrompts(theCar, job)
+    addComponentPrompts(theCar, job)
 	VehicleService.SetStage(job.Id, job.Diagnosed and "Repair" or "Diagnose")
 
 	task.spawn(function()
@@ -593,6 +720,7 @@ function VehicleService.Despawn(jobId: string, instant: boolean?)
 		return
 	end
 	byJob[jobId] = nil
+    resetComponents(car) -- nenhuma porta ou roda fica aberta durante a saída
 	local npc, animator = CustomerNpcService.Take(jobId)
 	local bay = findBay(car)
 	local plot = bay and bay.Parent

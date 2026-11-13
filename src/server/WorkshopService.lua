@@ -25,6 +25,7 @@ local EquipmentUpgradeRules = require(ReplicatedStorage.Shared.EquipmentUpgradeR
 local StaffAssignmentRules = require(ReplicatedStorage.Shared.StaffAssignmentRules)
 local LocationRules = require(ReplicatedStorage.Shared.LocationRules)
 local V2ReceptionRules = require(ReplicatedStorage.Shared.V2ReceptionRules)
+local V2ComponentRules = require(ReplicatedStorage.Shared.V2ComponentRules)
 local V2ManagementSummaryRules = require(ReplicatedStorage.Shared.V2ManagementSummaryRules)
 
 local WorkshopService = {}
@@ -1019,6 +1020,9 @@ function WorkshopService.StartRepair(player: Player, jobId: string, assist: bool
     if not RepairPrepRules.Ready(job.DefectId, job.PreparationStep) then
         return false, "Prepare primeiro o veículo: siga as etapas destacadas no carro."
     end
+    local states, pilotId = VehicleService.ComponentStates(jobId)
+    local componentReady, reason = V2ComponentRules.ReadyToRepair(job.DefectId, pilotId, states)
+    if not componentReady then return false, reason end
     local previous = Repairs[player.UserId]
     if previous then
         if RepairSessionRules.IsActive(previous, os.clock(), RepairRules.MaxSessionSeconds) then
@@ -1789,6 +1793,41 @@ function WorkshopService.HireNpc(player: Player, jobId: string)
 end
 
 -- Interação física com o veículo (ProximityPrompt). O servidor decide o que o jogador pode fazer.
+-- V2-03: controla mecanica pelo mesmo canal de ProximityPrompt da V1.
+-- Não há RemoteEvent novo; todas as verificações são feitas no servidor, perto do carro.
+function WorkshopService.ToggleVehicleComponent(player: Player, jobId: string, id: any): (boolean, string)
+    local job = Jobs[jobId]
+    if not job or job.Status ~= "InProgress" or type(id) ~= "string"
+        or not V2ComponentRules.ById[id] then
+        return false, "Ordem ou componente inválido."
+    end
+    local assigned = job.AssignedWorkerUserId == player.UserId
+    if not assigned or not CollaborationRules.IsAuthorized(job, player.UserId) then
+        return false, "Esta interação é exclusiva do mecânico responsável pela ordem."
+    end
+    local states, pilotId = VehicleService.ComponentStates(jobId)
+    if not pilotId then return false, "Este carro não possui articulações V2." end
+    local prepFolder = nil
+    local supportReady = RepairPrepRules.IsDone(job.DefectId, job.PreparationStep, "JackSupport")
+    local ctx: V2ComponentRules.Context = {
+        Parked = VehicleService.IsParked(jobId),
+        Assigned = assigned,
+        InProgress = job.Status == "InProgress",
+        Diagnosed = job.Diagnosed == true,
+        Repairing = (Repairs[player.UserId] ~= nil and Repairs[player.UserId].JobId == jobId),
+        WorkerBusy = employeeReserved(job),
+        WheelSupportReady = supportReady,
+        WheelSupportRequired = job.DefectId == "FlatTire",
+        HoodLockedOpen = job.Diagnosed == true and
+            (job.DefectId == "WeakBattery" or job.DefectId == "Overheating")
+            and (job.PreparationStep or 1) > 1
+            and not RepairPrepRules.Ready(job.DefectId, job.PreparationStep),
+    }
+    local _ = states
+    local _2 = prepFolder
+    return VehicleService.ToggleComponent(player, jobId, id, ctx)
+end
+
 function WorkshopService.Interact(player: Player, jobId: string, kind: string): (boolean, string)
     local job = Jobs[jobId]
     if kind == "Accept" then
@@ -1797,6 +1836,8 @@ function WorkshopService.Interact(player: Player, jobId: string, kind: string): 
     if not job or job.Status ~= "InProgress" then
         return false, "Ordem não está em andamento."
     end
+    local componentId = V2ComponentRules.FromPrompt(kind)
+    if componentId then return WorkshopService.ToggleVehicleComponent(player, jobId, componentId) end
     if kind == "Diagnose" then
         return WorkshopService.DiagnoseJob(player, jobId)
     elseif string.sub(kind, 1, 8) == "Inspect_" then

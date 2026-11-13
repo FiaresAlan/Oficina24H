@@ -1165,6 +1165,69 @@ do
 		and A.Get(worker).PendingClaimAudits[1].Status == "Missing")
 end
 
+-- V2-02: comportamento persistente do pedido de peças, incl. reload e antigos perfis v11.
+do
+    local store = newStore()
+    local A = server(store, "v2-supply-A")
+    local player = fakePlayer(2601)
+    A.Load(player)
+    local p = A.Get(player)
+    check("V2: novo perfil possui lista vazia e telemetria tipada",
+        p.SchemaVersion == 12 and type(p.SupplyRequests) == "table"
+        and p.TelemetryV2.FirstUpgrade == false and p.TelemetryV2.FirstEmployee == false)
+    local initialMoney = p.Coins
+    local created = A.RequestSupply(player, { Battery = 2, Tire = 1 })
+    check("V2: pedido acrescenta duas pecas sem debitar saldo",
+        created and p.SupplyRequests.Battery == 2 and p.SupplyRequests.Tire == 1
+        and p.Coins == initialMoney)
+    check("V2: repeticao de pedido nao multiplica quantidade",
+        A.RequestSupply(player, { Battery = 2 }) == false and p.SupplyRequests.Battery == 2)
+    A.AddParts(player, "Battery", 1)
+    check("V2: estoque aumentado por rollback nao cumpre pedido",
+        p.SupplyRequests.Battery == 2)
+    check("V2: compra confirmada decrementa apenas a peca comprada",
+        A.FulfillSupplyRequest(player, "Battery", 1)
+        and p.SupplyRequests.Battery == 1 and p.SupplyRequests.Tire == 1)
+    check("V2: compra invalida nao altera pedido",
+        A.FulfillSupplyRequest(player, "Battery", math.huge) == false
+        and p.SupplyRequests.Battery == 1)
+    check("V2: marco de primeiro upgrade e unico",
+        A.ClaimTelemetryMilestone(player, "FirstUpgrade")
+        and not A.ClaimTelemetryMilestone(player, "FirstUpgrade")
+        and not A.ClaimTelemetryMilestone(player, "Unknown"))
+    check("V2: saldo e pagamentos V1 nao sao alterados por lista",
+        p.Coins == initialMoney and #p.RepairLedger == 0)
+    check("V2: salvamento do pedido e telemetria", A.Save(player))
+    A.Remove(player)
+    local B = server(store, "v2-supply-B")
+    B.Load(player)
+    local q = B.Get(player)
+    check("V2: reentrada preserva pedido, saldo e marco",
+        q and q.SchemaVersion == 12 and q.SupplyRequests.Battery == 1
+        and q.SupplyRequests.Tire == 1 and q.Coins == initialMoney
+        and q.TelemetryV2.FirstUpgrade == true)
+end
+
+-- V2-00: migração aditiva sobre perfil antigo sem eliminar provas financeiras existentes.
+do
+    local store = newStore()
+    store.data["u_2611"] = {
+        SchemaVersion = 11, Coins = 721, TotalEarned = 354,
+        Reputation = 11, Parts = { Battery = 2 },
+        RepairLedger = {}, PendingClaims = {}, PendingClaimAudits = {},
+        OwnerSettlementProofs = {}, WorkerSettlementProofs = {}, WorkerPaidTombstones = {},
+    }
+    local A = server(store, "v2-migrate-A")
+    local player = fakePlayer(2611)
+    A.Load(player)
+    local p = A.Get(player)
+    check("V2: v11->v12 preserva contas, reputacao, estoque e arquivos",
+        p and p.SchemaVersion == 12 and p.Coins == 721
+        and p.TotalEarned == 354 and p.Reputation == 11
+        and p.Parts.Battery == 2 and type(p.WorkerPaidTombstones) == "table"
+        and type(p.SupplyRequests) == "table")
+end
+
 for _, c in ipairs(clones) do c:Destroy() end
 table.insert(results, failures == 0 and "TODOS OS TESTES PASSARAM" or (failures .. " TESTE(S) FALHARAM"))
 return table.concat(results, "\n")

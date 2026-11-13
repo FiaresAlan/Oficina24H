@@ -1819,9 +1819,8 @@ function WorkshopService.ToggleVehicleComponent(player: Player, jobId: string, i
     if not assigned or not CollaborationRules.IsAuthorized(job, player.UserId) then
         return false, "Esta interação é exclusiva do mecânico responsável pela ordem."
     end
-    local states, pilotId = VehicleService.ComponentStates(jobId)
+    local _, pilotId = VehicleService.ComponentStates(jobId)
     if not pilotId then return false, "Este carro não possui articulações V2." end
-    local prepFolder = nil
     local supportReady = RepairPrepRules.IsDone(job.DefectId, job.PreparationStep, "JackSupport")
     local ctx: V2ComponentRules.Context = {
         Parked = VehicleService.IsParked(jobId),
@@ -1837,8 +1836,6 @@ function WorkshopService.ToggleVehicleComponent(player: Player, jobId: string, i
             and (job.PreparationStep or 1) > 1
             and not RepairPrepRules.Ready(job.DefectId, job.PreparationStep),
     }
-    local _ = states
-    local _2 = prepFolder
     return VehicleService.ToggleComponent(player, jobId, id, ctx)
 end
 

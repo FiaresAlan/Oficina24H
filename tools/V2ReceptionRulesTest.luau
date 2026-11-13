@@ -19,4 +19,7 @@ j.Status="InProgress" j.Diagnosed=true
 j.Requirement={Parts={Battery=1}}
 check("esperando peca quando faltar",R.Stage(j,{Battery=0},200)=="Aguardando peça")
 check("exame pronto quando ha estoque",R.Stage(j,{Battery=1},200)=="Pronto para reparar")
+check("custo estimado de pecas",R.EstimatedPartsCost({Battery=1,Fuse=2})>0)
+local visible=R.BuildVisible({Diagnosed=true,Status="InProgress",Requirement={Reward=150,Parts={Battery=1}}},{Parts={Battery=0},PriceMultiplier=1},200)
+check("margem prevista sem vazar defeito",visible.EstimatedPartsCost>0 and visible.ContributionBeforeLabor==150-visible.EstimatedPartsCost)
 return table.concat(out,"\n")

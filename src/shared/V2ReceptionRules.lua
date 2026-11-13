@@ -60,6 +60,21 @@ function Rules.MissingParts(parts: any, stock: any): { [string]: number }
     return missing
 end
 
+-- Projecao atual das pecas, visivel SOMENTE apos o diagnostico.
+-- Nao inclui mao-de-obra, salario, aluguel ou custo historico: nao e lucro liquido.
+function Rules.EstimatedPartsCost(parts: any): number
+    local total = 0
+    if type(parts) ~= "table" then return total end
+    for id, count in pairs(parts) do
+        local known = Catalog.Parts[id]
+        if known and type(count) == "number" and count == count and count > 0
+            and count % 1 == 0 and count <= 1000 then
+            total += known.Cost * count
+        end
+    end
+    return total
+end
+
 -- Mapeamento de apresentacao: estados de persistencia da V1 nao sao renomeados nem adulterados.
 function Rules.Stage(job: any, stock: any, now: number?): string
     if type(job) ~= "table" then return "Indisponível" end
@@ -99,6 +114,9 @@ function Rules.BuildVisible(job: any, profile: any, now: number?): any
     local rate = type(profile) == "table" and profile.PriceMultiplier or 1
     local low, high = Rules.GeneralPriceGuide(rate)
     local diagnosed = job.Diagnosed == true
+    local requirement = diagnosed and job.Requirement
+    local estimatedParts = requirement and Rules.EstimatedPartsCost(requirement.Parts) or nil
+    local price = requirement and number(requirement.Reward) or nil
     return {
         Stage = Rules.Stage(job, stock, now),
         Priority = Rules.ValidPriority(job.Priority) and job.Priority or 0,
@@ -108,6 +126,8 @@ function Rules.BuildVisible(job: any, profile: any, now: number?): any
         -- Descoberta do valor exato pertence ao diagnostico (Requirement.Reward V1).
         PriceGuideMin = low, PriceGuideMax = high,
         MissingParts = diagnosed and Rules.MissingParts(job.Requirement and job.Requirement.Parts, stock) or {},
+        EstimatedPartsCost = estimatedParts,
+        ContributionBeforeLabor = price and estimatedParts and (price - estimatedParts) or nil,
     }
 end
 

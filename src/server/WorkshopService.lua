@@ -105,11 +105,16 @@ end
 
 -- Funil do guia do 1º atendimento (Creator Dashboard > Analytics > Funnels). Só conta quem ainda está no guia.
 local AnalyticsService = game:GetService("AnalyticsService")
-local FUNNEL_STEPS = { Claimed = { 1, "Oficina registrada" }, Accepted = { 2, "Aceitou o 1º cliente" }, Diagnosed = { 3, "Diagnosticou" }, Repaired = { 4, "Concluiu o 1º reparo" } }
+local FUNNEL_STEPS = {
+    Claimed = { 1, "Oficina registrada" }, Accepted = { 2, "Aceitou o 1º cliente" },
+    Diagnosed = { 3, "Diagnosticou" }, Repaired = { 4, "Concluiu o 1º reparo" },
+    FirstUpgrade = { 5, "Primeira ampliacao" }, FirstEmployee = { 6, "Primeiro mecanico" },
+}
 local function funnel(player: Player, key: string)
     local profile = DataService and DataService.Get(player)
     local step = FUNNEL_STEPS[key]
-    if not profile or not step or (profile.Onboarding and profile.Onboarding.Done and key ~= "Repaired") then
+    if not profile or not step or (profile.Onboarding and profile.Onboarding.Done and key ~= "Repaired"
+        and key ~= "FirstUpgrade" and key ~= "FirstEmployee") then
         return
     end
     pcall(function()
@@ -1988,6 +1993,7 @@ function WorkshopService.UpgradeWorkshop(player: Player)
     local next = WorkshopLevels.Levels[level + 1]
     DataService.AddCoins(player, -next.Cost, "Ampliação da oficina: " .. next.Name)
     DataService.SetWorkshopLevel(player, level + 1)
+    if DataService.ClaimTelemetryMilestone(player, "FirstUpgrade") then funnel(player, "FirstUpgrade") end
     StationService.ApplyLevel(plot, level + 1, player.DisplayName)
     EquipmentService.Sync(player, profile.Equipment)
     EquipmentUpgradePads.Sync(player, profile.Equipment, profile.EquipmentLevels)
@@ -2095,6 +2101,7 @@ function WorkshopService.HireEmployee(player: Player)
         profile.NextPayAt = os.time() + Config.PaydaySeconds
     end
     DataService.SetEmployees(player, (profile.Employees or 0) + 1)
+    if DataService.ClaimTelemetryMilestone(player, "FirstEmployee") then funnel(player, "FirstEmployee") end
     syncStaff(player)
     return true, string.format("Mecânico contratado! Salário: %d moedas a cada %d min. Ele atende sozinho os carros que estiverem no box.", Config.EmployeeSalary, Config.PaydaySeconds // 60)
 end

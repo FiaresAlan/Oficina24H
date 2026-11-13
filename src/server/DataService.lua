@@ -95,6 +95,7 @@ local function makeDefaultData(): any
 		EquipmentLevels = { BasicToolset = 1 }, -- C16: upgrades permanentes de ferramentas e máquinas
 		Parts = { TirePatch = 3, Battery = 1, Fuse = 2 }, -- estoque inicial para os primeiros serviços
 		SupplyRequests = {}, -- V2-02: lista de peças a buscar na loja (NAO debita moedas)
+        TelemetryV2 = { FirstUpgrade = false, FirstEmployee = false }, -- eventos anonimos de primeiro progresso
 		Transactions = {},
 		TotalEarned = 0,
 		PriceMultiplier = 1, -- preço da oficina em relação à tabela (0.7 a 1.5)
@@ -321,6 +322,11 @@ local function reconcile(data: any): any
 		data.Onboarding = { Done = false }
 	end
 	data.Onboarding = { Done = data.Onboarding.Done == true }
+    local metrics = type(data.TelemetryV2) == "table" and data.TelemetryV2 or {}
+    data.TelemetryV2 = {
+        FirstUpgrade = metrics.FirstUpgrade == true,
+        FirstEmployee = metrics.FirstEmployee == true,
+    }
 	data.SchemaVersion = SCHEMA_VERSION
 	return data
 end
@@ -1094,6 +1100,18 @@ function DataService.SetEmployees(player: Player, count: number)
 		profile.Employees = math.clamp(math.floor(count), 0, Config.MaxEmployees)
 		DataService.MarkDirty(player)
 	end
+end
+
+-- Concedido uma unica vez por perfil; permite registrar funis sem identificadores pessoais.
+function DataService.ClaimTelemetryMilestone(player: Player, kind: string): boolean
+    if kind ~= "FirstUpgrade" and kind ~= "FirstEmployee" then return false end
+    local profile = Profiles[player.UserId]
+    if not profile then return false end
+    profile.TelemetryV2 = profile.TelemetryV2 or {}
+    if profile.TelemetryV2[kind] then return false end
+    profile.TelemetryV2[kind] = true
+    Dirty[player.UserId] = true
+    return true
 end
 
 function DataService.MarkDirty(player: Player)

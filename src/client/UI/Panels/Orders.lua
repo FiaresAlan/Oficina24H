@@ -316,6 +316,14 @@ function Orders.new(parent: Instance)
 		})
 		requirement(info, job, snapshot, 4)
         local reception = job.Reception or {}
+        if job.Diagnosed and reception.EstimatedPartsCost ~= nil then
+            HudParts.text(info, string.format(
+                "Peças (estimativa): %d · Contribuição antes salários: %d",
+                    reception.EstimatedPartsCost, reception.ContributionBeforeLabor or 0),
+                19, { Font = Theme.FontSemi, TextColor3 = Theme.Muted,
+                    LayoutOrder = 4, TextWrapped = true, AutomaticSize = Enum.AutomaticSize.Y,
+                    Size = UDim2.new(1, 0, 0, 0) })
+        end
         HudParts.text(info, "Etapa: " .. (reception.Stage or "Em andamento")
             .. ((reception.DiscountPercent or 0) > 0 and
                 (" · desconto " .. tostring(reception.DiscountPercent) .. "%") or ""), 19, {
@@ -501,7 +509,7 @@ function Orders.new(parent: Instance)
                     Size = UDim2.new(1, -28, 0, 28), TextWrapped = true,
                 })
             HudParts.text(cardV2, string.format(
-                "Caixa: %d · Histórico bruto (%d OS): %d · Lucro líquido: a calcular na V2-08",
+                "Caixa: %d · Histórico bruto (%d OS): %d · Líquido: V2-08",
                     summary.Coins, summary.RecentCount, summary.RecentGross),
                 compact and 16 or 18, {
                     Font = Theme.FontSemi, TextColor3 = Theme.Muted,
@@ -516,6 +524,25 @@ function Orders.new(parent: Instance)
                 Position = UDim2.fromOffset(14, compact and 94 or 85),
                 Size = UDim2.new(1, -28, 0, 24), TextWrapped = true,
             })
+            -- Próximo investimento aparece depois do primeiro atendimento, sem overlay.
+            if (snapshot.Profile.RatingCount or 0) > 0
+                and (snapshot.Profile.WorkshopLevel or 0) == 0 then
+                local upgrade = snapshot.Workshop and snapshot.Workshop.Next
+                if upgrade then
+                    local guide = PanelKit.card(scroll, "V2FirstExpansion")
+                    guide.LayoutOrder = -9
+                    guide.Size = UDim2.new(1, -10, 0, 68)
+                    HudParts.text(guide, upgrade.CanBuy and
+                        ("PRÓXIMO PASSO: amplie para " .. upgrade.Name .. " na Construtora")
+                        or ("META DE EXPANSÃO: " .. upgrade.Name .. " · custo "
+                            .. tostring(upgrade.Cost) .. " moedas; confira os requisitos na Construtora"),
+                        compact and 17 or 20, {
+                        Font = Theme.FontSemi, TextColor3 = Theme.Accent,
+                        Position = UDim2.fromOffset(14, 9),
+                        Size = UDim2.new(1, -28, 0, 50), TextWrapped = true,
+                    })
+                end
+            end
             local top = stack(scroll, 10, true, 0)
 			local flyers = PanelKit.button(top, t("orders_new_customer"), "orange", Vector2.new(240, 48), function()
 				Store.Act("GenerateCustomer")

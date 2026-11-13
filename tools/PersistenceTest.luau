@@ -76,6 +76,8 @@ do
 	local prof = A.Get(p)
 	check("novo: perfil criado com moedas iniciais", prof and prof.Coins == 250, prof and prof.Coins)
 	check("novo: kit básico presente", prof and prof.Equipment.BasicToolset == true)
+	check("C16: kit inicia no nível 1", A.GetEquipmentLevel(p, "BasicToolset") == 1)
+	check("C16: perfil novo já nasce no schema v8", prof.SchemaVersion == 8)
 	check("novo: trava de sessão gravada", store.data["u_1"] and store.data["u_1"].Session and store.data["u_1"].Session.JobId == "A")
 end
 
@@ -97,6 +99,7 @@ do
 	check("recarga: moedas", prof and prof.Coins == 750, prof and prof.Coins)
 	check("recarga: XP e nível", B.GetSkillLevel(p, "Engine") == 2, B.GetSkillLevel(p, "Engine"))
 	check("recarga: equipamento persistido", prof and prof.Equipment.Jack == true)
+	check("C16: equipamento existente migra para nível 1", B.GetEquipmentLevel(p, "Jack") == 1)
 	check("recarga: reputação", prof and prof.Reputation == 7)
 	check("recarga: histórico de transações", prof and #prof.Transactions == 1 and prof.Transactions[1].Reason == "Teste")
 end
@@ -427,7 +430,7 @@ do
 	store.data["u_1101"].PendingClaims[1].At -= 900 -- simula novo servidor sem aplicar parcela do contratado
 	local B = server(store, "claimB")
 	B.Load(worker)
-	check("C14: migração do schema v7", B.Get(worker).SchemaVersion == 7)
+	check("C16: migração do schema v8", B.Get(worker).SchemaVersion == 8)
 	local recovered = B.ReconcileWorkerClaims(worker)
 	check("C13: parcela ausente recuperada", recovered == 1
 		or B.HasRepairCredit(worker, "job_77", token))
@@ -495,9 +498,33 @@ do
 	local A = server(store, "claimCorruptA")
 	local p = fakePlayer(1301)
 	A.Load(p)
-	check("C14: schema atualizado ao carregar v5", A.Get(p).SchemaVersion == 7)
+	check("C16: schema atualizado ao carregar v5", A.Get(p).SchemaVersion == 8)
 	check("C13: sanitize de reivindicações corrompidas", #A.Get(p).PendingClaims == 0)
 	check("C13: mantém saldo antigo", A.Get(p).Coins == 300)
+end
+
+-- C16: upgrade persistente, débito único, limites e recarga.
+do
+	local store = newStore()
+	local A = server(store, "upgradeA")
+	local p = fakePlayer(1601)
+	A.Load(p)
+	check("C16: equipamento não comprado não pode melhorar",
+		not select(1, A.UpgradeOwnedEquipment(p, "Scanner")))
+	check("C16: kit nível 2 custa 180", select(1, A.UpgradeOwnedEquipment(p, "BasicToolset"))
+		and A.Get(p).Coins == 70 and A.GetEquipmentLevel(p, "BasicToolset") == 2)
+	check("C16: saldo insuficiente não muda nível", not select(1, A.UpgradeOwnedEquipment(p, "BasicToolset"))
+		and A.GetEquipmentLevel(p, "BasicToolset") == 2 and A.Get(p).Coins == 70)
+	A.AddCoins(p, 420, "Teste de melhoria")
+	check("C16: nível 3 custa 420", select(1, A.UpgradeOwnedEquipment(p, "BasicToolset"))
+		and A.GetEquipmentLevel(p, "BasicToolset") == 3 and A.Get(p).Coins == 70)
+	check("C16: nível máximo não cobra novamente", not select(1, A.UpgradeOwnedEquipment(p, "BasicToolset"))
+		and A.Get(p).Coins == 70)
+	A.Remove(p)
+	local B = server(store, "upgradeB")
+	B.Load(p)
+	check("C16: upgrade persiste ao reconectar", B.GetEquipmentLevel(p, "BasicToolset") == 3
+		and B.Get(p).Coins == 70)
 end
 
 for _, c in ipairs(clones) do c:Destroy() end

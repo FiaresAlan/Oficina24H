@@ -229,6 +229,38 @@ check("pending claims only expose aggregate counts",
 check("archive tests registered",
       '"OwnerSettlementProofRulesTest"' in runner
       and (TOOLS / "OwnerSettlementProofRulesTest.luau").is_file())
+# C16/C17: upgrades persistentes e pads físicos autorizados no servidor.
+equipment_rules = text(SHARED / "EquipmentUpgradeRules.lua")
+pad_service = text(ROOT / "src" / "server" / "EquipmentUpgradePads.lua")
+staff_rules = text(SHARED / "StaffAssignmentRules.lua")
+check("equipment tiers persisted in schema v8",
+      "EquipmentLevels = { BasicToolset = 1 }" in data_service
+      and "EquipmentUpgradeRules.Sanitize(data.EquipmentLevels" in data_service
+      and "function DataService.UpgradeOwnedEquipment" in data_service)
+check("upgrade costs and economy are server-authoritative",
+      "function Rules.NextCost" in equipment_rules
+      and 'DataService.AddCoins(player, -cost, "Melhoria:' in data_service)
+check("floor pads use server root position and one purchase on entry",
+      "function Pads.Sync" in pad_service and "PointToObjectSpace(root.Position)" in pad_service
+      and "if inside and not entry.WasInside" in pad_service
+      and "entry.WasInside = true" in pad_service)
+check("upgrade server verifies plot ownership",
+      "PlotService.GetPlot(player) ~= sourcePlot" in workshop
+      and "sourcePlot:GetAttribute(\"OwnerUserId\")" in workshop)
+check("paid equipment level benefits repairs and employee speed",
+      "EquipmentUpgradeRules.RewardMultiplier(ownerLevel)" in workshop
+      and "EquipmentUpgradeRules.EmployeeSeconds" in workshop)
+check("employee physically walks before working",
+      "walkEmployee(npc, target" in workshop
+      and "PathfindingService:CreatePath" in workshop)
+check("staff starts at 2 bays and waits 25 seconds for one car",
+      "MaxEmployees = 1" in text(SHARED / "WorkshopLevels.lua")
+      and "StaffAssignmentRules.ShouldDispatch" in workshop
+      and "Rules.SoloWaitSeconds = 25" in staff_rules)
+check("new suites registered",
+      '"EquipmentUpgradeTest"' in runner and '"StaffAssignmentTest"' in runner
+      and (TOOLS / "EquipmentUpgradeTest.luau").is_file()
+      and (TOOLS / "StaffAssignmentTest.luau").is_file())
 check("readme links project checklist", "issues/15" in text(ROOT / "README.md"))
 
 print(f"\nStatic checks: {passed} passed, {len(failures)} failed")

@@ -20,6 +20,7 @@ local DiagnosisRules = require(ReplicatedStorage.Shared.DiagnosisRules)
 local DiagnosisEvidence = require(ReplicatedStorage.Shared.DiagnosisEvidence)
 local WorkshopLevels = require(ReplicatedStorage.Shared.WorkshopLevels)
 local EquipmentUpgradeRules = require(ReplicatedStorage.Shared.EquipmentUpgradeRules)
+local StaffAssignmentRules = require(ReplicatedStorage.Shared.StaffAssignmentRules)
 local LocationRules = require(ReplicatedStorage.Shared.LocationRules)
 
 local WorkshopService = {}
@@ -1907,6 +1908,26 @@ local function walkEmployee(npc: Model, target: Vector3, animator: any)
     NpcKit.WalkPath(npc, points, animator)
 end
 
+-- Ferramenta visível presa à mão durante o serviço (R15 e R6).
+local function workWrench(npc: Model): (Part?, Weld?)
+    local hand = npc:FindFirstChild("RightHand", true) or npc:FindFirstChild("Right Arm", true)
+    if not hand or not hand:IsA("BasePart") then return nil, nil end
+    local wrench = Instance.new("Part")
+    wrench.Name = "ChaveEmUso"
+    wrench.Size = Vector3.new(0.18, 0.18, 1.35)
+    wrench.Material = Enum.Material.Metal
+    wrench.Color = Color3.fromRGB(165, 175, 185)
+    wrench.CanCollide, wrench.CanTouch, wrench.CanQuery = false, false, false
+    wrench.Massless = true
+    wrench.CFrame = hand.CFrame
+    wrench.Parent = npc
+    local joint = Instance.new("Weld")
+    joint.Part0, joint.Part1 = hand, wrench
+    joint.C0 = CFrame.new(0, -0.5, -0.55)
+    joint.Parent = wrench
+    return wrench, joint
+end
+
 -- Funcionário assume um carro em espera e mostra seu trabalho ao proprietário.
 local function employeeWork(owner: Player, job: any, npc: Model)
     local entry = Staff[owner.UserId]
@@ -1961,7 +1982,27 @@ local function employeeWork(owner: Player, job: any, npc: Model)
     VehicleService.SetRepairing(job.Id, true)
     local level = DataService.GetEquipmentLevel(owner, defect.RequiredEquipment)
     local workSeconds = EquipmentUpgradeRules.EmployeeSeconds(Config.EmployeeWorkSeconds, level)
-    task.wait(workSeconds)
+    local wrench, joint = workWrench(npc)
+    local started = os.clock()
+    local lastStage = -1
+    while npc.Parent and job.Status == "InProgress" and os.clock() - started < workSeconds do
+        local elapsed = os.clock() - started
+        local percent = math.clamp(math.floor(100 * elapsed / workSeconds), 0, 100)
+        npc:SetAttribute("RepairProgress", percent)
+        local stage = math.floor(percent / 34)
+        if stage ~= lastStage then
+            lastStage = stage
+            local phrases = { "Inspecionando...", "Substituindo peças...", "Testando o reparo..." }
+            NpcKit.Say(npc, phrases[math.min(stage + 1, 3)], 5)
+        end
+        if joint then
+            joint.C0 = CFrame.new(0, -0.5, -0.55)
+                * CFrame.Angles(math.rad(16 * math.sin(elapsed * 5)), 0, 0)
+        end
+        task.wait(0.3)
+    end
+    if wrench then wrench:Destroy() end
+    npc:SetAttribute("RepairProgress", nil)
     local current = Jobs[job.Id]
     if current ~= job or job.Status ~= "InProgress" or not owner.Parent then
         release(nil)
@@ -2042,7 +2083,7 @@ local function staffTick()
                     oldestWait = math.max(oldestWait, os.time() - (job.AcceptedAt or os.time()))
                 end
             end
-            if working < #entry.Npcs and (waiting >= 2 or (waiting >= 1 and oldestWait >= 25)) then
+            if working < #entry.Npcs and StaffAssignmentRules.ShouldDispatch(waiting, oldestWait) then
                 for jobId, job in pairs(Jobs) do
                     if working >= #entry.Npcs then
                         break
@@ -2052,7 +2093,7 @@ local function staffTick()
                         and not (Repairs[userId] and Repairs[userId].JobId == jobId)
                         and not (RepairPrepRules.Requires(job.DefectId) and (job.PreparationStep or 1) > 1)
                         and os.time() >= (job.EmployeeRetryAt or 0)
-                        and (waiting >= 2 or os.time() - (job.AcceptedAt or os.time()) >= 25) then
+                        and StaffAssignmentRules.EligibleJob(waiting, os.time() - (job.AcceptedAt or os.time())) then
                         local free: Model? = nil
                         for _, npc in ipairs(entry.Npcs) do
                             if not npc:GetAttribute("Trabalhando") then

@@ -7,7 +7,7 @@ local suites = {
 	"RepairPrepTest", "RepairSocketTest", "RepairPartVisualTest", "HudLayoutTest", "CompactHudTest",
 	"ServiceFocusTest", "RepairOperationsTest", "WorkshopProceduresTest", "RepairActionRulesTest", "RepairReceiptTest", "SettlementLedgerTest", "SettlementDeliveryRulesTest", "SettlementClaimRulesTest", "OwnerSettlementProofRulesTest", "RepairStatementTest", "CollaborationRulesTest",
 	"RepairSessionTest", "LocationTest", "RivalRulesTest", "PlotTest", "PersistenceTest",
-	"ProgressTest", "StudioPlaceAudit",
+	"ProgressTest", "EquipmentUpgradeTest", "StaffAssignmentTest", "StudioPlaceAudit",
 }
 local output = {}
 local totalPass, totalFail, totalWarn = 0, 0, 0

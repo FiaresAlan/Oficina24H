@@ -147,7 +147,7 @@ do
 		check("nível " .. level .. ": sala dos fundos atrás dos boxes", WL.EquipmentZ - 3 > WL.BayZ + WL.BayDepth / 2)
 	end
 	check("nível máximo cabe todos os equipamentos", WL.MaxEquipment(WL.MaxLevel) >= #EquipmentService.Order)
-	check("funcionários só a partir do nível 2", WL.Levels[0].MaxEmployees == 0 and WL.Levels[1].MaxEmployees == 0 and WL.Levels[2].MaxEmployees >= 1)
+	check("funcionários a partir de 2 boxes", WL.Levels[0].MaxEmployees == 0 and WL.Levels[1].MaxEmployees == 1 and WL.Levels[2].MaxEmployees >= 2)
 	check("limite de funcionários do jogo cobre o maior prédio", Config.MaxEmployees >= WL.Levels[WL.MaxLevel].MaxEmployees)
 	-- requisitos: com tudo zerado não compra; com tudo no mínimo compra; faltando uma coisa não compra
 	local L1 = WL.Levels[1]

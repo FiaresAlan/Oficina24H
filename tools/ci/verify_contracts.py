@@ -89,6 +89,9 @@ check("C27: prompts/actions/upgrades and logout invalidate snapshot",
 check("C27: snapshot coherence regression registered",
       '"SnapshotCacheRulesTest"' in runner
       and (TOOLS / "SnapshotCacheRulesTest.luau").is_file())
+check("C27: snapshot coherence QA guide exists",
+      (ROOT / "docs" / "TESTE_C27_CACHE_SNAPSHOT_HUD_2026-11-13.md").is_file()
+      and "lastSnapshotBuild" in text(ROOT / "docs" / "TESTE_C27_CACHE_SNAPSHOT_HUD_2026-11-13.md"))
 job_exit = text(SHARED / "JobExitRules.lua")
 service_flow = text(TOOLS / "AllServiceActionFlowTest.luau")
 check("C26: logout never leaves owner jobs available without a vehicle",

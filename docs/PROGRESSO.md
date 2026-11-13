@@ -855,3 +855,12 @@ Detalhes em `docs/AUDITORIA_GERAL.md`. Resumo:
 - **CI/Rojo:** `verify_contracts.py` impede regressões óbvias de reconversão de jobs fantasmas e exige suites registradas; o CI não executa os testes Luau.
 - **Documento operacional:** [QA C26 — 15 serviços e ciclo de vida](TESTE_C26_CICLO_OS_15_SERVICOS_2026-11-13.md). Para homologação real ainda faltam assets importados, Studio Edit, gameplay cliente/servidor, 2 jogadores, DataStore, FPS e mobile.
 - **Escopo:** apenas V1; V2 não iniciada. Pacotes 3D baixados e organizados pelo usuário permanecem aguardando importação, sem modificação.
+
+
+## 2026-11-13 — V1 C27: cache do HUD sem estado antigo após compra/OS
+- **Bug concreto:** a resposta do `GetSnapshot` ainda podia reutilizar `lastSnapshotBuild` por 250 ms depois de uma compra/ação limpar apenas `snapshotCache`. Pads físicos de upgrade também não forçavam atualização.
+- **C27:** único cache `SnapshotCacheRules` com TTL de 0,4 s por jogador e invalidação por geração; ação/prompt/compra de upgrade/aviso pessoal/avaliação não reusa resultado anterior.
+- **Concorrência:** resultado de montagem em yield só é armazenado se jogador e geração continuam os mesmos; saída descarta a entrada e evita cache de sessão antiga.
+- **Regressão:** `SnapshotCacheRulesTest` em `RunAllTests` com expiração, alteração antes de 250 ms, isolamento, corrida e reconexão. CI confere integração e build Rojo (não executa o teste Luau).
+- **Documentação:** [TESTE_C27_CACHE_SNAPSHOT_HUD_2026-11-13.md](TESTE_C27_CACHE_SNAPSHOT_HUD_2026-11-13.md) com QA de Ordens, loja, avaliações, funcionários, dois jogadores e mobile.
+- **Pendências:** Studio Edit e assets reais ainda não validados, V2 apenas documentação.

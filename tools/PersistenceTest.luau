@@ -569,6 +569,48 @@ do
 		and A.HasOwnerProofCapacity(owner))
 end
 
+-- C21 revisão: a prova pode ficar cheia durante o Save da claim do
+-- contratado. A transação do dono deve devolver peças se não puder pagar.
+do
+	local Proofs = require(game.ReplicatedStorage.Shared.OwnerSettlementProofRules)
+	local store = newStore()
+	local A = server(store, "settleOwnerAtomic")
+	local owner = fakePlayer(2130)
+	A.Load(owner)
+	local token = "21302130-aaaa-bbbb-cccc-000000000001"
+	local start = A.Get(owner).Coins
+	local pieces = A.GetPartCount(owner, "TirePatch")
+	check("C21: reserva do dono debita peças e paga na mesma operação",
+		A.SettleRepairOwnerOnce(owner, "job_1", token, 80, { TirePatch = 2 },
+			"Freios", "Hatch", 2101, 120)
+		and A.GetPartCount(owner, "TirePatch") == pieces - 2
+		and A.Get(owner).Coins == start + 80
+		and #A.Get(owner).OwnerSettlementProofs == 1)
+	check("C21: repetir mesma liquidação não consome peça nem paga novamente",
+		not A.SettleRepairOwnerOnce(owner, "job_1", token, 80, { TirePatch = 2 },
+			"Freios", "Hatch", 2101, 120)
+		and A.GetPartCount(owner, "TirePatch") == pieces - 2
+		and A.Get(owner).Coins == start + 80)
+	check("C21: validar números de partes antes de mutar perfil",
+		not A.SettleRepairOwnerOnce(owner, "job_invalid", "21302130-aaaa-bbbb-cccc-000000000002",
+			80, { TirePatch = -1 }, "Freios", "Hatch", 2101, 120))
+	-- Deixe o arquivo lotado, mas ainda existe estoque de uma peça.
+	for i = 2, Proofs.MaxEntries do
+		local tk = string.format("21302130-eeee-ffff-0000-%012d", i)
+		Proofs.Add(A.Get(owner).OwnerSettlementProofs,
+			Proofs.Make("old_" .. i, tk, 2101, 20, 40, "Freios", "Hatch", 1790000000))
+	end
+	local before = A.Get(owner).Coins
+	local beforeParts = A.GetPartCount(owner, "TirePatch")
+	check("C21: falta de capacidade faz rollback de peças sem crédito",
+		not A.SettleRepairOwnerOnce(owner, "job_next",
+			"21302130-aaaa-bbbb-cccc-000000000003", 90, { TirePatch = 1 },
+			"Freios", "Hatch", 2101, 140)
+		and A.Get(owner).Coins == before
+		and A.GetPartCount(owner, "TirePatch") == beforeParts
+		and not A.HasRepairCredit(owner, "job_next", "21302130-aaaa-bbbb-cccc-000000000003"))
+end
+
 -- C13: dados corrompidos de reivindicação são descartados na migração.
 do
 	local store = newStore()

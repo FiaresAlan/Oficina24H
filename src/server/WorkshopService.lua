@@ -1049,6 +1049,21 @@ local function persistDelivery(entry: any): boolean
         SettlementDeliveryRules.MarkSaved(entry, "Owner", DataService.Save(entry.Owner))
     end
     if entry.OwnerSaved and not entry.WorkerSaved then
+        -- Se o crédito do executor falhou temporariamente, a claim já está
+        -- salva e a prova do dono agora está persistida. Retentar o mesmo
+        -- token antes de confirmar a conta do executor; nunca inventar XP.
+        if entry.Delegated then
+            if not DataService.HasRepairCredit(entry.Worker, entry.JobId, entry.Token) then
+                if not DataService.CreditRepairOnce(entry.Worker, entry.JobId, entry.Token,
+                    entry.WorkerPay, "Worker", entry.ServiceName, entry.VehicleName) then
+                    return false
+                end
+            end
+            if not entry.WorkerXpApplied then
+                DataService.AddSkillXP(entry.Worker, entry.Spec, entry.XP)
+                entry.WorkerXpApplied = true
+            end
+        end
         local workerSaved = entry.Worker == entry.Owner
             or (entry.Worker.Parent == Players and DataService.Save(entry.Worker))
         SettlementDeliveryRules.MarkSaved(entry, "Worker", workerSaved)
@@ -1177,14 +1192,28 @@ function WorkshopService.FinishRepair(player: Player, jobId: string, presses: an
             return finishFailure("Não foi possível reservar o pagamento do colaborador. Tente o reparo novamente.")
         end
     end
-    -- As peças pertencem sempre ao dono da OS.
-    if not DataService.TakeParts(workshopOwner, defect.Parts) then
+    -- A preparação da claim envolve Save(worker), portanto outra OS pode
+    -- encher o arquivo de provas durante esse yield. Testar e mutar estoque
+    -- + crédito do proprietário num único método sem yield, COM ROLLBACK.
+    if not DataService.SettleRepairOwnerOnce(workshopOwner, jobId, session.Token,
+        delegated and ownerPay or actorPay, defect.Parts, service.DisplayName, job.VehicleName,
+        delegated and player.UserId or nil, delegated and actorPay or nil) then
         if delegated then
             DataService.DiscardWorkerClaim(player, jobId, session.Token)
+            task.spawn(DataService.Save, player) -- limpeza da intenção antiga
         end
-        return finishFailure("Faltam peças na oficina.")
+        return finishFailure("Não foi possível reservar peças e pagamento. Verifique estoque ou limite de repasses.")
     end
-    -- A partir daqui a ordem é aplicada uma vez. O dono é salvo ANTES do executor.
+    -- A parcela do proprietário foi registrada; o contratado tem uma claim
+    -- persistida que permite recuperação se o crédito dele falhar.
+    local workerCredited = true
+    if delegated then
+        workerCredited = DataService.CreditRepairOnce(player, jobId, session.Token, actorPay,
+            "Worker", service.DisplayName, job.VehicleName)
+        if not workerCredited then
+            warn("[WorkshopService] Crédito do contratado pendente de retentativa:", jobId, player.UserId)
+        end
+    end
     job.Status = "Completed"
     VehicleService.Flash(job.Id, Color3.fromRGB(90, 220, 130))
     VehicleService.Despawn(job.Id)
@@ -1195,25 +1224,13 @@ function WorkshopService.FinishRepair(player: Player, jobId: string, presses: an
             breakCombo(player.UserId)
         end
     end
-    -- Tanto operações quanto timing usam ledger durável, token e idempotência.
-    do
-        local role = delegated and "Worker" or "Owner"
-        if not DataService.CreditRepairOnce(player, jobId, session.Token, actorPay,
-            role, service.DisplayName, job.VehicleName) then
-            warn("[WorkshopService] Falha ao registrar crédito de reparo:", jobId, player.UserId)
-        end
-        if delegated and workshopOwner ~= player then
-            if not DataService.CreditRepairOnce(workshopOwner, jobId, session.Token, ownerPay,
-                "Owner", service.DisplayName, job.VehicleName, player.UserId, actorPay) then
-                warn("[WorkshopService] Falha ao registrar parte do dono:", jobId, workshopOwner.UserId)
-            end
-        end
-    end
     if delegated then
         player:SetAttribute("CollaborationOwnerUserId", nil)
         player:SetAttribute("CollaborationJobId", nil)
     end
-    DataService.AddSkillXP(player, defect.Specialization, xp)
+    if workerCredited then
+        DataService.AddSkillXP(player, defect.Specialization, xp)
+    end
     DataService.AddReputation(workshopOwner, service.Reputation)
     local stars = rateService(workshopOwner, job, service, defect, player, false, result.Quality)
     ProgressService.Record(workshopOwner, {
@@ -1261,6 +1278,9 @@ function WorkshopService.FinishRepair(player: Player, jobId: string, presses: an
         end
         entry.Worker, entry.Owner = player, workshopOwner
         entry.Delegated, entry.Receipt = delegated, receiptPayload
+        entry.WorkerPay, entry.XP, entry.Spec = actorPay, xp, defect.Specialization
+        entry.ServiceName, entry.VehicleName = service.DisplayName, job.VehicleName
+        entry.WorkerXpApplied = workerCredited
         entry.OwnerMessage = string.format("%s concluiu %s com %d%% de qualidade: sua parte foi %d moedas.",
             player.DisplayName, service.DisplayName, result.Quality, ownerPay)
         entry.At = os.clock()

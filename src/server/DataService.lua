@@ -808,6 +808,34 @@ function DataService.SettleNpcRepairOnce(player: Player, jobId: string, token: s
 	return true
 end
 
+-- C21 (revisão de concorrência): as peças e a PARCELA DO DONO são
+-- preparadas no mesmo perfil sem yield. Mesmo que outro reparo tenha
+-- ocupado a última prova durante o Save da claim do trabalhador, o dono
+-- não perde estoque nem paga parcialmente quando a prova falha.
+function DataService.SettleRepairOwnerOnce(owner: Player, jobId: string, token: string,
+	amount: number, needed: { [string]: number }?, service: string, vehicle: string,
+	workerUserId: number?, workerPay: number?): boolean
+	if not Profiles[owner.UserId] or not SettlementLedgerRules.ValidKey(jobId, token)
+		or not finite(amount) or amount % 1 ~= 0 or amount < 0 or amount > 1e8
+		or (needed ~= nil and type(needed) ~= "table")
+		or type(service) ~= "string" or type(vehicle) ~= "string" then return false end
+	for partId, count in pairs(needed or {}) do
+		if Catalog.Parts[partId] == nil or not finite(count)
+			or count % 1 ~= 0 or count < 1 or count > 10000 then return false end
+	end
+	if DataService.HasRepairCredit(owner, jobId, token)
+		or not DataService.HasParts(owner, needed) then return false end
+	if not DataService.TakeParts(owner, needed) then return false end
+	if not DataService.CreditRepairOnce(owner, jobId, token, amount,
+		"Owner", service, vehicle, workerUserId, workerPay) then
+		for partId, count in pairs(needed or {}) do
+			DataService.AddParts(owner, partId, count)
+		end
+		return false
+	end
+	return true
+end
+
 -- Mochila: move `amount` peças entre a prateleira (Parts) e a mochila (Bag). `toBag` = pegar da prateleira.
 -- Retorna (ok, mensagem). Respeita o limite Config.BagCapacity.
 function DataService.MoveBag(player: Player, partId: string, amount: number, toBag: boolean): (boolean, string)

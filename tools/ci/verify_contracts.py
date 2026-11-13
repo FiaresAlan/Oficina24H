@@ -229,6 +229,15 @@ check("C21: owner proofs never evict unresolved claims at capacity",
 check("C21: capacity verified before consuming collaborative repair parts",
       "DataService.HasOwnerProofCapacity(workshopOwner)" in workshop
       and "OwnerSettlementProofRules.CanAdd(profile.OwnerSettlementProofs, proof)" in data_service)
+check("C21: owner shares and parts settle with rollback after the claim Save yield",
+      "function DataService.SettleRepairOwnerOnce" in data_service
+      and 'DataService.SettleRepairOwnerOnce(workshopOwner, jobId, session.Token' in workshop
+      and 'DataService.AddParts(owner, partId, count)' in data_service
+      and 'local workerCredited = true' in workshop)
+check("C21: worker credit and XP confirmed before worker account save",
+      'if not DataService.HasRepairCredit(entry.Worker, entry.JobId, entry.Token)' in workshop
+      and 'DataService.AddSkillXP(entry.Worker, entry.Spec, entry.XP)' in workshop
+      and 'entry.WorkerXpApplied = workerCredited' in workshop)
 check("C21: owner proof released only after worker claim cleanup saved",
       "DataService.DiscardWorkerClaim(entry.Worker, entry.JobId, entry.Token)" in workshop
       and "if not DataService.Save(entry.Worker) then" in workshop

@@ -765,6 +765,31 @@ function DataService.TakeParts(player: Player, needed: { [string]: number }?): b
 	return true
 end
 
+-- C20: liquida um reparo de NPC com peças + crédito idempotente no MESMO
+-- perfil (sem yield). A gravação subsequente do perfil é atômica por usuário.
+-- A confirmação de salvamento e as retentativas são feitas pelo WorkshopService.
+function DataService.SettleNpcRepairOnce(player: Player, jobId: string, token: string,
+	amount: number, needed: { [string]: number }?, service: string, vehicle: string): boolean
+	if not Profiles[player.UserId] or not SettlementLedgerRules.ValidKey(jobId, token)
+		or not finite(amount) or amount % 1 ~= 0 or amount < 0 or amount > 1e8
+		or (needed ~= nil and type(needed) ~= "table")
+		or type(service) ~= "string" or type(vehicle) ~= "string" then return false end
+	for partId, count in pairs(needed or {}) do
+		if Catalog.Parts[partId] == nil or not finite(count)
+			or count % 1 ~= 0 or count < 1 or count > 10000 then return false end
+	end
+	if DataService.HasRepairCredit(player, jobId, token)
+		or not DataService.HasParts(player, needed) then return false end
+	if not DataService.TakeParts(player, needed) then return false end
+	if not DataService.CreditRepairOnce(player, jobId, token, amount, "Owner", service, vehicle) then
+		for partId, count in pairs(needed or {}) do
+			DataService.AddParts(player, partId, count) -- rollback sem yield
+		end
+		return false
+	end
+	return true
+end
+
 -- Mochila: move `amount` peças entre a prateleira (Parts) e a mochila (Bag). `toBag` = pegar da prateleira.
 -- Retorna (ok, mensagem). Respeita o limite Config.BagCapacity.
 function DataService.MoveBag(player: Player, partId: string, amount: number, toBag: boolean): (boolean, string)

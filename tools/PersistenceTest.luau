@@ -527,6 +527,41 @@ do
 		and B.Get(p).Coins == 70)
 end
 
+-- C20: serviço NPC consome estoque e credita UMA VEZ no mesmo perfil.
+do
+	local store = newStore()
+	local A = server(store, "npc20-A")
+	local p = fakePlayer(2001)
+	A.Load(p)
+	A.AddParts(p, "Tire", 2)
+	local token = "55555555-2222-3333-4444-555555555555"
+	local initial = A.Get(p).Coins
+	check("C20: não aceita quantidade de peça inválida", not A.SettleNpcRepairOnce(p, "job_1", token,
+		150, { Tire = -2 }, "Troca", "Hatch"))
+	check("C20: sem estoque não concede crédito", not A.SettleNpcRepairOnce(p, "job_1", token,
+		150, { BrakePad = 100 }, "Troca", "Hatch"))
+	check("C20: valor negativo não concede crédito", not A.SettleNpcRepairOnce(p, "job_1", token,
+		-150, { Tire = 1 }, "Troca", "Hatch"))
+	check("C20: nenhuma falha consome peças ou dinheiro",
+		A.GetPartCount(p, "Tire") == 2 and A.Get(p).Coins == initial)
+	check("C20: reparo NPC liquida com peças e ledger", A.SettleNpcRepairOnce(p, "job_1", token,
+		150, { Tire = 1 }, "Troca", "Hatch")
+		and A.GetPartCount(p, "Tire") == 1 and A.Get(p).Coins == initial + 150
+		and A.HasRepairCredit(p, "job_1", token))
+	check("C20: replay do mesmo token é recusado sem novo débito", not A.SettleNpcRepairOnce(p, "job_1", token,
+		150, { Tire = 1 }, "Troca", "Hatch")
+		and A.GetPartCount(p, "Tire") == 1 and A.Get(p).Coins == initial + 150)
+	check("C20: salva crédito e peça juntos", A.Save(p)
+		and store.data["u_2001"].Coins == initial + 150
+		and store.data["u_2001"].Parts.Tire == 1)
+	A.Remove(p)
+	local B = server(store, "npc20-B")
+	B.Load(p)
+	check("C20: reconexão conserva saldo, ledger e estoque",
+		B.Get(p).Coins == initial + 150 and B.GetPartCount(p, "Tire") == 1
+		and B.HasRepairCredit(p, "job_1", token))
+end
+
 for _, c in ipairs(clones) do c:Destroy() end
 table.insert(results, failures == 0 and "TODOS OS TESTES PASSARAM" or (failures .. " TESTE(S) FALHARAM"))
 return table.concat(results, "\n")

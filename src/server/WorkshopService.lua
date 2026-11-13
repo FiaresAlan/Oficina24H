@@ -75,6 +75,7 @@ local Repairs: { [number]: { JobId: string, Plan: any, StartedAt: number, Progre
 -- Só guardamos um resultado DEPOIS de aplicar consumo, dinheiro, XP e avaliação.
 local RepairReceipts: { [number]: { any } } = {}
 local SettlingRepairs: { [number]: any } = {} -- barreira de confirmação e retentativas por executor
+local NpcPendingSaves: { [string]: boolean } = {} -- conclusão NPC: regrava sem reaplicar crédito
 -- Funcionários por dono: NPCs, ordens em que estão trabalhando e próximo pagamento de salário.
 local Staff: { [number]: { Npcs: { Model }, Busy: { [string]: boolean }, NextPay: number } } = {}
 -- Uma ordem reservada para NPC não pode simultaneamente ser abandonada,
@@ -1512,6 +1513,41 @@ function WorkshopService.CompleteCollaborativeJob(worker: Player, jobId: string)
     return WorkshopService.StartRepair(worker, jobId, false)
 end
 
+-- A renda de um NPC não é anunciada como confirmada enquanto o perfil
+-- proprietário não for salvo. Repetir Save NUNCA reaplica peças ou moedas.
+local function confirmNpcSave(owner: Player, jobId: string, token: string, message: string, alreadyTried: boolean?)
+    local key = tostring(owner.UserId) .. ":" .. jobId .. ":" .. token
+    if NpcPendingSaves[key] then return end
+    NpcPendingSaves[key] = true
+    task.spawn(function()
+        if alreadyTried and eventSender and owner.Parent == Players then
+            eventSender(owner, "Notice", {
+                Message = "Serviço realizado; pagamento aguardando DataStore. Não inicie cobrança novamente.",
+                Success = false,
+            })
+        end
+        for attempt = 1, 6 do
+            if owner.Parent ~= Players or not DataService.Get(owner) then break end
+            if DataService.Save(owner) then
+                NpcPendingSaves[key] = nil
+                if eventSender and owner.Parent == Players then
+                    eventSender(owner, "Notice", { Message = message, Success = true })
+                end
+                return
+            end
+            task.wait(math.min(attempt * 4, 20))
+        end
+        NpcPendingSaves[key] = nil
+        warn("[WorkshopService] NPC sem confirmação de persistência:", owner.UserId, jobId)
+        if eventSender and owner.Parent == Players then
+            eventSender(owner, "Notice", {
+                Message = "Serviço NPC executado, mas o salvamento falhou. Evite sair; procure suporte.",
+                Success = false,
+            })
+        end
+    end)
+end
+
 function WorkshopService.HireNpc(player: Player, jobId: string)
     local job = Jobs[jobId]
     if not job or job.OwnerUserId ~= player.UserId or job.Status ~= "InProgress" then
@@ -1544,16 +1580,24 @@ function WorkshopService.HireNpc(player: Player, jobId: string)
     end
 
     local missing = missingPartsMessage(player, defect.Parts)
-    if missing or not DataService.TakeParts(player, defect.Parts) then
-        return false, missing or "Faltam peças."
+    if missing then return false, missing end
+    local token = game:GetService("HttpService"):GenerateGUID(false)
+    if not DataService.SettleNpcRepairOnce(player, job.Id, token, price - npcCost,
+        defect.Parts, "NPC avulso: " .. service.DisplayName, job.VehicleName) then
+        return false, "Não foi possível registrar o custo e o pagamento deste serviço."
     end
-    DataService.AddCoins(player, price - npcCost, "Serviço por mecânico NPC: " .. service.DisplayName)
-    DataService.AddReputation(player, service.Reputation)
-    local stars = rateService(player, job, service, defect, nil, true)
     job.Status = "Completed"
     VehicleService.Despawn(job.Id)
-    return true, "Mecânico NPC concluiu o serviço. Custo: " .. tostring(npcCost) .. " moedas. Você não recebeu XP. Avaliação: "
-        .. CustomerRules.StarsText(stars) .. " (" .. tostring(stars) .. ")"
+    DataService.AddReputation(player, service.Reputation)
+    local stars = rateService(player, job, service, defect, nil, true)
+    DataService.AttachRepairReceipt(player, job.Id, token, {
+        JobId = job.Id, Token = token, Price = price - npcCost, Stars = stars, Quality = Config.EmployeeQuality,
+    })
+    local message = "Mecânico NPC concluiu o serviço. Custo: " .. tostring(npcCost)
+        .. " moedas. Você não recebeu XP. Avaliação: " .. CustomerRules.StarsText(stars) .. " (" .. tostring(stars) .. ")"
+    if DataService.Save(player) then return true, message end
+    confirmNpcSave(player, job.Id, token, message, true)
+    return false, "Serviço realizado; aguarde a confirmação do pagamento no DataStore."
 end
 
 -- Interação física com o veículo (ProximityPrompt). O servidor decide o que o jogador pode fazer.
@@ -2010,29 +2054,33 @@ local function employeeWork(owner: Player, job: any, npc: Model)
         release(nil)
         return
     end
-    if not DataService.TakeParts(owner, defect.Parts) then
-        VehicleService.SetRepairing(job.Id, false)
-        VehicleService.SetStage(job.Id, "Repair")
-        job.EmployeeRetryAt = os.time() + 60
-        release("Faltaram peças para o mecânico terminar " .. service.DisplayName .. ".")
-        return
-    end
-    job.Status = "Completed"
-    VehicleService.SetRepairing(job.Id, false)
-    VehicleService.Flash(job.Id, Color3.fromRGB(90, 220, 130))
-    VehicleService.Despawn(job.Id)
     local basePrice = job.Price or service.Reward
     local quality = EquipmentUpgradeRules.EmployeeQuality(Config.EmployeeQuality, level)
     local price = math.floor(basePrice * RepairRules.PayMultiplier(quality)
         * EquipmentUpgradeRules.RewardMultiplier(level) + 0.5)
-    DataService.AddCoins(owner, price, "Serviço do funcionário: " .. service.DisplayName)
+    local token = game:GetService("HttpService"):GenerateGUID(false)
+    if not DataService.SettleNpcRepairOnce(owner, job.Id, token, price, defect.Parts,
+        "Funcionário NPC: " .. service.DisplayName, job.VehicleName) then
+        VehicleService.SetRepairing(job.Id, false)
+        VehicleService.SetStage(job.Id, "Repair")
+        job.EmployeeRetryAt = os.time() + 60
+        release("O mecânico não conseguiu reservar peças e pagamento de " .. service.DisplayName .. ".")
+        return
+    end
+    job.Status = "Completed" -- nenhuma reexecução de pagamento/peças depois deste ponto
+    VehicleService.SetRepairing(job.Id, false)
+    VehicleService.Flash(job.Id, Color3.fromRGB(90, 220, 130))
+    VehicleService.Despawn(job.Id)
     DataService.AddReputation(owner, service.Reputation)
     local stars = rateService(owner, job, service, defect, nil, true, quality)
+    DataService.AttachRepairReceipt(owner, job.Id, token, {
+        JobId = job.Id, Token = token, Price = price, Quality = quality, Stars = stars,
+    })
     WorkshopService.UpdateSkin(owner)
     release(nil)
-    if eventSender then
-        eventSender(owner, "Notice", { Message = string.format("Seu mecânico concluiu %s: +%d moedas (%s).", service.DisplayName, price, CustomerRules.StarsText(stars)), Success = true })
-    end
+    confirmNpcSave(owner, job.Id, token, string.format(
+        "Seu mecânico concluiu %s: +%d moedas (%s).",
+        service.DisplayName, price, CustomerRules.StarsText(stars)))
 end
 
 local function staffTick()

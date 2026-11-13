@@ -279,6 +279,12 @@ check("NPC failure releases busy slot and restores vehicle state",
       'xpcall(function()' in workshop
       and 'StaffAssignmentRules.Release(entry.Busy, jobId)' in workshop
       and 'VehicleService.SetRepairing(jobId, false)' in workshop)
+check("NPC payouts use per-owner idempotent ledger and confirmed save",
+      "function DataService.SettleNpcRepairOnce" in data_service
+      and "DataService.CreditRepairOnce(player, jobId, token" in data_service
+      and 'DataService.SettleNpcRepairOnce(owner, job.Id, token, price' in workshop
+      and 'DataService.SettleNpcRepairOnce(player, job.Id, token, price - npcCost' in workshop
+      and "confirmNpcSave(owner, job.Id, token" in workshop)
 check("new suites registered",
       '"EquipmentUpgradeTest"' in runner and '"StaffAssignmentTest"' in runner
       and (TOOLS / "EquipmentUpgradeTest.luau").is_file()

@@ -9,7 +9,7 @@ Mercado de veículos de revenda é atividade **secundária** à oficina de OS. O
 
 ## Experiência implementada
 
-A aba `Ordens > Caixa` tem seção de mercado com miniaturas 3D dos modelos já publicados em `VehiclePreviews` (ou fallback sem miniatura quando asset indisponível), três ofertas e estimativas **antes** da compra. Comprar exige estar na Loja de Autopeças; inspeção, desmontagem, reparo, pintura e venda exigem estar no lote próprio. Interface existente reutilizada, sem overlay escuro ou botão adicional na HUD.
+A aba `Ordens > Caixa` tem seção de mercado com miniaturas 3D dos modelos já publicados em `VehiclePreviews` (ou fallback sem miniatura quando asset indisponível), três ofertas e estimativas **antes** da compra. Após a aquisição, `V2UsedMarketDisplay` cria **uma vitrine física não colidível** no pátio lateral do lote, com o carro real sanitizado (ou um fallback procedural), placa de etapa e `ProximityPrompt` para inspecionar, desmontar, restaurar e vender. A apresentação atualiza a tintura e a condição visual, sem tocar em `VehicleService` ou nos boxes de clientes. Não há física de desmontagem de malhas. Comprar exige estar na Loja de Autopeças; inspeção, desmontagem, reparo, pintura e venda exigem estar no lote próprio. Interface existente reutilizada, sem overlay escuro ou botão adicional na HUD.
 
 Três variantes de preço fixo definido no **servidor**:
 
@@ -21,7 +21,7 @@ Três variantes de preço fixo definido no **servidor**:
 
 O custo oculto de risco é sorteado pelo servidor na aquisição e exibido ao proprietário após a compra. Etapas obrigatórias de negócio: `Purchased → Inspected → Stripped → Restored → Sell`. Em qualquer etapa anterior a `Restored`, pode desistir, vender sucata por valor abaixo da compra e liberar o único slot. A pintura opcional custa 40 moedas e só aumenta o preço de venda em 30: não é uma exploração de dinheiro infinito.
 
-**Limite explícito:** inspeção, desmontagem e reforma são sequências por interface (com controle de presença do jogador), **não** representam ainda montagem/desmontagem física em carro de revenda na cena. Pré-visualização 3D não prova funcionalidade no Studio. V2-10 prevê showroom e apresentação visual dedicada; não atribuir trabalho visual inexistente a V2-09.
+**Limite explícito:** existe carro físico decorativo no lote e prompt interativo autenticado no servidor, mas inspeção, desmontagem e reforma são **etapas transacionais**; não representam ainda desmontagem de rodas e peças individuais, reparos com ferramenta ou simulação de dirigibilidade. Essas interações 3D aprofundadas e o showroom ficam para V2-10/V2-11, conforme viabilidade. Pré-visualização e build não comprovam funcionamento no Studio.
 
 ## Segurança, dinheiro e persistência
 
@@ -33,7 +33,7 @@ O custo oculto de risco é sorteado pelo servidor na aquisição e exibido ao pr
 
 ## Verificações de código e critérios de QA
 
-`tools/V2UsedMarketRulesTest.luau` cobre as três ofertas, saldo, limite de slots, requisitos, riscos inválidos, UID, replay, peça ausente, ordem de etapas, pintura, sucata, cooldown, dados corrompidos, JSON round-trip e categoria financeira. `tools/PersistenceTest.luau` exercita compra, progressão, consumo, venda, dois ciclos de relog e persistência de caixa/UID usando DataStore fake. `tools/RunAllTests.luau` registra o conjunto e o CI verifica contratos estáticos e build Rojo.
+`tools/V2UsedMarketRulesTest.luau` cobre as três ofertas, saldo, limite de slots, requisitos, riscos inválidos, UID, replay, peça ausente, ordem de etapas, pintura, sucata, cooldown, dados corrompidos, JSON round-trip e categoria financeira. `tools/V2UsedMarketDisplayTest.luau` exercita no Edit um lote temporário, uma única vitrine, prompts, isolamento dos boxes, segurança de colisão e cleanup. `tools/PersistenceTest.luau` exercita compra, progressão, consumo, venda, dois ciclos de relog e persistência de caixa/UID usando DataStore fake. `tools/RunAllTests.luau` registra o conjunto e o CI verifica contratos estáticos e build Rojo.
 
 **Portão Studio obrigatório antes de homologar:** entrar com conta antiga v14 e conta nova v15; OS 1–3, upgrade nível 1, comprar Hatch/Sedã/Picape; fechar UI, desconectar após compra/etapa/saída, repetir os remotes, 2 jogadores simultâneos, stock insuficiente, dinheiro insuficiente, invadir lote de vizinho, tentativa fora da loja, mobile/gamepad; reentrar após cooldown; verificar financeiro sem duplicação, visuais dos três carros, isolamento da OS e fluxo normal de 15 serviços. Fazer playtest econômico comparando tempo/recompensa por OS vs. revenda. A decisão de manter ou cortar V2-09 permanece com o proprietário após testes reais.
 

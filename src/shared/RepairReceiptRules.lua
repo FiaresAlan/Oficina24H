@@ -37,7 +37,7 @@ function RepairReceiptRules.Prune(receipts: any, now: number): number
 	for i = #receipts, 1, -1 do
 		local entry = receipts[i]
 		if type(entry) ~= "table" or not finite(entry.At)
-			or now < entry.At or now - entry.At > RepairReceiptRules.TtlSeconds then
+			or now - entry.At > RepairReceiptRules.TtlSeconds then
 			table.remove(receipts, i)
 			removed += 1
 		end
@@ -68,7 +68,7 @@ function RepairReceiptRules.Lookup(receipts: any, jobId: any, token: any, now: n
 	RepairReceiptRules.Prune(receipts, now)
 	for i = #receipts, 1, -1 do
 		local entry = receipts[i]
-		if entry.JobId == jobId and entry.Token == token then
+		if entry.JobId == jobId and entry.Token == token and now >= entry.At then
 			return clonePayload(entry.Payload)
 		end
 	end

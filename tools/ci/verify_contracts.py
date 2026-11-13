@@ -135,7 +135,7 @@ check("client result correlated with job and token",
 ledger = text(SHARED / "SettlementLedgerRules.lua")
 data_service = text(ROOT / "src" / "server" / "DataService.lua")
 check("ledger bounded and sanitized", "SettlementLedgerRules.MaxEntries" in ledger and "function SettlementLedgerRules.Sanitize" in ledger)
-check("ledger persists in profile schema v5", "local SCHEMA_VERSION = 7" in data_service
+check("ledger persists in profile schema v5", "local SCHEMA_VERSION = 8" in data_service
       and "RepairLedger = {}" in data_service
       and "SettlementLedgerRules.Sanitize(data.RepairLedger)" in data_service)
 check("ledger credit idempotency", "function DataService.CreditRepairOnce" in data_service

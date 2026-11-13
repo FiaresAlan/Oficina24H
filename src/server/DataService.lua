@@ -15,10 +15,11 @@ local CustomerRules = require(ReplicatedStorage.Shared.CustomerRules)
 local SettlementLedgerRules = require(ReplicatedStorage.Shared.SettlementLedgerRules)
 local SettlementClaimRules = require(ReplicatedStorage.Shared.SettlementClaimRules)
 local OwnerSettlementProofRules = require(ReplicatedStorage.Shared.OwnerSettlementProofRules)
+local EquipmentUpgradeRules = require(ReplicatedStorage.Shared.EquipmentUpgradeRules)
 
 local DataService = {}
 
-local SCHEMA_VERSION = 7 -- 7: arquivo privado de provas duráveis do dono
+local SCHEMA_VERSION = 8 -- 8: evolução de nível dos equipamentos possuídos
 local MAX_ATTEMPTS = 4
 local LOCK_TIMEOUT = 360 -- s; maior que 2 autosaves, para um servidor que caiu não prender o jogador para sempre
 local LOCK_WAIT_STEP = 3
@@ -79,6 +80,7 @@ local function makeDefaultData(): any
 		Reputation = Config.StartingReputation,
 		SkillXP = skills,
 		Equipment = { BasicToolset = true },
+		EquipmentLevels = { BasicToolset = 1 }, -- C16: upgrades permanentes de ferramentas e máquinas
 		Parts = { TirePatch = 3, Battery = 1, Fuse = 2 }, -- estoque inicial para os primeiros serviços
 		Transactions = {},
 		TotalEarned = 0,
@@ -155,6 +157,7 @@ local function reconcile(data: any): any
 			data.Equipment[equipmentId] = nil -- item removido do catálogo
 		end
 	end
+	data.EquipmentLevels = EquipmentUpgradeRules.Sanitize(data.EquipmentLevels, data.Equipment)
 	data.PriceMultiplier = type(data.PriceMultiplier) == "number" and CustomerRules.ClampPrice(data.PriceMultiplier) or 1
 	-- Avaliações: contadores coerentes (soma entre count e 5*count) e lista recente limpa
 	local rc = type(data.RatingCount) == "number" and data.RatingCount == data.RatingCount and math.max(0, math.floor(data.RatingCount)) or 0
@@ -635,8 +638,32 @@ function DataService.GrantEquipment(player: Player, equipmentId: string): boolea
 		return false
 	end
 	profile.Equipment[equipmentId] = true
+	profile.EquipmentLevels = profile.EquipmentLevels or {}
+	profile.EquipmentLevels[equipmentId] = 1
 	Dirty[player.UserId] = true
 	return true
+end
+
+function DataService.GetEquipmentLevel(player: Player, equipmentId: string): number
+	local profile = Profiles[player.UserId]
+	return profile and EquipmentUpgradeRules.Level(profile.EquipmentLevels, profile.Equipment, equipmentId) or 0
+end
+
+-- C16: troca dinheiro por um upgrade da própria máquina, sem yield entre
+-- checagem de nível/saldo e débito. Não há RemoteEvent de compra do pad.
+function DataService.UpgradeOwnedEquipment(player: Player, equipmentId: string): (boolean, string)
+	local profile = Profiles[player.UserId]
+	if not profile or not Catalog.Equipment[equipmentId] then return false, "Equipamento inválido." end
+	local current = EquipmentUpgradeRules.Level(profile.EquipmentLevels, profile.Equipment, equipmentId)
+	if current == 0 then return false, "Você precisa comprar e instalar este equipamento primeiro." end
+	local cost = EquipmentUpgradeRules.NextCost(equipmentId, current)
+	if not cost then return false, "Equipamento já está no nível máximo." end
+	if profile.Coins < cost then return false, "Moedas insuficientes para esta melhoria." end
+	DataService.AddCoins(player, -cost, "Melhoria: " .. Catalog.Equipment[equipmentId].DisplayName .. " N" .. (current + 1))
+	profile.EquipmentLevels[equipmentId] = current + 1
+	Dirty[player.UserId] = true
+	return true, string.format("%s melhorado para nível %d! (-%d moedas)",
+		Catalog.Equipment[equipmentId].DisplayName, current + 1, cost)
 end
 
 -- Registra a avaliação de um cliente (1 a 5). Devolve (quantidade, soma) ou nil se inválida/sem perfil.

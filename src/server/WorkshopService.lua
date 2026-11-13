@@ -18,6 +18,7 @@ local RepairPrepRules = require(ReplicatedStorage.Shared.RepairPrepRules)
 local DiagnosisRules = require(ReplicatedStorage.Shared.DiagnosisRules)
 local DiagnosisEvidence = require(ReplicatedStorage.Shared.DiagnosisEvidence)
 local WorkshopLevels = require(ReplicatedStorage.Shared.WorkshopLevels)
+local EquipmentUpgradeRules = require(ReplicatedStorage.Shared.EquipmentUpgradeRules)
 local LocationRules = require(ReplicatedStorage.Shared.LocationRules)
 
 local WorkshopService = {}
@@ -894,7 +895,8 @@ function WorkshopService.StartRepair(player: Player, jobId: string, assist: bool
     end
     local margin = math.max(0, DataService.GetSkillLevel(player, defect.Specialization) - defect.RequiredLevel)
     local operation = RepairOperations.BuildPlan(job.DefectId, math.random(1, 2147483646))
-    local plan = operation or RepairRules.BuildPlan(math.random(1, 2147483646), defect.RequiredLevel, margin, assist == true or RepairAssist[player.UserId] == true, Catalog.EquipmentEfficiency[defect.RequiredEquipment])
+    local plan = operation or RepairRules.BuildPlan(math.random(1, 2147483646), defect.RequiredLevel, margin, assist == true or RepairAssist[player.UserId] == true, EquipmentUpgradeRules.Efficiency(defect.RequiredEquipment,
+        DataService.GetEquipmentLevel((Players:GetPlayerByUserId(job.OwnerUserId) or player), defect.RequiredEquipment)))
     Repairs[player.UserId] = {
         JobId = job.Id, Plan = plan, StartedAt = os.clock(),
         Progress = plan.Kind == "Operations" and RepairActionRules.New(plan) or nil,
@@ -1084,7 +1086,8 @@ function WorkshopService.FinishRepair(player: Player, jobId: string, presses: an
     end
     local mods: RepairRules.Mods = {
         Margin = math.max(0, DataService.GetSkillLevel(player, defect.Specialization) - defect.RequiredLevel),
-        EquipmentEfficiency = Catalog.EquipmentEfficiency[defect.RequiredEquipment] or 0,
+        EquipmentEfficiency = EquipmentUpgradeRules.Efficiency(defect.RequiredEquipment,
+            DataService.GetEquipmentLevel(owner :: Player, defect.RequiredEquipment)),
         PartReliability = Catalog.AveragePartReliability(defect.Parts),
         DiagnosisAttempts = job.DiagnoseAttempts or 1,
     }
@@ -1118,7 +1121,9 @@ function WorkshopService.FinishRepair(player: Player, jobId: string, presses: an
     local basePrice = job.Price or service.Reward
     local combo = delegated and 1 or comboMultiplier(player.UserId)
     local friend = delegated and 1 or ProgressService.FriendMultiplier(player)
-    local price = math.floor(basePrice * RepairRules.PayMultiplier(result.Quality) * combo * friend + 0.5)
+    local ownerLevel = DataService.GetEquipmentLevel(owner :: Player, defect.RequiredEquipment)
+    local price = math.floor(basePrice * RepairRules.PayMultiplier(result.Quality) * combo * friend
+        * EquipmentUpgradeRules.RewardMultiplier(ownerLevel) + 0.5)
     local tip = RepairRules.Tip(basePrice, result.Quality)
     local xp = RepairRules.XPBonus(service.XP, result.Quality)
     local actorPay, ownerPay = price + tip, 0
@@ -1285,6 +1290,16 @@ end
 function WorkshopService.SkipOnboarding(player: Player)
     DataService.CompleteOnboarding(player, 0)
     return true, ""
+end
+
+function WorkshopService.UpgradeOwnedEquipment(player: Player, equipmentId: string, sourcePlot: Instance): (boolean, string)
+	local workshop = getWorkshop(player)
+	if not workshop or PlotService.GetPlot(player) ~= sourcePlot
+		or sourcePlot:GetAttribute("OwnerUserId") ~= player.UserId then
+		return false, "Melhorias só podem ser compradas na sua oficina."
+	end
+	if workshop.Equipment[equipmentId] ~= true then return false, "Equipamento não instalado." end
+	return DataService.UpgradeOwnedEquipment(player, equipmentId)
 end
 
 function WorkshopService.BuyEquipment(player: Player, equipmentId: string)

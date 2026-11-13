@@ -653,6 +653,22 @@ check("V2-03: auditoria de Studio e regras puras no runner",
     and '"V2ComponentRulesTest"' in runner
     and '"V2ComponentPlaceAudit"' in runner)
 
+check("V2-03: cofre do motor com fallback 5 componentes e LOD",
+    (CLIENT / "V2EngineBayFx.client.lua").is_file()
+    and all(x in text(CLIENT / "V2EngineBayFx.client.lua") for x in (
+      '"EngineBlock"', '"Battery"', '"Coolant"', '"Intake"', '"Alternator"',
+      "V2EngineBayRole", "V2State_Hood", "CanCollide", "MAX_DISTANCE")))
+check("V2-03: peças nativas explícitas e integridade das rodas",
+    'V2MovingComponent' in v2_visual
+    and all(x in v2_visual for x in ('WheelFL = "LF"', 'WheelFR = "RF"',
+        'WheelRL = "LB"', 'WheelRR = "RB"'))
+    and "V2MovingComponent" in v2_articulations)
+check("V2-03: mecânica visível após diagnóstico e saída segura",
+    "entry.Mechanics =" in workshop
+    and "not V2ComponentRules.MayDrive(states)" in v2_vehicle
+    and "resetComponents(car)" in v2_vehicle
+    and "job.Mechanics" in ui_orders)
+
 print(f"\nStatic checks: {passed} passed, {len(failures)} failed")
 if failures:
     raise SystemExit(1)

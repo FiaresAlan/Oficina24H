@@ -879,6 +879,7 @@ function WorkshopService.StartRepair(player: Player, jobId: string, assist: bool
     Repairs[player.UserId] = {
         JobId = job.Id, Plan = plan, StartedAt = os.clock(),
         Progress = plan.Kind == "Operations" and RepairActionRules.New(plan) or nil,
+        Token = plan.Kind == "Operations" and game:GetService("HttpService"):GenerateGUID(false) or nil,
     }
     VehicleService.SetRepairing(job.Id, true) -- carro sobe no elevador / capô abre / pneu sai (efeitos no cliente)
     if eventSender then
@@ -887,6 +888,7 @@ function WorkshopService.StartRepair(player: Player, jobId: string, assist: bool
             Vehicle = job.VehicleName,
             Service = Catalog.Services[job.ServiceId].DisplayName,
             Plan = operation and RepairOperations.PublicPlan(operation) or plan,
+            Token = Repairs[player.UserId].Token,
         })
     end
     return true, ""
@@ -894,9 +896,10 @@ end
 
 -- O servidor recebe cada interação do procedimento e confirma uma revisão antes de aceitar a próxima.
 -- A UI não pode substituir ações ausentes por um formulário final fabricado.
-function WorkshopService.RepairAction(player: Player, jobId: string, command: any): (boolean, string, number)
+function WorkshopService.RepairAction(player: Player, jobId: string, token: any, command: any): (boolean, string, number)
     local session = Repairs[player.UserId]
-    if not session or session.JobId ~= jobId or session.Plan.Kind ~= "Operations" or not session.Progress then
+    if not session or session.JobId ~= jobId or session.Plan.Kind ~= "Operations" or not session.Progress
+        or type(token) ~= "string" or token ~= session.Token then
         return false, "Não há um procedimento válido em andamento.", 0
     end
     local now = os.clock()
@@ -958,6 +961,10 @@ function WorkshopService.FinishRepair(player: Player, jobId: string, presses: an
     }
     local result
     if session.Plan.Kind == "Operations" then
+        if type(presses) ~= "table" or type(presses.Token) ~= "string" or presses.Token ~= session.Token then
+            VehicleService.SetRepairing(jobId, false)
+            return false, "Identificador de sessão inválido: inicie novamente o procedimento."
+        end
         local verifiedInput, reason = RepairActionRules.FinalInput(session.Plan, session.Progress)
         if not verifiedInput then
             VehicleService.SetRepairing(jobId, false)

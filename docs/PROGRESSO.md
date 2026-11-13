@@ -807,3 +807,13 @@ Detalhes em `docs/AUDITORIA_GERAL.md`. Resumo:
 - **Limitações:** não há atomicidade entre duas chaves, proofs/claims antigos de trabalhadores offline podem ocupar espaço e o Studio ainda não foi executado. A V2 continua somente documental.
 
 - **Revisão C21 após CI:** `DataService.SettleRepairOwnerOnce` liquida crédito do dono + estoque sem yield após `Save` da claim, com rollback caso o arquivo tenha sido preenchido por outra OS durante a espera. Worker recebe apenas após sucesso do dono, com crédito/recibo/XP aplicados na retentativa antes de confirmar entrega. Regressão adicional em `PersistenceTest` e verificação CI.
+
+
+## 2026-11-13 — V1 C22: reconciliação do arquivo de provas de funcionários offline
+- **Antes:** após logout durante limpeza da claim, o comprovante podia permanecer no perfil do proprietário mesmo com contratado já pago. O limite de 1024 bloqueava novas colaborações.
+- **C22:** nova regra `OwnerProofSweepRules` e `DataService.ReconcileOwnerProofs`, que consultam apenas o perfil persistido do contratado, exigem crédito `Worker` compatível e reivindicação ausente. Somente então removem a prova e salvam o dono.
+- **Carga limitada:** 4 leituras por passagem, intervalo mínimo de 300 s por dono, comprovantes de pelo menos 900 s, cursor circular; rotina após o login do dono e no autosave.
+- **Falha segura:** erro de leitura, dados divergentes, claim pendente ou ledger de 64 lançamentos já rotacionado mantém a prova. Save do dono com erro não confirma a limpeza.
+- **Regressões escritas:** `OwnerProofSweepRulesTest`, `PersistenceTest` e `verify_contracts.py`; testes de integração/Studio não executados. [QA C22](TESTE_C22_LIMPEZA_PROVAS_OFFLINE_2026-11-13.md).
+- **Assets:** os cinco pacotes gratuitos já estão baixados e organizados pelo proprietário, **ainda não importados**. [Guia único](GUIA_UNICO_ASSETS_V1.md).
+- **V2:** ainda documental e não iniciada. Próxima pendência financeira P0: confirmações antigas já fora do ledger de 64 registros.

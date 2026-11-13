@@ -1,6 +1,6 @@
 # CHECK_LIST_MESTRE_V2 — OFICINA 24H
 
-**Versão:** 2.2, 13/11/2026. **Situação:** V2-00/01/02 implementadas em engenharia na PR #27; falta reconciliação com main/QA V1 e validação de modelos/Studio. V2-03–16 continuam planejadas. **Nenhuma homologação Studio presumida.**  
+**Versão:** 2.3, 13/11/2026. **Situação:** engenharia V2-00–10 na PR #27, com pendência de lotes de fornecedor V2-08 e de integração com main/QA V1 e modelos/Studio; V2-11–16 planejadas. **Nenhuma homologação Studio presumida.**  
 **Direção aprovada pelo proprietário:** híbrida — estilização legível do mundo + reparos visualmente mecânicos + gestão de negócio.  
 **Código base de referência:** main em C31 (`2690f082` antes dos commits exclusivamente documentais da V2). **Atenção:** o Claude Code está homologando/corrigindo a V1 em paralelo; sempre ler novo HEAD e reconciliar diffs antes de programar V2. Preservar Issue #15 V1 como histórico.  
 **Documentos de referência:** DIRECAO_JOGO_V2_2026-11-13.md, PESQUISA_MERCADO_V2_2026-11-13.md, AUDITORIA_V2_BASE_CODIGO_2026-11-13.md (auditoria histórica até C17), [GUIA_UNICO_ASSETS_V2.md](GUIA_UNICO_ASSETS_V2.md) e GUIA_UNICO_ASSETS_V1.md.
@@ -50,7 +50,7 @@ P0 = prioridade para o núcleo de lançamento. P1 = opcional condicionado a viab
 - [ ] **Merge na main:** depende de comparar, revisar e conciliar as correções V1 do Claude e refazer CI.
 - [ ] **Arte real:** revisar/importar os três modelos piloto, ajustar malhas móveis, pivôs, licença, áudio e LOD reais.
 - [ ] **Studio:** executar RunAllTests, V2PilotPlaceAudit, 15 serviços, multiplayer, mobile/PC/gamepad e verificar efeitos reais.
-- [ ] **Demais V2-03–16:** implementar somente após as dependências, sem declarar V2 completa por CI verde.
+- [ ] **V2-11–16 e lotes V2-08:** implementar somente após dependências, sem declarar V2 completa por CI verde.
 
 **Portão:** código escrito e integrado em branch não equivale a jogo homologado. Não há publicação automática.
 
@@ -206,11 +206,21 @@ P0 = prioridade para o núcleo de lançamento. P1 = opcional condicionado a viab
 **Pendência herdada da V2-08:** graus Econômico/Padrão/Premium por lotes FIFO ainda precisam de controle de custos, consumo, migração e rollback. Não apresentar como implementados.
 
 ## V2-10 — Personalização comercial e showroom (P1)
-- [ ] [C] Pintura/acabamento/rodas com visual antes/depois e preço transparente.
-- [ ] [C] Showroom com número limitado de carros e física inativa fora da condução.
-- [ ] [C] Benefício em satisfação/reputação sem obrigar corrida/tuning detalhado.
-- [ ] [A] Testes de aplicação, cancelamento e persistência.
-- [ ] [S] Performance e UX mobile/gamepad.
+
+**Engenharia integrada na PR #27, sem QA Studio:** [guia de preço, UI, comportamento, segurança e playtest](V2_FASE_10_SHOWROOM.md).
+
+- [x] [C] Catálogo fechado para pintura (Azul/Vermelho/Grafite), acabamento (fosco/brilhante) e rodas (clássicas/esportivas); custo servidor > bônus máximo de revenda.
+- [x] [C] Prévia 3D ANTES/DEPOIS local usando os mesmos visuais do pátio; confirmação separada; cancelar prévia nunca cobra. Só uma aplicação válida por categoria e veículo.
+- [x] [C] Showroom persistente com 2 carros restaurados expostos e 1 ativo independente das OS, sem colisão, toque, física ou script de asset; prompts de retirada e venda autenticados.
+- [x] [C] Transferir/retirar/vender com o mesmo UID; venda de exposto idempotente, cooldown e livro financeiro em `Market`, sem bônus de OS/XP/rating.
+- [x] [C] +1 reputação apenas na primeira exposição histórica de Hatch/Sedã/Picape (limite 3), com marcador no mesmo perfil sem yield e sem replay após venda/reentrada.
+- [x] [C] `UsedMarket` v15 aditivo com Showroom/ShowroomSeen/Finish/Wheels; compatível com carros V2-09 Azul/Vermelho e históricos sem campos novos.
+- [x] [C] Subnavegação CAIXA/USADOS na aba existente: mercado e showroom acessíveis sem rolagem por todo o extrato no celular; nenhum botão novo na HUD.
+- [x] [A] Suites Luau escritas e registradas, contratos estáticos/build Rojo [aprovados](https://github.com/FiaresAlan/Oficina24H/actions/runs/43530472623) após implementação do núcleo. Executar CI novamente no commit final.
+- [ ] [S] Homologar três veículos reais, malhas PBR, roteiro de 2 jogadores, tablet/celular/gamepad, relog, 15 OS e desempenho por lote no Roblox Studio.
+- [ ] [S] Confirmar que benefício de reputação pontual e catálogo cosmético não desviam o jogador das OS. Decidir manter/simplificar após beta.
+
+**Não confundir:** showroom físico decorativo e prévia 3D existem em código, mas não há condução física dos carros (V2-11) nem testes Studio concluídos. Materiais PBR podem precisar de `V2CosmeticRole` nos meshes importados.
 
 ## V2-11 — Fundamentos do carro dirigido pelo jogador (P1)
 - [ ] [C] Um veículo piloto com assento real, direção/freio/câmera/controles; preservar caminhos NPC.

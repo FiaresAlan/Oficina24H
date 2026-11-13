@@ -87,6 +87,16 @@ function Rules.SaleBonus(car: any): number
     return bonus
 end
 
+function Rules.Spent(car: any): number
+    local a = Rules.Appearance(car)
+    local paid = 0
+    for _, category in ipairs(Rules.Order) do
+        local item = Rules.Catalog[category][a[category]]
+        if item then paid += item.Cost end
+    end
+    return paid
+end
+
 function Rules.Public(): any
     local categories = {}
     for _, category in ipairs(Rules.Order) do

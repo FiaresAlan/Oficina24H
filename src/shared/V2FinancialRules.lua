@@ -30,7 +30,7 @@ local function base(opening: any,since: any,partial: boolean): any
 end
 function Rules.Category(reason: any,delta: any): string
     local r=type(reason)=="string" and reason or ""
-    if string.sub(r,1,18)=="Liquidação de OS:" then return "Service" end
+    if string.find(r,"^Liquidação de OS:") then return "Service" end
     if string.find(r,"^Peças:") or r=="Loja de peças" then return "Inventory" end
     if string.find(r,"^Salário dos funcionários") then return "Payroll" end
     if string.find(r,"^Publicidade:") then return "Marketing" end

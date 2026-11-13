@@ -89,7 +89,7 @@ end
 local lastActionAt: {[number]: {[string]: number}} = {}
 local lastOutcomeQuery: {[number]: number} = {}
 local KNOWN_ACTIONS: {[string]: boolean} = {}
-for _, name in ipairs({ "ClaimWorkshop", "GenerateCustomer", "DeclineJob", "AcceptJob", "DiagnoseJob", "ExamineJob", "CompleteJob", "FinishRepair", "RepairAction", "CheckRepairResult", "RepairPrefs", "CancelRepair", "SkipOnboarding", "BuyEquipment", "SetPrice", "BuyPart", "Checkout", "HireNpc", "InviteWorker", "CompleteCollaborativeJob", "RespondInvite", "MoveBag", "UpgradeWorkshop", "ClaimDaily", "ClaimMission", "RedeemCode", "SetJobPriority", "ScheduleJob", "DiscountJob", "RequestJobSupplies", "ClearSupplyRequests", "SetStaffPolicy", "AssignStaffJob", "ClearStaffJob" }) do
+for _, name in ipairs({ "ClaimWorkshop", "GenerateCustomer", "DeclineJob", "AcceptJob", "DiagnoseJob", "ExamineJob", "CompleteJob", "FinishRepair", "RepairAction", "CheckRepairResult", "RepairPrefs", "CancelRepair", "SkipOnboarding", "BuyEquipment", "SetPrice", "BuyPart", "Checkout", "HireNpc", "InviteWorker", "CompleteCollaborativeJob", "RespondInvite", "MoveBag", "UpgradeWorkshop", "ClaimDaily", "ClaimMission", "RedeemCode", "SetJobPriority", "ScheduleJob", "DiscountJob", "RequestJobSupplies", "ClearSupplyRequests", "SetStaffPolicy", "AssignStaffJob", "ClearStaffJob", "UsedMarket" }) do
     KNOWN_ACTIONS[name] = true
 end
 
@@ -322,6 +322,8 @@ actionEvent.OnServerEvent:Connect(function(player: Player, action: any, payload:
         success, message = WorkshopService.BuyEquipment(player, payload.EquipmentId)
     elseif action == "SetPrice" and type(payload.Multiplier) == "number" then
         success, message = WorkshopService.SetPrice(player, payload.Multiplier)
+    elseif action == "UsedMarket" then
+        success, message = WorkshopService.UsedMarketAction(player, payload.Operation, payload.Id, payload.Style)
     elseif action == "BuyPart" and type(payload.PartId) == "string" and type(payload.Quantity) == "number" then
         success, message = WorkshopService.BuyPart(player, payload.PartId, payload.Quantity)
     elseif action == "ClaimDaily" then

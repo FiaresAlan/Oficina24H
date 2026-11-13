@@ -2,6 +2,16 @@
 
 **Versão:** 1.0 — 13/11/2026. **Objetivo:** dizer exatamente o que conferir, de onde conseguir e em qual pasta deixar, sem downloads desnecessários.
 
+> **STATUS INFORMADO PELO PROPRIETÁRIO EM 13/11/2026:** os pacotes abaixo **já foram baixados e organizados em uma pasta no computador**, conforme captura enviada. **Aguardam importação e configuração no Roblox Studio**; não estão automaticamente instalados porque foram baixados. Não faça downloads duplicados:
+> - `Car Repair Garage and MOT Workshop.glb`
+> - `CGTrader — Low Poly City/`
+> - `Shuriken Town Streets & Park v1/`
+> - `Shuriken Houses/`
+> - `Shuriken City/`
+> - `GUIA_UNICO_ASSETS_V1` (cópia local do guia).
+>
+> **IMPORTANTE:** importar tudo de uma vez não cria automaticamente as pastas `Veiculos`, `Clientes`, `Equipamentos` e `Cenario`, nem configura nomes, `PrimaryPart`, colisão ou pivôs. Use o place original com backup; faça a importação **por categoria**, movendo os modelos ao caminho indicado. Evite substituir o bairro já aprovado ou executar os scripts de reconstrução sem backup.
+
 > **ANTES DE BAIXAR:** abra seu *place original* da Oficina 24H no Roblox Studio. **Não crie um place vazio e não substitua sua rua.** Os GLB brutos não estão no GitHub; muitos assets já foram carregados no seu Studio/Creator Hub segundo o histórico do projeto. Esta lista é o inventário selecionado, **não** prova de que os modelos estão presentes no seu computador. Baixe/insira **somente o que estiver faltando**. Em caso de dúvida, rode `StudioPlaceAudit` (instruções ao final).
 
 ## 1. O lugar certo dos modelos no Studio

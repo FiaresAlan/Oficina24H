@@ -551,7 +551,16 @@ do
 	check("C20: replay do mesmo token é recusado sem novo débito", not A.SettleNpcRepairOnce(p, "job_1", token,
 		150, { Tire = 1 }, "Troca", "Hatch")
 		and A.GetPartCount(p, "Tire") == 1 and A.Get(p).Coins == initial + 150)
-	check("C20: salva crédito e peça juntos", A.Save(p)
+	-- Falha de quatro tentativas não deve declarar recebimento confirmado;
+	-- a mesma intenção é gravada novamente SEM conceder dinheiro ou peça extra.
+	store.failNext = 4
+	check("C20: falha total do DataStore não declara pagamento salvo", not A.Save(p)
+		and store.data["u_2001"].Coins == initial)
+	check("C20: falha não remove ledger em memória e não permite replay",
+		A.HasRepairCredit(p, "job_1", token) and A.Get(p).Coins == initial + 150
+		and A.GetPartCount(p, "Tire") == 1
+		and not A.SettleNpcRepairOnce(p, "job_1", token, 150, { Tire = 1 }, "Troca", "Hatch"))
+	check("C20: retentativa grava crédito e estoque juntos", A.Save(p)
 		and store.data["u_2001"].Coins == initial + 150
 		and store.data["u_2001"].Parts.Tire == 1)
 	A.Remove(p)

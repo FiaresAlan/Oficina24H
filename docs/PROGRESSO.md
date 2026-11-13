@@ -788,3 +788,12 @@ Detalhes em `docs/AUDITORIA_GERAL.md`. Resumo:
 - **C19 — inventário de assets:** `docs/GUIA_UNICO_ASSETS_V1.md` concentra exatamente o catálogo atual de 21 carros, 11 equipamentos, NPCs, 24 peças da cidade e props, com origem/IDs e a localização sob `ServerStorage.Assets`. Se o place original já tem os assets, não baixar de novo. Pacotes Shuriken e 3DAssets são gratuitos; arquivos de terceiros não devem ser redistribuídos nem colocados no GitHub quando proibido.
 - **Verificações:** `RepairSessionTest` e `RepairTest` ampliados; contratos estáticos do CI e Rojo. Consulte `docs/TESTE_C18_TIMING_TOKEN_2026-11-13.md`. **Luau/Studio real ainda não executados**.
 - **V1 ainda aberta:** integridade financeira multi-conta, arte/rigs/áudio/licenças, testes dos 15 serviços, dispositivos, NPCs, assets do place, performance e beta. Código de V2 não iniciado.
+
+
+## 2026-11-13 — V1 C20: reserva exclusiva de OS e crédito idempotente de NPC (Studio pendente)
+- **Bug corrigido:** mecânico NPC reservava ordem só dentro de task.spawn, e o proprietário podia iniciar, cancelar ou terceirizar o serviço ao mesmo tempo.
+- **C20:** `StaffAssignmentRules` reserva JobId ANTES do worker assíncrono, os comandos concorrentes são bloqueados e exceções liberam a reserva com estado restaurado quando aplicável.
+- **Finanças:** `DataService.SettleNpcRepairOnce` consome peças e credita ledger idempotente no mesmo perfil sem yield. Funcionário e NPC avulso usam a mesma operação. Mensagens de êxito dependem de `Save` confirmado, com retentativa sem duplo crédito.
+- **Regressões:** `StaffAssignmentTest`, `PersistenceTest` e contratos do CI (ver `docs/TESTE_C20_ORDEM_NPC_EXCLUSIVA_2026-11-13.md`). Validação runtime/Studio pendente.
+- **Assets:** usuário confirmou download e organização local de `Car Repair Garage and MOT Workshop.glb`, `CGTrader Low Poly City`, `Shuriken Town Streets & Park v1`, `Shuriken Houses` e `Shuriken City`. Ainda não importados no place; `docs/GUIA_UNICO_ASSETS_V1.md` atualizado.
+- **Fase V2:** não iniciada; V1 ainda tem P0 de liquidação colaborativa e homologação de assets.

@@ -505,6 +505,7 @@ function WorkshopService.GetSnapshot(player: Player)
                         or (job.CollaboratorUserId ~= nil and Repairs[job.CollaboratorUserId] ~= nil
                             and Repairs[job.CollaboratorUserId].JobId == job.Id),
                     CollaboratorUserId = job.CollaboratorUserId,
+                    EmployeeAssignedSlot = job.EmployeeAssignedSlot,
                     ServiceName = job.Diagnosed and Catalog.Services[job.ServiceId].DisplayName or nil,
                 }
                 -- Requisitos e pagamento só são revelados após o diagnóstico (o defeito real fica no servidor).

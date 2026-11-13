@@ -75,6 +75,20 @@ check("runner has no duplicate suite names", len(set(suite_ids)) == len(suite_id
 for suite in suite_ids:
     check(f"tool exists: {suite}", (TOOLS / f"{suite}.luau").is_file())
 check("runner includes StudioPlaceAudit", "StudioPlaceAudit" in suite_ids)
+# Repair C5: the operation UI must not pay from an unrecorded final form.
+action_rules = text(SHARED / "RepairActionRules.lua")
+workshop = text(ROOT / "src" / "server" / "WorkshopService.lua")
+main = text(ROOT / "src" / "server" / "Main.server.lua")
+store = text(CLIENT / "UI" / "Store.lua")
+check("incremental repair rules exist", "function RepairActionRules.Apply" in action_rules)
+check("server reconstructs final input", "RepairActionRules.FinalInput(session.Plan, session.Progress)" in workshop)
+check("server issues session token", 'GenerateGUID(false)' in workshop)
+check("server validates repair actions", "function WorkshopService.RepairAction" in workshop)
+check("remote sends revision acknowledgements", '"RepairActionAck"' in main and '"RepairAction"' in main)
+check("client receives server ack", "Store.RepairActionAck.Event:Connect" in ui)
+check("operation UI attaches session token", "input.Token = sessionToken" in ui)
+check("legacy timing repair remains supported", "RepairRules.Evaluate(session.Plan, presses, elapsed, mods)" in workshop)
+
 check("readme links project checklist", "issues/15" in text(ROOT / "README.md"))
 
 print(f"\nStatic checks: {passed} passed, {len(failures)} failed")

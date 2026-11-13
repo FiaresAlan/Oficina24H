@@ -21,10 +21,11 @@ local WorkerSettlementProofRules = require(ReplicatedStorage.Shared.WorkerSettle
 local WorkerPaidTombstoneRules = require(ReplicatedStorage.Shared.WorkerPaidTombstoneRules)
 local WorkerProofArchiveRules = require(ReplicatedStorage.Shared.WorkerProofArchiveRules)
 local EquipmentUpgradeRules = require(ReplicatedStorage.Shared.EquipmentUpgradeRules)
+local V2SupplyRules = require(ReplicatedStorage.Shared.V2SupplyRules)
 
 local DataService = {}
 
-local SCHEMA_VERSION = 11 -- 11: auditoria persistida das claims legadas sem prova vinculada
+local SCHEMA_VERSION = 12 -- V2: adiciona somente lista de compras, preserva v11 e provas financeiras
 local MAX_ATTEMPTS = 4
 local LOCK_TIMEOUT = 360 -- s; maior que 2 autosaves, para um servidor que caiu não prender o jogador para sempre
 local LOCK_WAIT_STEP = 3
@@ -93,6 +94,7 @@ local function makeDefaultData(): any
 		Equipment = { BasicToolset = true },
 		EquipmentLevels = { BasicToolset = 1 }, -- C16: upgrades permanentes de ferramentas e máquinas
 		Parts = { TirePatch = 3, Battery = 1, Fuse = 2 }, -- estoque inicial para os primeiros serviços
+		SupplyRequests = {}, -- V2-02: lista de peças a buscar na loja (NAO debita moedas)
 		Transactions = {},
 		TotalEarned = 0,
 		PriceMultiplier = 1, -- preço da oficina em relação à tabela (0.7 a 1.5)
@@ -235,6 +237,8 @@ local function reconcile(data: any): any
 			data.Parts[partId] = math.floor(count)
 		end
 	end
+	-- V2-02: migracao aditiva v11 -> v12; whitelist, limite e nenhuma retirada de moedas.
+	data.SupplyRequests = V2SupplyRules.Sanitize(data.SupplyRequests)
 	if type(data.Bag) ~= "table" then
 		data.Bag = {}
 	end
@@ -936,9 +940,22 @@ function DataService.AddParts(player: Player, partId: string, amount: number): b
 	if not profile or Catalog.Parts[partId] == nil or n <= 0 then
 		return false
 	end
-	profile.Parts[partId] = (profile.Parts[partId] or 0) + n
+		profile.Parts[partId] = (profile.Parts[partId] or 0) + n
+	profile.SupplyRequests = V2SupplyRules.OnPurchase(profile.SupplyRequests, partId, n)
 	Dirty[player.UserId] = true
 	return true
+end
+
+-- V2-02: pedido de compra SEM transacao financeira; a compra real continua na loja V1.
+-- Recebe somente deficit calculado no servidor por WorkshopService.
+function DataService.RequestSupply(player: Player, needed: any): (boolean, string)
+    local profile = Profiles[player.UserId]
+    if not profile then return false, "Perfil indisponível." end
+    local nextList, added = V2SupplyRules.MergeMissing(profile.SupplyRequests, needed)
+    if added == 0 then return false, "Nenhuma peça nova para adicionar à lista." end
+    profile.SupplyRequests = nextList
+    Dirty[player.UserId] = true
+    return true, "Lista atualizada. Compre as peças na Loja de Autopeças."
 end
 
 -- Devolve true se o estoque cobre TODAS as peças pedidas ({ [partId] = quantidade }).

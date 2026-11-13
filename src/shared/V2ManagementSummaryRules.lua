@@ -1,6 +1,7 @@
 --!strict
 -- V2-02: leitura de snapshot V1. Historico de receita = BRUTO, nao margem ou lucro.
 local Levels = require(script.Parent.WorkshopLevels)
+local Supply = require(script.Parent.V2SupplyRules)
 local Rules = {}
 local function nonnegative(x: any): number
     if type(x) ~= "number" or x ~= x or x == math.huge or x == -math.huge or x < 0 then
@@ -44,10 +45,18 @@ function Rules.Build(snapshot: any): any
     elseif waiting > 0 then action = "Atenda o próximo cliente"
     elseif busy > 0 then action = "Conclua um reparo em andamento"
     else action = "Aguarde clientes ou divulgue a oficina" end
+    local pending = Supply.Sanitize(profile.SupplyRequests)
+    local kinds, stockUnits = 0, 0
+    for _ in pairs(pending) do kinds += 1 end
+    if type(profile.Parts) == "table" then
+        for _, n in pairs(profile.Parts) do stockUnits += nonnegative(n) end
+    end
     return {
         Bays = bays, FreeBays = math.max(0, bays - busy), Waiting = waiting, Working = busy,
         Urgent = urgent, Employees = nonnegative(profile.Employees), Coins = nonnegative(profile.Coins),
         RecentGross = gross, RecentCount = count, DiagnosedEstimateGross = estimated,
+        SupplyRequestKinds = kinds, SupplyEstimatedCost = Supply.TotalEstimatedCost(pending),
+        StockUnits = stockUnits,
         NextAction = action, NetProfitAvailable = false,
     }
 end

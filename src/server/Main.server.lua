@@ -88,7 +88,7 @@ end
 local lastActionAt: {[number]: {[string]: number}} = {}
 local lastOutcomeQuery: {[number]: number} = {}
 local KNOWN_ACTIONS: {[string]: boolean} = {}
-for _, name in ipairs({ "ClaimWorkshop", "GenerateCustomer", "DeclineJob", "AcceptJob", "DiagnoseJob", "ExamineJob", "CompleteJob", "FinishRepair", "RepairAction", "CheckRepairResult", "RepairPrefs", "CancelRepair", "SkipOnboarding", "BuyEquipment", "SetPrice", "BuyPart", "Checkout", "HireNpc", "InviteWorker", "CompleteCollaborativeJob", "RespondInvite", "MoveBag", "UpgradeWorkshop", "ClaimDaily", "ClaimMission", "RedeemCode" }) do
+for _, name in ipairs({ "ClaimWorkshop", "GenerateCustomer", "DeclineJob", "AcceptJob", "DiagnoseJob", "ExamineJob", "CompleteJob", "FinishRepair", "RepairAction", "CheckRepairResult", "RepairPrefs", "CancelRepair", "SkipOnboarding", "BuyEquipment", "SetPrice", "BuyPart", "Checkout", "HireNpc", "InviteWorker", "CompleteCollaborativeJob", "RespondInvite", "MoveBag", "UpgradeWorkshop", "ClaimDaily", "ClaimMission", "RedeemCode", "SetJobPriority", "ScheduleJob", "DiscountJob", "RequestJobSupplies" }) do
     KNOWN_ACTIONS[name] = true
 end
 
@@ -274,6 +274,14 @@ actionEvent.OnServerEvent:Connect(function(player: Player, action: any, payload:
         success, message = WorkshopService.ClaimWorkshop(player)
     elseif action == "GenerateCustomer" then
         success, message = WorkshopService.GenerateCustomer(player)
+    elseif action == "SetJobPriority" and type(payload.JobId) == "string" then
+        success, message = WorkshopService.SetJobPriority(player, payload.JobId, payload.Priority)
+    elseif action == "ScheduleJob" and type(payload.JobId) == "string" then
+        success, message = WorkshopService.ScheduleJob(player, payload.JobId, payload.Seconds)
+    elseif action == "DiscountJob" and type(payload.JobId) == "string" then
+        success, message = WorkshopService.DiscountJob(player, payload.JobId, payload.Percent)
+    elseif action == "RequestJobSupplies" and type(payload.JobId) == "string" then
+        success, message = WorkshopService.RequestJobSupplies(player, payload.JobId)
     elseif action == "DeclineJob" and type(payload.JobId) == "string" then
         success, message = WorkshopService.DeclineJob(player, payload.JobId)
     elseif action == "AcceptJob" and type(payload.JobId) == "string" then

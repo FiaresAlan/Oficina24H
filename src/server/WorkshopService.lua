@@ -24,6 +24,7 @@ local WorkshopLevels = require(ReplicatedStorage.Shared.WorkshopLevels)
 local EquipmentUpgradeRules = require(ReplicatedStorage.Shared.EquipmentUpgradeRules)
 local StaffAssignmentRules = require(ReplicatedStorage.Shared.StaffAssignmentRules)
 local LocationRules = require(ReplicatedStorage.Shared.LocationRules)
+local V2ReceptionRules = require(ReplicatedStorage.Shared.V2ReceptionRules)
 
 local WorkshopService = {}
 
@@ -377,6 +378,11 @@ local function createJob(ownerUserId: number, specialization: string?)
         Price = price,
         PriceMultiplier = multiplier,
         Status = "Available",
+        Priority = 0,
+        ScheduledUntil = 0,
+        ScheduleUsed = false,
+        DiscountPercent = 0,
+        OriginalPrice = price,
         AssignedWorkerUserId = nil,
         Diagnosed = false,
         CreatedAt = os.time(),
@@ -478,6 +484,9 @@ function WorkshopService.GetSnapshot(player: Player)
                     PatienceSeconds = Config.CustomerPatienceSeconds * (job.Regular and Config.RegularPatienceMultiplier or 1),
                     Complaint = job.Complaint,
                     Status = job.Status,
+                    Priority = job.Priority or 0,
+                    ScheduledUntil = job.ScheduledUntil or 0,
+                    ScheduleUsed = job.ScheduleUsed == true,
                     Diagnosed = job.Diagnosed,
                     CollaboratorUserId = job.CollaboratorUserId,
                     ServiceName = job.Diagnosed and Catalog.Services[job.ServiceId].DisplayName or nil,
@@ -497,6 +506,7 @@ function WorkshopService.GetSnapshot(player: Player)
                         Parts = defect.Parts or {},
                     }
                 end
+                entry.Reception = V2ReceptionRules.BuildVisible(entry, profile)
                 table.insert(jobs, entry)
             end
         end
@@ -669,6 +679,75 @@ function WorkshopService.DeclineJob(player: Player, jobId: string)
     return true, "Ordem abandonada. -1 de reputação."
 end
 
+-- V2-02: somente o dono na recepcao pode mudar a prioridade/agendamento/preco/pedido.
+local function nearReception(player: Player): boolean
+    local plot = PlotService.GetPlot(player)
+    return plot ~= nil and plot:FindFirstChild("Estacoes") ~= nil
+        and StationService.IsNear(player, plot, "Orders")
+end
+
+function WorkshopService.SetJobPriority(player: Player, jobId: string, value: any): (boolean, string)
+    local job = Jobs[jobId]
+    if not V2ReceptionRules.CanManage(player.UserId, job, "Available")
+        or not V2ReceptionRules.ValidPriority(value) then
+        return false, "Ordem ou prioridade inválida."
+    end
+    if not nearReception(player) then return false, "Use o balcão de recepção da sua oficina." end
+    job.Priority = value
+    return true, "Prioridade da fila atualizada."
+end
+
+function WorkshopService.ScheduleJob(player: Player, jobId: string, seconds: any): (boolean, string)
+    local job = Jobs[jobId]
+    if not V2ReceptionRules.CanManage(player.UserId, job, "Available")
+        or not V2ReceptionRules.ValidAppointment(seconds) then
+        return false, "Agendamento inválido."
+    end
+    if not nearReception(player) then return false, "Use o balcão de recepção da sua oficina." end
+    if job.ScheduleUsed or CustomerArrivalService.IsArriving(jobId) then
+        return false, "Este cliente já foi reagendado ou ainda está chegando."
+    end
+    job.ScheduleUsed = true -- apenas UMA remarcação por OS, sem farmar paciencia
+    job.ScheduledUntil = os.time() + seconds
+    job.CreatedAt += seconds -- concede o mesmo prazo que ficou reservado
+    return true, "Atendimento reservado por " .. seconds .. " segundos. O cliente continua aguardando."
+end
+
+function WorkshopService.DiscountJob(player: Player, jobId: string, percent: any): (boolean, string)
+    local job = Jobs[jobId]
+    if not V2ReceptionRules.CanManage(player.UserId, job, "InProgress")
+        or not job.Diagnosed or not V2ReceptionRules.ValidDiscount(percent) then
+        return false, "Proposta inválida ou diagnóstico pendente."
+    end
+    if not nearReception(player) then return false, "Use o balcão de recepção da sua oficina." end
+    if job.CollaboratorUserId or employeeReserved(job)
+        or (Repairs[player.UserId] and Repairs[player.UserId].JobId == jobId) then
+        return false, "Não é possível renegociar um reparo em execução ou delegado."
+    end
+    local original = job.OriginalPrice or job.Price
+    local amount = V2ReceptionRules.PriceAfterDiscount(original, percent)
+    if not amount then return false, "Valor inválido." end
+    job.Price = amount
+    job.DiscountPercent = percent
+    job.PriceMultiplier = (job.PriceMultiplierOriginal or job.PriceMultiplier or 1) * (100 - percent) / 100
+    job.PriceMultiplierOriginal = job.PriceMultiplierOriginal or (job.PriceMultiplier / ((100 - percent) / 100))
+    return true, "Proposta registrada: " .. tostring(amount) .. " moedas."
+end
+
+function WorkshopService.RequestJobSupplies(player: Player, jobId: string): (boolean, string)
+    local job = Jobs[jobId]
+    if not V2ReceptionRules.CanManage(player.UserId, job, "InProgress") or not job.Diagnosed then
+        return false, "Diagnostique a ordem antes de solicitar peças."
+    end
+    if not nearReception(player) then return false, "Use o balcão de recepção da sua oficina." end
+    local profile = DataService.Get(player)
+    if not profile then return false, "Perfil indisponível." end
+    local required = Catalog.Defects[job.DefectId].Parts or {}
+    local missing = V2ReceptionRules.MissingParts(required, profile.Parts)
+    if next(missing) == nil then return false, "Você já tem todas as peças necessárias." end
+    return DataService.RequestSupply(player, missing)
+end
+
 function WorkshopService.AcceptJob(player: Player, jobId: string)
     local job = Jobs[jobId]
     if not job or job.OwnerUserId ~= player.UserId then
@@ -679,6 +758,9 @@ function WorkshopService.AcceptJob(player: Player, jobId: string)
     end
     if CustomerArrivalService.IsArriving(jobId) then
         return false, "O cliente ainda está estacionando."
+    end
+    if os.time() < (job.ScheduledUntil or 0) then
+        return false, "O atendimento está agendado. Aguarde o horário reservado."
     end
     local plot = PlotService.GetPlot(player)
     if plot and plot:FindFirstChild("Estacoes") and not StationService.IsNear(player, plot, "Orders") then

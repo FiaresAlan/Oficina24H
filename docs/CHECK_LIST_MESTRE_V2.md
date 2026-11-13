@@ -90,6 +90,15 @@ P0 = prioridade para o núcleo de lançamento. P1 = opcional condicionado a viab
 **Aceite:** o jogador percebe a próxima decisão de negócio rapidamente.
 
 ## V2-03 — Capô, portas, rodas, engine bay e elevadores
+
+**Código V2-03 entregue na PR #27, sem homologação Studio:** [guia exato e QA V2-03](V2_FASE_03_COMPONENTES.md).
+- [x] [C] Oito pontos físicos, estados server-authoritative, permissão do responsável, distância e bloqueio ao movimentar ou durante reparo.
+- [x] [C] Portas, tampa, capô, quatro rodas independentes e cofre do motor, com partes nativas marcadas ou proxies client-side.
+- [x] [C] Pré-requisitos dos procedimentos FlatTire/WeakBattery/Overheating, reset seguro antes da saída e próximo passo no HUD pós-diagnóstico.
+- [x] [C] Suítes Luau registradas, auditoria não destrutiva de pivôs/meshes e checks CI.
+- [ ] [S] Homologar separação física das malhas reais, posicionamento de pivôs, 15 serviços, mobile/gamepad e multiplayer no Studio.
+
+
 - [ ] [C] Rigs/Attachments/pivôs de capô, portas, porta-malas e rodas para os três carros.
 - [ ] [C] Usar sockets de componentes reais; não só posições genéricas do carro.
 - [ ] [C] Regras de porta/capô: abrir, inspecionar, reparar, fechar, impedir abertura em movimento.

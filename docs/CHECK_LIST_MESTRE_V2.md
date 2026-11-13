@@ -174,14 +174,19 @@ P0 = prioridade para o núcleo de lançamento. P1 = opcional condicionado a viab
 **Aceite:** engenharia separada e limitada; performance real depende de QA Studio.
 
 ## V2-08 — Negócio e margem financeira
-- [ ] [C] Extrato de receitas e despesas: serviço, peças, funcionário, publicidade, upgrade e contratos.
-- [ ] [C] Decisões de estoque/reposição, qualidade de peças, preços e condições dos clientes.
-- [ ] [C] Previsão de margem e aviso de lucro negativo ou caixa insuficiente.
-- [ ] [C] Equilibrar renda manual, NPC e eventual automação offline limitada.
-- [ ] [A] Testes de simulação de economia, anti-exploit e compatibilidade da persistência.
-- [ ] [S] Playtest de 20–30 min com foco em decisões do proprietário.
 
-**Aceite:** gerir a oficina é interessante mesmo quando NPCs estão reparando.
+**Engenharia financeira na PR #27, ainda não homologada em Studio:** [guia v14, caixa, categorias e QA](V2_FASE_08_FINANCAS.md).
+
+- [x] [C] Entradas e despesas reais por categoria: OS, peças, salários, publicidade, máquinas, prédio, contratação e bônus.
+- [x] [C] Schema v14 aditivo, saldos e categorias persistentes, migração com histórico parcial explícito, conciliação e privacidade de recibos.
+- [x] [C] Checkout misto separa equipamentos/peças sem custo duplicado; créditos de OS e NPC seguem comprovantes V1.
+- [x] [C] Reposição de peças por OS diagnosticada e histórico, reserva de salários, alerta de insuficiência de caixa e 15 estimativas de contribuição-base.
+- [x] [C] Aba Caixa na janela Ordens; fluxo de caixa real distinguido de lucro contábil não comprovado.
+- [x] [A] Suites Luau e simulação de migração/replay/salvamento escritas; contratos estáticos e build Rojo.
+- [ ] [C] Fornecedores com graus de qualidade de peça e custo/consumo próprios — requer controle de lote e rollback, não simulado.
+- [ ] [S] QA Studio: 15 serviços, salários, estoque, colaboração, mobile e playtest gerencial de 20–30 min.
+
+**Aceite do livro de caixa:** lançamentos reais sem duplicação. **Aceite completo da fase:** resta aquisição por qualidade e homologação Studio.
 
 ## V2-09 — Mercado de carros velhos / compra e revenda (P1, protótipo)
 - [ ] [C] Mercado controlado, carro avariado, avaliação de custo e previsão aproximada de lucro.

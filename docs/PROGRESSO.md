@@ -880,3 +880,10 @@ Detalhes em `docs/AUDITORIA_GERAL.md`. Resumo:
 - **Privacidade/isolamento:** desconexão de A não destrói cenas de B; o carro já entregue à oficina continua sendo limpo por `VehicleService`, não pela rotina de chegada.
 - **Testes escritos:** `VehicleSceneRulesTest` em `RunAllTests`, contratos estáticos em `verify_contracts.py`. [QA C29](TESTE_C29_CENAS_CLIENTES_DESCONEXAO_2026-11-13.md).
 - **Pendente:** execução dos testes Luau, cenas NPC e modelos com dois jogadores no Studio. CI valida contratos e Rojo, não multiplayer. G1–G5 permanecem abertos; V2 segue documental e assets aguardam importação.
+
+
+## 13/11/2026 — C30/C31: G1 preparação de segurança e auditoria estrutural
+- C30: [commit a972b386](https://github.com/FiaresAlan/Oficina24H/commit/a972b386454d60456dac56f61bae3578c96ad0cf), sanitização de Script/LocalScript/ModuleScript em clones de carro, NPC, equipamento e preview; teste isolado. [CI verde](https://github.com/FiaresAlan/Oficina24H/actions/runs/43478961090).
+- C31: [commit 426b9665](https://github.com/FiaresAlan/Oficina24H/commit/426b9665f49555da191be35c011daf2d5c29669a), auditoria estrutural de 21 carros, NPC R15 e equipamentos; [correção de índice 0ef749b5](https://github.com/FiaresAlan/Oficina24H/commit/0ef749b5c56d769fac46c2bea9262d5f65e7efba). [CI final verde](https://github.com/FiaresAlan/Oficina24H/actions/runs/43479613749).
+- G1–G5: **todos pendentes**. Os testes escritos não foram executados no Studio; modelos 3D continuam baixados, não importados. Nenhum código V2 implementado.
+- Roteiros: `docs/TESTE_C30_SEGURANCA_ASSETS_V1_2026-11-13.md` e `docs/TESTE_C31_AUDITORIA_MODELOS_V1_2026-11-13.md`.

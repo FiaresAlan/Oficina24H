@@ -1,6 +1,6 @@
 # Oficina 24H — Portões finais de homologação da V1
 
-**Data-base:** 13/11/2026 · **Fonte detalhada:** [Checklist Mestre V1 — Issue #15](https://github.com/FiaresAlan/Oficina24H/issues/15). Este é um resumo dos critérios de conclusão, **não substitui** o histórico técnico C1–C28 ou os testes existentes.
+**Data-base:** 13/11/2026 · **Fonte detalhada:** [Checklist Mestre V1 — Issue #15](https://github.com/FiaresAlan/Oficina24H/issues/15). Este é um resumo dos critérios de conclusão, **não substitui** o histórico técnico C1–C31 ou os testes existentes.
 
 ## Quanto ainda falta?
 A implementação de código dos sistemas principais (15 serviços, cliente/ordem, estoque, funcionário NPC, upgrade, contratos, progressão e persistência) está avançada. **Não há percentual de conclusão defensável** sem executar os jogos no place real: CI verde confirma build de código, não experiência visual, multiplayer ou dados reais.
@@ -20,7 +20,10 @@ A Issue #15 contém muitos checkboxes redundantes de testes e ideias opcionais. 
 ### Ficam fora do bloqueio de MVP
 Guincho, desmontagem modular de motor, cooperação simultânea para a mesma tarefa, restauração avançada, tuning/ECU, test-drive e expansão de mapa — validar como novas fases depois, não impedir o teste do núcleo da V1 por novas ideias. A direção V2 continua apenas documentada até autorização do proprietário.
 
-### Próximas ações práticas
+### Preparação adicional de G1 (C30–C31)
+A C30 sanitiza cópias de assets antes de inseri-las no mundo, e a C31 audita estruturas de modelos e NPCs. As verificações de CI passaram, mas não validam os modelos reais nem substituem a execução do Studio. Guias: [C30](TESTE_C30_SEGURANCA_ASSETS_V1_2026-11-13.md) e [C31](TESTE_C31_AUDITORIA_MODELOS_V1_2026-11-13.md). **G1 permanece aberto** até importação e conferência manual.
+
+## Próximas ações práticas
 1. Proprietário importa os pacotes já organizados no Studio e preserva backup da rua aprovada, conforme [guia único de assets](GUIA_UNICO_ASSETS_V1.md).
 2. Executa as suítes Studio, começando por `RunAllTests`, `StudioPlaceAudit` e atendimento real de pneu/bateria; registra erro exato e prints/logs.
 3. O desenvolvimento corrige as falhas encontradas, valida CI novamente e repete o ciclo para 15 serviços, multiplayer e aparelhos.

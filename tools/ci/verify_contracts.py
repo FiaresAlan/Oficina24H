@@ -129,6 +129,24 @@ check("client checks receipt before resending a finish",
       and 'payload.Status == "Completed"' in ui and 'payload.Status == "Active"' in ui)
 check("client result correlated with job and token",
       "payload.JobId ~= jobId or payload.Token ~= sessionToken" in ui)
+# C8: per-profile persistent settlement idempotency (NOT multi-user atomicity).
+ledger = text(SHARED / "SettlementLedgerRules.lua")
+data_service = text(ROOT / "src" / "server" / "DataService.lua")
+check("ledger bounded and sanitized", "SettlementLedgerRules.MaxEntries" in ledger and "function SettlementLedgerRules.Sanitize" in ledger)
+check("ledger persists in profile schema v5", "local SCHEMA_VERSION = 5" in data_service
+      and "RepairLedger = {}" in data_service
+      and "SettlementLedgerRules.Sanitize(data.RepairLedger)" in data_service)
+check("ledger credit idempotency", "function DataService.CreditRepairOnce" in data_service
+      and "SettlementLedgerRules.Record(profile.RepairLedger" in data_service)
+check("credited repair state recoverable", "function DataService.GetRepairReceipt" in data_service
+      and "DataService.GetRepairReceipt(player, jobId, token)" in workshop)
+check("server uses guarded repair credit", "DataService.CreditRepairOnce(player, jobId, session.Token" in workshop)
+check("server attaches receipt to credited entry",
+      "DataService.AttachRepairReceipt(player, jobId, session.Token" in workshop)
+check("server attempts save before notification",
+      workshop.find("DataService.Save(workshopOwner)") < workshop.find('eventSender(player, "RepairDone", receiptPayload)'))
+check("ledger test is registered", '"SettlementLedgerTest"' in runner
+      and (TOOLS / "SettlementLedgerTest.luau").is_file())
 check("readme links project checklist", "issues/15" in text(ROOT / "README.md"))
 
 print(f"\nStatic checks: {passed} passed, {len(failures)} failed")

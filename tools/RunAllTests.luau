@@ -5,7 +5,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local suites = {
 	"CatalogTest", "CustomerTest", "RepairTest", "DiagnosisEvidenceTest", "InspectionPointTest",
 	"RepairPrepTest", "RepairSocketTest", "RepairPartVisualTest", "HudLayoutTest", "CompactHudTest",
-	"ServiceFocusTest", "RepairOperationsTest", "WorkshopProceduresTest", "RepairActionRulesTest", "RepairReceiptTest", "CollaborationRulesTest",
+	"ServiceFocusTest", "RepairOperationsTest", "WorkshopProceduresTest", "RepairActionRulesTest", "RepairReceiptTest", "SettlementLedgerTest", "CollaborationRulesTest",
 	"RepairSessionTest", "LocationTest", "RivalRulesTest", "PlotTest", "PersistenceTest",
 	"ProgressTest", "StudioPlaceAudit",
 }

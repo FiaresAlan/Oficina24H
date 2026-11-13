@@ -488,6 +488,87 @@ do
 		and B.PendingClaimSummary(worker).Token == nil)
 end
 
+-- C21: a prova do proprietário só pode desaparecer quando a claim do
+-- executor já tiver sido removida com sucesso do DataStore dele.
+do
+	local store = newStore()
+	local A = server(store, "proofC21-A")
+	local worker, owner = fakePlayer(2101), fakePlayer(2102)
+	local token = "cccccccc-aaaa-4444-bbbb-dddddddddddd"
+	A.Load(worker) A.Load(owner)
+	local startWorker = A.Get(worker).Coins
+	check("C21: permite registrar claim e persistir antes da OS",
+		A.StageWorkerClaim(worker, owner.UserId, "job_2101", token,
+			120, 230, 44, 92, "Freios", "Hatch", "Freios") and A.Save(worker))
+	check("C21: dono registra sua parcela e prova do contratado",
+		A.CreditRepairOnce(owner, "job_2101", token, 120, "Owner",
+			"Freios", "Hatch", worker.UserId, 230) and A.Save(owner))
+	check("C21: prova do proprietário fica disponível após o 1º save",
+		#store.data["u_2102"].OwnerSettlementProofs == 1)
+	check("C21: crédito do executor salvo de forma idempotente",
+		A.CreditRepairOnce(worker, "job_2101", token, 230, "Worker", "Freios", "Hatch")
+			and A.Save(worker))
+	check("C21: claim persistente ainda pede limpeza",
+		#store.data["u_2101"].PendingClaims == 1)
+	check("C21: limpeza da claim inicia em memória", A.DiscardWorkerClaim(worker, "job_2101", token))
+	store.failNext = 4
+	check("C21: save falhou, claim ainda está no disco",
+		not A.Save(worker) and #store.data["u_2101"].PendingClaims == 1)
+	check("C21: erro NÃO libera prova do dono",
+		#store.data["u_2102"].OwnerSettlementProofs == 1
+			and #A.Get(owner).OwnerSettlementProofs == 1)
+	check("C21: retentativa salva remoção da claim", A.Save(worker)
+		and #store.data["u_2101"].PendingClaims == 0)
+	check("C21: prova fica vinculada ao trabalhador correto",
+		not A.DiscardConfirmedOwnerProof(owner, "job_2101", token, 2103)
+			and #A.Get(owner).OwnerSettlementProofs == 1)
+	check("C21: após save do trabalhador, dono pode liberar prova",
+		A.DiscardConfirmedOwnerProof(owner, "job_2101", token, worker.UserId)
+			and A.Save(owner) and #store.data["u_2102"].OwnerSettlementProofs == 0)
+	A.Remove(worker) A.Remove(owner)
+	local B = server(store, "proofC21-B")
+	B.Load(worker) B.Load(owner)
+	check("C21: após reconexão saldo do trabalhador é exato",
+		B.Get(worker).Coins == startWorker + 230
+			and B.HasRepairCredit(worker, "job_2101", token))
+	check("C21: claims finalizadas não ressurgem após reconexão",
+		#B.Get(worker).PendingClaims == 0
+			and #B.Get(owner).OwnerSettlementProofs == 0)
+	check("C21: replay não gera segundo pagamento",
+		not B.CreditRepairOnce(worker, "job_2101", token, 230, "Worker", "Freios", "Hatch")
+			and B.Get(worker).Coins == startWorker + 230)
+end
+
+-- C21: arquivo cheio não pode apagar créditos antigos e não pode conceder
+-- parcela do proprietário sem registrar prova do contratado.
+do
+	local Proofs = require(game.ReplicatedStorage.Shared.OwnerSettlementProofRules)
+	local store = newStore()
+	local A = server(store, "proofFull")
+	local owner = fakePlayer(2120)
+	A.Load(owner)
+	for i = 1, Proofs.MaxEntries do
+		local token = string.format("21212121-3333-4444-5555-%012d", i)
+		Proofs.Add(A.Get(owner).OwnerSettlementProofs,
+			Proofs.Make("old_" .. i, token, 2101, 20, 40, "Freios", "Hatch", 1790000000))
+	end
+	local coins = A.Get(owner).Coins
+	local token = "21212121-4444-5555-6666-777777777777"
+	check("C21: capacidade do dono detecta arquivo completo", not A.HasOwnerProofCapacity(owner))
+	check("C21: owner não credita sem conseguir registrar prova nova",
+		not A.CreditRepairOnce(owner, "job_new", token, 60, "Owner",
+			"Freios", "Hatch", 2101, 100)
+		and A.Get(owner).Coins == coins
+		and not A.HasRepairCredit(owner, "job_new", token))
+	check("C21: entrada antiga continua para recuperação",
+		Proofs.Find(A.Get(owner).OwnerSettlementProofs, "old_1",
+			"21212121-3333-4444-5555-000000000001") ~= nil)
+	check("C21: remover uma prova confirmada reabre capacidade",
+		A.DiscardConfirmedOwnerProof(owner, "old_1",
+			"21212121-3333-4444-5555-000000000001", 2101)
+		and A.HasOwnerProofCapacity(owner))
+end
+
 -- C13: dados corrompidos de reivindicação são descartados na migração.
 do
 	local store = newStore()

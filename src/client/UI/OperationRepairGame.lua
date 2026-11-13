@@ -80,6 +80,10 @@ function OperationRepairGame.new(gui: ScreenGui)
 
 	local active, waiting, showingResult = false, false, false
 	local jobId, currentPlan = "", nil :: any
+	local sessionToken = ""
+	local revision = 0
+	local pendingAction: any = nil
+	local statusRef: TextLabel? = nil
 	local startedAt = 0
 	local pressure, spot, sequence = 28, nil :: string?, {} :: { string }
 	local fluid, bleed, fan = 1.5, 0, false
@@ -99,6 +103,8 @@ function OperationRepairGame.new(gui: ScreenGui)
 		if not root.Visible then return end
 		local notify = cancelServer and active and not showingResult
 		active, waiting, showingResult = false, false, false
+		pendingAction = nil
+		statusRef = nil
 		if notify then
 			Store.Act("CancelRepair", {})
 		end
@@ -118,6 +124,9 @@ function OperationRepairGame.new(gui: ScreenGui)
 		clear()
 		jobId = tostring(payload.JobId)
 		currentPlan = payload.Plan
+		sessionToken = tostring(payload.Token or "")
+		revision = 0
+		pendingAction = nil
 		active, waiting, showingResult = true, false, false
 		startedAt = os.clock()
 		pressure, spot, sequence = 28, nil, {}
@@ -126,6 +135,30 @@ function OperationRepairGame.new(gui: ScreenGui)
 		sourceId, actionId = nil, nil
 		title.Text = tostring(payload.Service or "Reparo") .. " · procedimento"
 		local status = label(content, "", 72, 36, 20)
+		statusRef = status
+		if sessionToken == "" then
+			active = false
+			status.Text = "Sessão sem identificador; tente iniciar o reparo novamente."
+			Store.Act("CancelRepair", {})
+			return
+		end
+
+		local function submit(kind: string, id: string?, value: any, apply: () -> ())
+			if not active or waiting or pendingAction then return end
+			pendingAction = { Apply = apply, JobId = jobId, Token = sessionToken }
+			local requested = pendingAction
+			Store.Act("RepairAction", {
+				JobId = jobId, Token = sessionToken,
+				Command = { Revision = revision, Kind = kind, Id = id, Value = value },
+			})
+			task.delay(4, function()
+				if pendingAction == requested and active then
+					pendingAction = nil
+					Store.Message:Fire("Sem confirmação do servidor. Reinicie o reparo para evitar inconsistência.", false, "RepairAction")
+					close(true)
+				end
+			end)
+		end
 
 		local function update()
 			if currentPlan.Mode == "Tire" then
@@ -291,7 +324,7 @@ function OperationRepairGame.new(gui: ScreenGui)
 		end
 		update()
 		button(content, "CONCLUIR SERVIÇO", 316, 265, 286, 48, function()
-			if not active or waiting then return end
+			if not active or waiting or pendingAction then return end
 			local input
 			if currentPlan.Mode == "Tire" then
 				if not spot then
@@ -334,6 +367,7 @@ function OperationRepairGame.new(gui: ScreenGui)
 			end
 			waiting = true
 			status.Text = "Verificando reparo com o servidor..."
+			input.Token = sessionToken
 			Store.Act("FinishRepair", { JobId = jobId, Presses = input })
 			task.delay(5, function()
 				if waiting and active and not showingResult then
@@ -369,6 +403,25 @@ function OperationRepairGame.new(gui: ScreenGui)
 	closeButton.BackgroundColor3 = Color3.fromRGB(50, 55, 70)
 	Store.RepairStart.Event:Connect(start)
 	Store.RepairDone.Event:Connect(showResult)
+	Store.RepairActionAck.Event:Connect(function(payload: any)
+		if type(payload) ~= "table" or not active or payload.JobId ~= jobId
+			or payload.Token ~= sessionToken or not pendingAction then return end
+		local action = pendingAction
+		pendingAction = nil
+		if payload.Accepted == true and type(payload.Revision) == "number"
+			and payload.Revision == revision + 1 then
+			revision = payload.Revision
+			action.Apply()
+		else
+			if statusRef then
+				statusRef.Text = tostring(payload.Message or "Ação não confirmada.")
+			end
+			if type(payload.Revision) ~= "number" or payload.Revision ~= revision then
+				Store.Message:Fire("Sessão dessincronizada. Inicie um novo reparo.", false, "RepairAction")
+				close(true)
+			end
+		end
+	end)
 	Store.Message.Event:Connect(function(_text: string, success: boolean, action: string)
 		if action == "FinishRepair" and not success and active then
 			close(false)

@@ -493,6 +493,8 @@ function DataService.StageWorkerClaim(worker: Player, ownerUserId: number, jobId
 	if existing then
 		return existing.OwnerUserId == ownerUserId and existing.OwnerPay == ownerPay
 			and existing.WorkerPay == workerPay and existing.XP == xp
+			and existing.Quality == quality and existing.Service == service
+			and existing.Vehicle == vehicle and existing.Spec == spec
 	end
 	if #profile.PendingClaims >= SettlementClaimRules.MaxPending
 		or DataService.HasRepairCredit(worker, jobId, token) then return false end
@@ -551,6 +553,7 @@ function DataService.ReconcileWorkerClaims(worker: Player): number
 						Quality = claim.Quality, XP = claim.XP,
 					})
 					recovered += 1
+					warn("[DataService] Pagamento de contratado restaurado da prova do proprietário:", userId, claim.JobId)
 				end
 				-- Salva saldo+ledger ANTES de descartar a prova. Em erro, claim
 				-- continua disponível e o ledger impede duplo crédito no retry.

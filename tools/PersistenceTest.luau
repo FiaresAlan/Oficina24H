@@ -458,7 +458,7 @@ do
 			"Freios", "Hatch", "Freios") and B.Save(worker))
 	check("C13: dono paga próxima OS", A.CreditRepairOnce(owner, "job_89", token2,
 		80, "Owner", "Freios", "Hatch") and A.Save(owner))
-	store.failGetNext = 1
+	store.failGetNext = 2 -- duas claims pendentes; ambas precisam falhar neste ciclo
 	B.ReconcileWorkerClaims(worker)
 	check("C13: falha de leitura não inventa receita", not B.HasRepairCredit(worker, "job_89", token2))
 	B.ReconcileWorkerClaims(worker)

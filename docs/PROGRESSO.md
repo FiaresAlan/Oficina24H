@@ -747,3 +747,11 @@ Detalhes em `docs/AUDITORIA_GERAL.md`. Resumo:
 - **C11:** em erro de `UpdateAsync`, o mesmo token de liquidação é usado para novas tentativas de gravar os perfis ainda sem confirmação, **sem** reaplicar peças, saldo, XP ou avaliações. Testes de estado e falha transitória adicionados ao runner; instruções de QA em `docs/TESTE_C10_C11_ENTREGA_FINANCEIRA_2026-11-13.md`.
 - **CI Rojo/contratos:** ver link no checklist mestre; **sem execução em Roblox Studio nesta rodada**.
 - **P0 permanece:** não existe atomicidade entre chaves de DataStore de dono e executor, nem compensação após crash entre gravações. Minijogo timing legado ainda precisa de GUID/recibo durável. Todos os testes reais de rede, interrupção e UI continuam pendentes.
+
+
+## 2026-11-13 — C12/C13: reivindicação prévia e recuperação de crédito colaborativo (GitHub-only)
+- **C12:** schema v6 adiciona `PendingClaims` privado (máximo 64). Antes de consumir peças, a OS colaborativa com token registra e persiste reivindicação do executor contendo o valor dividido, XP e vínculo ao proprietário. Sem `Save` do contratado no preparo, não inicia a mutação financeira.
+- **C13:** ao carregar e periodicamente, o servidor consulta o ledger **persistido do dono**, exige papel `Owner`, mesma chave/valor/serviço/veículo, recupera o crédito+XP do trabalhador com idempotência e salva antes de remover claim. Nenhum token de claim é replicado.
+- **Regressões escritas:** `SettlementClaimRulesTest` e `PersistenceTest` ganharam cenários de queda, reentrada, prova ausente ou divergente, falha de leitura e corrupção do schema. Veja `docs/TESTE_C12_C13_CLAIMS_2026-11-13.md`.
+- **CI:** ver execução da branch e da main no checklist mestre. **Sem execução Roblox Studio** ou falha real de processo nesta rodada.
+- **Riscos abertos:** não há atomicidade multi-chave; ledger do dono possui retenção de 64 lançamentos, e claims não confirmadas podem acumular até 64. Legacy timing continua sem claim/recibo robusto. Antes de publicar, provar o fluxo sob falhas reais, concorrência e desconexões.

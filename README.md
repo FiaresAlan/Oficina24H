@@ -12,7 +12,7 @@ Simulador social de oficina mecânica para Roblox: o jogador atende clientes, di
 
 A Issue #15 é o painel único de check-ins. Lá estão as caixas `[x]` para código e documentação registrados e `[ ]` para execução de testes, validação no Studio e merge. O arquivo `docs/PROGRESSO.md` permanece como histórico detalhado.
 
-**Status de desenvolvimento (A1–C11):** regras, HUD, diagnóstico e procedimentos de **15 serviços**, recibos e proteção de entrega financeira estão na `main`. O pipeline automatizado executa contratos estáticos e build Rojo. **As suítes Luau da sequência recente ainda não foram executadas no Studio**, e testes de perfis reais, dois jogadores, latência, telas e assets permanecem pendentes. O MVP antigo não homologa as alterações atuais. A publicação exige arte, som, licenças, desempenho e QA reais.
+**Status de desenvolvimento (A1–C13):** regras, HUD, diagnóstico e procedimentos de **15 serviços**, recibos, proteção de entrega financeira e recuperação de créditos de contratados estão na `main`. O pipeline automatizado executa contratos estáticos e build Rojo. **As suítes Luau da sequência recente ainda não foram executadas no Studio**, e testes de perfis reais, dois jogadores, latência, telas e assets permanecem pendentes. O MVP antigo não homologa as alterações atuais. A publicação exige arte, som, licenças, desempenho e QA reais.
 
 ## Ciclo do MVP
 

@@ -234,7 +234,7 @@ check("client result correlated with job and token",
 ledger = text(SHARED / "SettlementLedgerRules.lua")
 data_service = text(ROOT / "src" / "server" / "DataService.lua")
 check("ledger bounded and sanitized", "SettlementLedgerRules.MaxEntries" in ledger and "function SettlementLedgerRules.Sanitize" in ledger)
-check("ledger persists across additive profile schema v12", "local SCHEMA_VERSION = 12" in data_service
+check("ledger persists across additive profile schema v12", "local SCHEMA_VERSION = 13" in data_service
       and "RepairLedger = {}" in data_service
       and "SettlementLedgerRules.Sanitize(data.RepairLedger)" in data_service)
 check("ledger credit idempotency", "function DataService.CreditRepairOnce" in data_service
@@ -392,7 +392,7 @@ check("C23: worker paid confirmation archive validates and never silently rotate
       and "function Paid.CanAdd" in paid and "function Paid.Matches" in paid
       and "while #raw > Paid.MaxEntries" not in paid)
 check("C23: worker confirmation survives schema v12",
-      "local SCHEMA_VERSION = 12" in data_service
+      "local SCHEMA_VERSION = 13" in data_service
       and "WorkerSettlementProofs = {}" in data_service
       and "WorkerSettlementProofRules.FromLedger" in data_service
       and "WorkerSettlementProofRules.Add(profile.WorkerSettlementProofs, workerProof)" in data_service
@@ -426,7 +426,7 @@ check("C24: verify durable owner data, with limited reads and two worker saves",
       and "Archive.MaxReadsPerPass = 4" in archive
       and "WorkerPaidTombstoneRules.Compact(proofs, profile.WorkerPaidTombstones," in data_service)
 check("C24: schema v12 preserves v11 private tombstones and schedules reconciliation",
-      "local SCHEMA_VERSION = 12" in data_service
+      "local SCHEMA_VERSION = 13" in data_service
       and "WorkerPaidTombstones = {}" in data_service
       and "WorkerPaidTombstoneRules.Sanitize(data.WorkerPaidTombstones)" in data_service
       and "data.RepairLedger, data.WorkerPaidTombstones)" in data_service
@@ -467,14 +467,14 @@ check("staff starts at 2 bays and waits 25 seconds for one car",
       and "StaffAssignmentRules.ShouldDispatch" in workshop
       and "Rules.SoloWaitSeconds = 25" in staff_rules)
 check("NPC reservation is created before asynchronous work and enforced at interaction entry",
-      "StaffAssignmentRules.TryReserve(entry.Busy, jobId)" in workshop
+      "StaffAssignmentRules.TryReserve(entry.Busy,candidate.Id)" in workshop
       and "function Rules.TryReserve" in staff_rules
       and "if employeeReserved(job) then" in workshop
       and 'or (Repairs[owner.UserId] and Repairs[owner.UserId].JobId == job.Id)' in workshop)
 check("NPC failure releases busy slot and restores vehicle state",
       'xpcall(function()' in workshop
-      and 'StaffAssignmentRules.Release(entry.Busy, jobId)' in workshop
-      and 'VehicleService.SetRepairing(jobId, false)' in workshop)
+      and 'StaffAssignmentRules.Release(entry.Busy,candidate.Id)' in workshop
+      and 'VehicleService.SetRepairing(candidate.Id,false)' in workshop)
 check("NPC payouts use per-owner idempotent ledger and confirmed save",
       "function DataService.SettleNpcRepairOnce" in data_service
       and "DataService.CreditRepairOnce(player, jobId, token" in data_service
@@ -562,7 +562,7 @@ server = text(ROOT / "src" / "server" / "Main.server.lua")
 arrival = text(ROOT / "src" / "server" / "CustomerArrivalService.lua")
 ui_orders = text(CLIENT / "UI" / "Panels" / "Orders.lua")
 check("V2-00: migracao aditiva schema v12 com lista persistente",
-    "SCHEMA_VERSION = 12" in data_service and "V2SupplyRules.Sanitize" in data_service
+    "SCHEMA_VERSION = 13" in data_service and "V2SupplyRules.Sanitize" in data_service
     and "SupplyRequests = {}" in data_service and "SupplyRequests" in v2_compatibility)
 check("V2-02: compra no estoque desconta lista sem debitar pedido",
     "V2SupplyRules.OnPurchase" in data_service
@@ -731,6 +731,58 @@ check("V2-04: apoio fisico estavel exigido para roda e rollback seguro",
     and 'VehicleService.SupportIsStable(jobId)' in workshop
     and 'string.sub(id,1,5)=="Wheel"' in workshop
     and "V2SupportReadyAt" in v2_vehicle)
+
+# V2-05: supervisor and payroll remain subordinate to original V1 credits.
+staff_v2=text(SHARED / "V2StaffRules.lua")
+nav_v2=text(ROOT / "src" / "server" / "V2StaffNavigator.lua")
+orders_v2=text(CLIENT / "UI" / "Panels" / "Orders.lua")
+server_v2=text(ROOT / "src" / "server" / "Main.server.lua")
+check("V2-05: schema v13 preserves all V1 financial evidence",
+    "SCHEMA_VERSION = 13" in data_service
+    and "StaffSlots = V2StaffRules.Sanitize(nil)" in data_service
+    and "data.StaffSlots = V2StaffRules.Sanitize" in data_service
+    and "RepairLedger = {}" in data_service and "PendingClaims = {}" in data_service)
+check("V2-05: payroll due once per profile, no duplicate debit",
+    "function DataService.ChargeStaffPayrollOnce" in data_service
+    and "profile.NextPayAt~=dueAt" in data_service
+    and "DataService.AddCoins(player,-due" in data_service
+    and "function DataService.DeferStaffPayroll" in data_service
+    and "DataService.ChargeStaffPayrollOnce(owner,dueAt" in workshop)
+check("V2-05: two employees, specialization, deterministic queue",
+    all(x in staff_v2 for x in (
+      "Rules.MaxEmployees = 2", "function Rules.Sanitize",
+      "function Rules.Order", "function Rules.Record", "function Rules.Update",
+      "function Rules.CanHandle"))
+    and "V2StaffRules.Order(thisSlot,slot,os.time())" in workshop
+    and "StaffAssignmentRules.TryReserve(entry.Busy,candidate.Id)" in workshop)
+check("V2-05: bounded cancellable pathfinding and no unsafe teleport",
+    "function Nav.Travel" in nav_v2 and "Nav.MaxRetries=2" in nav_v2
+    and "PathfindingService:CreatePath" in nav_v2
+    and "NpcKit.Place" not in nav_v2
+    and "V2StaffNavigator.Travel" in workshop
+    and 'npc:SetAttribute("V2WorkState","Buscando peças")' in workshop)
+check("V2-05: manual assignment and pause guarded at orders TV",
+    all(x in workshop for x in (
+      "function WorkshopService.SetStaffPolicy",
+      "function WorkshopService.AssignStaffJob",
+      "function WorkshopService.ClearStaffJob",
+      'StationService.IsNear(player,plot,"Orders")',
+      "employeeReserved(job)"))
+    and all(x in server_v2 for x in (
+      '"SetStaffPolicy"', '"AssignStaffJob"', '"ClearStaffJob"'))
+    and all(x in orders_v2 for x in (
+      'Id = "team"', 'Store.Act("SetStaffPolicy"',
+      'Store.Act("AssignStaffJob"', 'Store.Act("ClearStaffJob"')))
+check("V2-05: performance recorded only after validated NPC settlement",
+    "DataService.SettleNpcRepairOnce" in workshop
+    and "DataService.RecordStaffJob(owner,index,job.Id" in workshop
+    and workshop.index("DataService.RecordStaffJob(owner,index,job.Id")
+        > workshop.index("if not DataService.SettleNpcRepairOnce")
+    and 'job.Status = "Completed"' in workshop)
+check("V2-05: suites for policy, 0/1/2 worker dispatch and persistence",
+    (TOOLS / "V2StaffRulesTest.luau").is_file()
+    and (TOOLS / "V2StaffDispatchTest.luau").is_file()
+    and '"V2StaffRulesTest"' in runner and '"V2StaffDispatchTest"' in runner)
 
 print(f"\nStatic checks: {passed} passed, {len(failures)} failed")
 if failures:

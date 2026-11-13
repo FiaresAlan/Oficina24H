@@ -160,14 +160,18 @@ P0 = prioridade para o núcleo de lançamento. P1 = opcional condicionado a viab
 **Aceite de código:** investir por decisão explícita e visualizar a nova capacidade, sem compra acidental. **Aceite de produto:** requer QA Studio.
 
 ## V2-07 — Bairro vivo e escalável
-- [ ] [C] Pedestres ambientais com pools e rotas, evitando bloqueio de clientes e tráfego.
-- [ ] [C] Trânsito de carros NPC, entregador de peças, rotina de clientes e rivais de oficina.
-- [ ] [C] Limitar densidade e atualizações pelo dispositivo, distância e número de jogadores.
-- [ ] [C] Remover NPCs/veículos órfãos no logout e evitar modelos pesados fora de vista.
-- [ ] [A] Testes de spawn/despawn, cleanup e custo por tick.
-- [ ] [S] Medir FPS/memória em mundo cheio com streaming e touch.
 
-**Aceite:** sensação de bairro movimentado com desempenho previsível.
+**Engenharia implementada na PR #27, não homologada no Studio:** [guia de tráfego, ativos, limites e QA](V2_FASE_07_BAIRRO_VIVO.md).
+
+- [x] [C] 9 trajetos de pedestres e 6 de carros no bairro, usando modelos licenciados já importados, animação apenas no cliente e sem colisão.
+- [x] [C] Pool global de 12 modelos e máximo de 9 entidades ativas, com culling por distância, FPS, dispositivo e jogadores.
+- [x] [C] Entregador visual com prioridade após compra de peças validada, sem mudar o inventário ou repetir pagamento.
+- [x] [C] Templates de até 3 avatares sanitizados e modelos reais de veículos reutilizados da V1; rivais e clientes permanecem V1.
+- [x] [C] Recolhimento ao pool, cooldown, prioridade de veículos reais, desligamento de VFX e cleanup do jogador.
+- [x] [A] Regras e auditoria Studio escritas, incluídas no runner; CI estático e build Rojo.
+- [ ] [S] Conferir assets, streaming, FPS, visual/animador de NPC e conflito de tráfego no Studio.
+
+**Aceite:** engenharia separada e limitada; performance real depende de QA Studio.
 
 ## V2-08 — Negócio e margem financeira
 - [ ] [C] Extrato de receitas e despesas: serviço, peças, funcionário, publicidade, upgrade e contratos.

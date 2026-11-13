@@ -6,6 +6,7 @@ local DataService = require(script.Parent.DataService)
 local PlotService = require(script.Parent.PlotService)
 local VehicleService = require(script.Parent.VehicleService)
 local EquipmentService = require(script.Parent.EquipmentService)
+local EquipmentUpgradePads = require(script.Parent.EquipmentUpgradePads)
 local WorkshopService = require(script.Parent.WorkshopService)
 local StationService = require(script.Parent.StationService)
 local RivalService = require(script.Parent.RivalService)
@@ -57,6 +58,7 @@ if game:GetService("RunService"):IsStudio() then
             if plot then
                 StationService.ApplyLevel(plot, profile.WorkshopLevel, player.DisplayName)
                 EquipmentService.Sync(player, profile.Equipment)
+                EquipmentUpgradePads.Sync(player, profile.Equipment, profile.EquipmentLevels)
             end
             return profile.WorkshopLevel
         elseif command == "Regular" then
@@ -94,6 +96,17 @@ end
 
 VehicleService.PublishPreviews()
 EquipmentService.PublishPreviews()
+EquipmentUpgradePads.Start()
+EquipmentUpgradePads.SetPurchaseHandler(function(player: Player, equipmentId: string, plot: Instance)
+    local ok, message = WorkshopService.UpgradeOwnedEquipment(player, equipmentId, plot)
+    if ok then
+        local profile = DataService.Get(player)
+        if profile then EquipmentUpgradePads.Sync(player, profile.Equipment, profile.EquipmentLevels) end
+    end
+    if player.Parent == Players then
+        actionEvent:FireClient(player, "Notice", { Message = message, Success = ok })
+    end
+end)
 
 -- Loja de autopeças física: um prompt na fachada abre a Loja de Peças (o cliente escuta o prompt e abre o painel).
 do

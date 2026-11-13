@@ -27,6 +27,7 @@ local PlotService = require(script.Parent.PlotService)
 local VehicleService = require(script.Parent.VehicleService)
 local CustomerArrivalService = require(script.Parent.CustomerArrivalService)
 local EquipmentService = require(script.Parent.EquipmentService)
+local EquipmentUpgradePads = require(script.Parent.EquipmentUpgradePads)
 local StationService = require(script.Parent.StationService)
 local CustomerNpcService = require(script.Parent.CustomerNpcService)
 local RivalService = require(script.Parent.RivalService)
@@ -426,6 +427,7 @@ function WorkshopService.ClaimWorkshop(player: Player)
         StationService.ApplyLevel(plot, profile.WorkshopLevel or 0, player.DisplayName)
     end
     EquipmentService.Sync(player, profile.Equipment)
+    EquipmentUpgradePads.Sync(player, profile.Equipment, profile.EquipmentLevels)
     funnel(player, "Claimed")
     if not (profile.Onboarding and profile.Onboarding.Done) then
         -- novato: o 1º cliente chega logo (sem esperar a leva do bairro)
@@ -1320,6 +1322,9 @@ function WorkshopService.BuyEquipment(player: Player, equipmentId: string)
     DataService.AddCoins(player, -equipment.Cost, "Compra: " .. equipment.DisplayName)
     DataService.GrantEquipment(player, equipmentId)
     EquipmentService.Add(player, profile.Equipment, equipmentId)
+    task.delay(0.7, function()
+        if player.Parent == Players then EquipmentUpgradePads.Sync(player, profile.Equipment, profile.EquipmentLevels) end
+    end)
     return true, equipment.DisplayName .. " comprado."
 end
 
@@ -1409,6 +1414,11 @@ function WorkshopService.Checkout(player: Player, items: any)
     for equipmentId in pairs(equipmentIds) do
         DataService.GrantEquipment(player, equipmentId)
         EquipmentService.Add(player, profile.Equipment, equipmentId)
+    end
+    if next(equipmentIds) then
+        task.delay(0.7, function()
+            if player.Parent == Players then EquipmentUpgradePads.Sync(player, profile.Equipment, profile.EquipmentLevels) end
+        end)
     end
     return true, string.format("Compra concluída: %d moedas.", total)
 end
@@ -1758,6 +1768,7 @@ function WorkshopService.UpgradeWorkshop(player: Player)
     DataService.SetWorkshopLevel(player, level + 1)
     StationService.ApplyLevel(plot, level + 1, player.DisplayName)
     EquipmentService.Sync(player, profile.Equipment)
+    EquipmentUpgradePads.Sync(player, profile.Equipment, profile.EquipmentLevels)
     syncStaffRef(player)
     refreshPlotDisplays()
     return true, string.format("Obra concluída! Agora você tem um %s com %d boxes.", next.Name, #next.Bays)

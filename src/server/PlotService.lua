@@ -120,6 +120,8 @@ function PlotService.Release(player: Player)
 		return
 	end
 	plotByUser[player.UserId] = nil
+	local pads = plot:FindFirstChild("UpgradePads")
+	if pads then pads:Destroy() end
 	local equipment = plot:FindFirstChild("Equipment")
 	if equipment then
 		equipment:Destroy() -- os equipamentos pertencem ao perfil do jogador, não ao lote

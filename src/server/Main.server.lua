@@ -13,6 +13,7 @@ local RivalService = require(script.Parent.RivalService)
 local ProgressService = require(script.Parent.ProgressService)
 local ContractService = require(script.Parent.ContractService)
 local SnapshotCacheRules = require(ReplicatedStorage.Shared.SnapshotCacheRules)
+local V2NeighborhoodAssets = require(script.Parent.V2NeighborhoodAssets)
 
 local snapshotStates: { [number]: any } = {}
 local function invalidateSnapshot(userId: number)
@@ -101,6 +102,7 @@ local function sendResult(player: Player, success: boolean, message: string, act
 end
 
 VehicleService.PublishPreviews()
+V2NeighborhoodAssets.Publish() -- até 3 NPCs sanitizados; clientes replicam só cópias visuais
 EquipmentService.PublishPreviews()
 EquipmentUpgradePads.Start()
 EquipmentUpgradePads.SetNoticeHandler(function(player: Player,message: string,ok: boolean)

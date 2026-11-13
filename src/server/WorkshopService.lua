@@ -1562,6 +1562,11 @@ function WorkshopService.BuyPart(player: Player, partId: string, quantity: numbe
     DataService.AddCoins(player, -cost, string.format("Peças: %dx %s", quantity, part.DisplayName))
     DataService.AddParts(player, partId, quantity)
     DataService.FulfillSupplyRequest(player, partId, quantity)
+    -- V2-07: animação de entregador local, só após débito e estoque confirmados.
+    -- Não concede itens nem retarda a compra; nenhuma mecânica de entrega paralela.
+    if eventSender then
+        eventSender(player,"V2NeighborhoodCourier",{PartCount=quantity})
+    end
     return true, string.format("%dx %s comprado(s).", quantity, part.DisplayName)
 end
 
@@ -1634,6 +1639,11 @@ function WorkshopService.Checkout(player: Player, items: any)
         task.delay(0.7, function()
             if player.Parent == Players then EquipmentUpgradePads.Sync(player, profile.Equipment, profile.EquipmentLevels) end
         end)
+    end
+    local delivered=0
+    for _,quantity in pairs(partQuantities) do delivered+=quantity end
+    if delivered>0 and eventSender then
+        eventSender(player,"V2NeighborhoodCourier",{PartCount=delivered})
     end
     return true, string.format("Compra concluída: %d moedas.", total)
 end

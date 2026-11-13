@@ -791,6 +791,12 @@ check("V2-05: Studio auditoria de avatar e zonas registrada",
     and "function CustomerNpcService.Position" in text(ROOT / "src" / "server" / "CustomerNpcService.lua")
     and 'profileView.StaffSlots = nil' in workshop
     and 'profileView.StaffPayroll = nil' in workshop)
+check("V2-05: waypoint no plano horizontal e prioridade com sinal",
+    "function Nav.HorizontalDistance" in text(ROOT/"src"/"server"/"V2StaffNavigator.lua")
+    and text(ROOT/"src"/"server"/"V2StaffNavigator.lua").count("Nav.HorizontalDistance") >= 5
+    and "local function signedPriority" in text(SHARED/"V2StaffRules.lua")
+    and 'ranked[3].Id=="low"' in text(TOOLS/"V2StaffRulesTest.luau"))
+
 print(f"\nStatic checks: {passed} passed, {len(failures)} failed")
 if failures:
     raise SystemExit(1)

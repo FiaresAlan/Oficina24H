@@ -11,6 +11,12 @@ for _, spec in ipairs(Catalog.Specializations) do
     Rules.Focuses[spec] = true
 end
 
+local function signedPriority(value: any): number
+    if type(value)~="number" or value~=value
+        or value==math.huge or value==-math.huge then return 0 end
+    return math.floor(math.clamp(value,-1,1))
+end
+
 local function bounded(value: any, max: number): number
     if type(value) ~= "number" or value ~= value or value == math.huge or value == -math.huge then
         return 0
@@ -121,7 +127,7 @@ function Rules.Order(jobs: any, slot: any, now: number): { any }
     end
     table.sort(candidates, function(a, b)
         if (a.Manual == true) ~= (b.Manual == true) then return a.Manual == true end
-        local p1, p2 = bounded(a.Priority, 10), bounded(b.Priority, 10)
+        local p1, p2 = signedPriority(a.Priority), signedPriority(b.Priority)
         if p1 ~= p2 then return p1 > p2 end
         local t1, t2 = bounded(a.AcceptedAt, 4102444800), bounded(b.AcceptedAt, 4102444800)
         if t1 ~= t2 then return t1 < t2 end

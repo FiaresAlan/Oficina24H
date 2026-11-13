@@ -20,6 +20,14 @@ local jobs={
 }
 local sorted=S.Order(jobs,slots[1],100)
 ok("ordem deterministica prioridade idade id",#sorted==3 and sorted[1].Id=="j1" and sorted[2].Id=="j3")
+local negative={
+    {Id="low",Specialization="Engine",Ready=true,Priority=-1,AcceptedAt=1},
+    {Id="normal",Specialization="Engine",Ready=true,Priority=0,AcceptedAt=100},
+    {Id="urgent",Specialization="Engine",Ready=true,Priority=1,AcceptedAt=200},
+}
+local ranked=S.Order(negative,slots[1],300)
+ok("prioridade negativa não empata com normal",ranked[1].Id=="urgent"
+    and ranked[2].Id=="normal" and ranked[3].Id=="low")
 jobs[1].Manual=true
 ok("manual tem precedencia",S.Order(jobs,slots[1],100)[1].Id=="j2")
 S.Update(slots,1,"Mode","Manual")

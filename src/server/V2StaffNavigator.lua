@@ -7,6 +7,12 @@ Nav.MaxRetries=2
 Nav.Reach=3.2
 Nav.MaxWait=35
 
+-- Destinos foram construídos em coordenadas de SOLO, mas HumanoidRootPart
+-- caminha 2-4 studs acima do chão. Medir XY/Z faria uma rota válida falhar.
+function Nav.HorizontalDistance(a: Vector3,b: Vector3): number
+    return (Vector3.new(a.X,0,a.Z)-Vector3.new(b.X,0,b.Z)).Magnitude
+end
+
 local function alive(npc: Model, valid: () -> boolean): boolean
     return npc.Parent~=nil and npc.PrimaryPart~=nil and valid()
 end
@@ -15,13 +21,13 @@ local function leg(npc: Model, dest: Vector3, valid: () -> boolean): boolean
     local humanoid=npc:FindFirstChildOfClass("Humanoid")
     local root=npc.PrimaryPart
     if not humanoid or not root or not root:IsA("BasePart") then return false end
-    local maxWait=math.clamp((root.Position-dest).Magnitude/9+4,4,Nav.MaxWait)
+    local maxWait=math.clamp(Nav.HorizontalDistance(root.Position,dest)/9+4,4,Nav.MaxWait)
     local start=os.clock()
     local lastProgress=start
     local best=math.huge
     humanoid:MoveTo(dest)
     while alive(npc,valid) and os.clock()-start<maxWait do
-        local remaining=(root.Position-dest).Magnitude
+        local remaining=Nav.HorizontalDistance(root.Position,dest)
         if remaining<=Nav.Reach then humanoid:Move(Vector3.zero);return true end
         if remaining<best-0.3 then
             best=remaining
@@ -41,7 +47,7 @@ function Nav.Travel(npc: Model, dest: Vector3, animator: any, valid: () -> boole
     for attempt=1,Nav.MaxRetries+1 do
         if not alive(npc,valid) then break end
         local root=npc.PrimaryPart
-        if (root.Position-dest).Magnitude<=Nav.Reach then reached=true;break end
+        if Nav.HorizontalDistance(root.Position,dest)<=Nav.Reach then reached=true;break end
         local ok,path=pcall(function()
             local p=PathfindingService:CreatePath({
                 AgentRadius=2,AgentHeight=5,AgentCanJump=false,
@@ -56,7 +62,7 @@ function Nav.Travel(npc: Model, dest: Vector3, animator: any, valid: () -> boole
             for _,waypoint in ipairs(path:GetWaypoints()) do
                 table.insert(points,waypoint.Position)
             end
-        elseif (root.Position-dest).Magnitude<=12 then
+        elseif Nav.HorizontalDistance(root.Position,dest)<=12 then
             -- Travessia direta curta para lugares com navmesh não calculada.
             points={dest}
         else
@@ -67,7 +73,7 @@ function Nav.Travel(npc: Model, dest: Vector3, animator: any, valid: () -> boole
             if not leg(npc,point,valid) then complete=false;break end
         end
         if complete and alive(npc,valid) and
-            (npc.PrimaryPart.Position-dest).Magnitude<=Nav.Reach then
+            Nav.HorizontalDistance(npc.PrimaryPart.Position,dest)<=Nav.Reach then
             reached=true;break
         end
         -- na falha de caminho, recomeça do ponto real em que ficou

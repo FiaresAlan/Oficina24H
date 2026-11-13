@@ -47,3 +47,8 @@ O painel não calcula lucro líquido nesta fase; isso ficará na V2-08, que inte
 **Teste obrigatório pelo Claude/proprietário no Studio:** contratar e demitir 0/1/2 mecânicos, esperar salário, faltar dinheiro, atuar com 1/2/3 OS, foco divergente, pausas, atribuições, duplo clique, dois jogadores, logout no meio da caminhada, queda de rede na liquidação, estoque insuficiente, bloqueio de caminho e recuperação, 15 serviços, gamepad/mobile e FPS. Registrar capturas e números antes de declarar a fase homologada.
 
 **Limite de release:** finalização de código não equivale a testes visuais/funcionais. Esta PR não deve ser mesclada automaticamente na main enquanto o Claude altera V1. A próxima fase do checklist é V2-06 — upgrades físicos.
+
+
+### Revisão adicional de navegação e integridade de dados
+
+O cálculo de chegada dos NPCs utiliza **distância horizontal**, pois os pontos da oficina são medidos no piso e a HumanoidRootPart fica acima dele. Isso evita rejeitar rotas alcançadas por diferença apenas de altura. O despacho respeita prioridades `-1/0/+1`, e a telemetria recusa `NaN`/`Infinity` em qualidade, receita e duração para não contaminar os totais. A suíte `V2StaffNavigatorTest` e novos casos de `V2StaffRulesTest` registram essas regressões. A confirmação dessas suites no Roblox Studio ainda é necessária; o CI disponível não executa os testes Luau.

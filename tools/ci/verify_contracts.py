@@ -804,6 +804,11 @@ check("V2-05: rejeita telemetria não finita sem contaminar estatísticas",
     and "not finite(seconds)" in text(SHARED/"V2StaffRules.lua")
     and "rejeita NaN/inf" in text(TOOLS/"V2StaffRulesTest.luau"))
 
+check("V2-05: teste proprio de waypoint planar registrado no Studio",
+    (TOOLS/"V2StaffNavigatorTest.luau").is_file()
+    and '"V2StaffNavigatorTest"' in runner
+    and "Nav.HorizontalDistance" in text(TOOLS/"V2StaffNavigatorTest.luau"))
+
 print(f"\nStatic checks: {passed} passed, {len(failures)} failed")
 if failures:
     raise SystemExit(1)

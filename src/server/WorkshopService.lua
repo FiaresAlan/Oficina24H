@@ -77,6 +77,13 @@ local RepairReceipts: { [number]: { any } } = {}
 local SettlingRepairs: { [number]: any } = {} -- barreira de confirmação e retentativas por executor
 -- Funcionários por dono: NPCs, ordens em que estão trabalhando e próximo pagamento de salário.
 local Staff: { [number]: { Npcs: { Model }, Busy: { [string]: boolean }, NextPay: number } } = {}
+-- Uma ordem reservada para NPC não pode simultaneamente ser abandonada,
+-- terceirizada ou iniciada manualmente. Reserva é por JobId e proprietário.
+local function employeeReserved(job: any): boolean
+    if type(job) ~= "table" then return false end
+    local entry = Staff[job.OwnerUserId]
+    return entry ~= nil and StaffAssignmentRules.IsReserved(entry.Busy, job.Id)
+end
 local RepairAssist: { [number]: boolean } = {} -- preferência de acessibilidade (Reduzir movimento), por jogador
 
 local function isFinite(value: any): boolean
@@ -641,6 +648,9 @@ function WorkshopService.DeclineJob(player: Player, jobId: string)
     if job.CollaboratorUserId then
         return false, "Há um colaborador nesta ordem; aguarde ele concluir ou sair."
     end
+    if employeeReserved(job) then
+        return false, "Seu mecânico já está atendendo este carro. Aguarde a conclusão."
+    end
     local active = Repairs[player.UserId]
     if active and active.JobId == jobId then
         Repairs[player.UserId] = nil
@@ -849,6 +859,9 @@ function WorkshopService.PrepareRepairStep(player: Player, jobId: string, stepId
     if not CollaborationRules.IsAuthorized(job, player.UserId) or not job.Diagnosed then
         return false, "Você não está autorizado a preparar esta ordem."
     end
+    if employeeReserved(job) then
+        return false, "Um funcionário já assumiu esta ordem."
+    end
     if not RepairPrepRules.Requires(job.DefectId) then
         return false, "Esta ordem usa o procedimento tradicional."
     end
@@ -884,6 +897,9 @@ function WorkshopService.StartRepair(player: Player, jobId: string, assist: bool
     local ok, message, job, defect = checkRepairable(player, jobId)
     if not ok then
         return false, message
+    end
+    if employeeReserved(job) then
+        return false, "Um funcionário já está executando esta ordem. Aguarde a conclusão."
     end
     if not RepairPrepRules.Ready(job.DefectId, job.PreparationStep) then
         return false, "Prepare primeiro o veículo: siga as etapas destacadas no carro."
@@ -1405,6 +1421,9 @@ function WorkshopService.InviteWorker(owner: Player, workerUserId: number, jobId
     if job.CollaboratorUserId then
         return false, "Esta ordem já tem um colaborador."
     end
+    if employeeReserved(job) then
+        return false, "Um funcionário já está executando a ordem; não é possível convidar outro."
+    end
     if Repairs[owner.UserId] and Repairs[owner.UserId].JobId == jobId then
         return false, "Termine ou cancele seu reparo antes de contratar um profissional."
     end
@@ -1460,6 +1479,10 @@ function WorkshopService.RespondInvite(worker: Player, inviteId: string, accepte
         invite.Status = "Expired"
         return false, "A ordem já tem um colaborador."
     end
+    if employeeReserved(job) then
+        invite.Status = "Expired"
+        return false, "Um funcionário já iniciou o atendimento; convite expirado."
+    end
 
     for _, other in pairs(Jobs) do
         if other ~= job and CollaborationRules.IsWorker(other, worker.UserId) then
@@ -1493,6 +1516,9 @@ function WorkshopService.HireNpc(player: Player, jobId: string)
     local job = Jobs[jobId]
     if not job or job.OwnerUserId ~= player.UserId or job.Status ~= "InProgress" then
         return false, "Ordem inválida."
+    end
+    if employeeReserved(job) or (Repairs[player.UserId] and Repairs[player.UserId].JobId == jobId) then
+        return false, "Esta ordem já está sendo reparada. Aguarde a conclusão ou cancele o reparo manual."
     end
     if not job.Diagnosed then return false, "Faça o diagnóstico primeiro." end
     if job.CollaboratorUserId then
@@ -1903,12 +1929,12 @@ end
 -- Funcionário assume um carro em espera e mostra seu trabalho ao proprietário.
 local function employeeWork(owner: Player, job: any, npc: Model)
     local entry = Staff[owner.UserId]
-    entry.Busy[job.Id] = true
+    if not entry or not StaffAssignmentRules.IsReserved(entry.Busy, job.Id) then return end
     local defect = Catalog.Defects[job.DefectId]
     local service = Catalog.Services[job.ServiceId]
     local workshop = getWorkshop(owner)
     local function release(message: string?)
-        entry.Busy[job.Id] = nil
+        StaffAssignmentRules.Release(entry.Busy, job.Id)
         local plot = PlotService.GetPlot(owner)
         local spot = plot and staffSpot(plot, table.find(entry.Npcs, npc) or 1)
         if npc.Parent and spot then
@@ -1977,7 +2003,10 @@ local function employeeWork(owner: Player, job: any, npc: Model)
     npc:SetAttribute("RepairProgress", nil)
     local current = Jobs[job.Id]
     if current ~= job or job.Status ~= "InProgress" or owner.Parent ~= Players
-        or not npc.Parent or not table.find(entry.Npcs, npc) then
+        or not npc.Parent or not table.find(entry.Npcs, npc) or Staff[owner.UserId] ~= entry
+        or not StaffAssignmentRules.IsReserved(entry.Busy, job.Id)
+        or job.CollaboratorUserId ~= nil
+        or (Repairs[owner.UserId] and Repairs[owner.UserId].JobId == job.Id) then
         release(nil)
         return
     end
@@ -2074,12 +2103,22 @@ local function staffTick()
                                 break
                             end
                         end
-                        if free then
+                        if free and StaffAssignmentRules.TryReserve(entry.Busy, jobId) then
                             working += 1
                             local worker = free :: Model
                             worker:SetAttribute("Trabalhando", true)
                             task.spawn(function()
-                                employeeWork(owner, job, worker)
+                                local ok, err = xpcall(function()
+                                    employeeWork(owner, job, worker)
+                                end, debug.traceback)
+                                if not ok then
+                                    warn("[WorkshopService] Mecânico NPC falhou:", jobId, err)
+                                    StaffAssignmentRules.Release(entry.Busy, jobId)
+                                    if Jobs[jobId] == job and job.Status == "InProgress" then
+                                        VehicleService.SetRepairing(jobId, false)
+                                        VehicleService.SetStage(jobId, "Repair")
+                                    end
+                                end
                                 worker:SetAttribute("Trabalhando", nil)
                             end)
                         end

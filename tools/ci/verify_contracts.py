@@ -270,6 +270,15 @@ check("staff starts at 2 bays and waits 25 seconds for one car",
       "MaxEmployees = 1" in text(SHARED / "WorkshopLevels.lua")
       and "StaffAssignmentRules.ShouldDispatch" in workshop
       and "Rules.SoloWaitSeconds = 25" in staff_rules)
+check("NPC reservation is created before asynchronous work and enforced at interaction entry",
+      "StaffAssignmentRules.TryReserve(entry.Busy, jobId)" in workshop
+      and "function Rules.TryReserve" in staff_rules
+      and "if employeeReserved(job) then" in workshop
+      and 'or (Repairs[owner.UserId] and Repairs[owner.UserId].JobId == job.Id)' in workshop)
+check("NPC failure releases busy slot and restores vehicle state",
+      'xpcall(function()' in workshop
+      and 'StaffAssignmentRules.Release(entry.Busy, jobId)' in workshop
+      and 'VehicleService.SetRepairing(jobId, false)' in workshop)
 check("new suites registered",
       '"EquipmentUpgradeTest"' in runner and '"StaffAssignmentTest"' in runner
       and (TOOLS / "EquipmentUpgradeTest.luau").is_file()

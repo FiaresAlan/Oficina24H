@@ -724,6 +724,14 @@ check("V2-04: resultado de qualidade explica erros e retrabalho seguro",
     and "REFAZER SEM COBRAR" in operation_game
     and "CancelRepair" in text(ROOT / "src" / "server" / "Main.server.lua"))
 
+check("V2-04: apoio fisico estavel exigido para roda e rollback seguro",
+    "function VehicleService.SetSupport" in v2_vehicle
+    and "function VehicleService.SupportIsStable" in v2_vehicle
+    and "StationService.IsLifted(bay)" in v2_vehicle
+    and 'VehicleService.SupportIsStable(jobId)' in workshop
+    and 'string.sub(id,1,5)=="Wheel"' in workshop
+    and "V2SupportReadyAt" in v2_vehicle)
+
 print(f"\nStatic checks: {passed} passed, {len(failures)} failed")
 if failures:
     raise SystemExit(1)

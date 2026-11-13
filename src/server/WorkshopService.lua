@@ -1880,7 +1880,7 @@ function WorkshopService.ToggleVehicleComponent(player: Player, jobId: string, i
     local _, pilotId = VehicleService.ComponentStates(jobId)
     if not pilotId then return false, "Este carro não possui articulações V2." end
     local supportReady = RepairPrepRules.IsDone(job.DefectId, job.PreparationStep, "JackSupport") or job.V2SupportPlaced==true
-    if V2ServiceProcedureRules.HasWheelProcedure(job.DefectId) and supportReady
+    if string.sub(id,1,5)=="Wheel" and V2ServiceProcedureRules.HasWheelProcedure(job.DefectId) and supportReady
         and not VehicleService.SupportIsStable(jobId) then
         return false,"Aguarde o elevador estabilizar antes de retirar ou recolocar a roda."
     end

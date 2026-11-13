@@ -1356,6 +1356,95 @@ do
         B.GetEquipmentLevel(player,"BasicToolset")==2 and B.Get(player).Coins==before-180)
 end
 
+-- V2-08: fluxo financeiro cumulativo desde a abertura, com migração
+-- conservadora de apenas 50 transações legadas. Nenhum segundo crédito.
+do
+    local store=newStore()
+    local A=server(store,"v2-finance-A")
+    local player=fakePlayer(3001)
+    A.Load(player)
+    local profile=A.Get(player)
+    check("V2-08: schema 14 nasce com livro de caixa, sem receita inicial",
+        profile.SchemaVersion==14 and profile.FinanceLedger.CashIn==0
+        and profile.FinanceLedger.OpeningBalance==profile.Coins
+        and profile.FinanceLedger.LegacyWindow==false)
+    local token=game:GetService("HttpService"):GenerateGUID(false)
+    local base=profile.Coins
+    local credited=A.CreditRepairOnce(player,"job_3001",token,
+        90,"Owner","Reparar pneu","Hatch")
+    local repeated=A.CreditRepairOnce(player,"job_3001",token,
+        90,"Owner","Reparar pneu","Hatch")
+    check("V2-08: liquidação comprova receita uma vez",
+        credited and not repeated and profile.Coins==base+90
+        and profile.FinanceLedger.Groups.Service.In==90
+        and profile.FinanceLedger.Count==1)
+    A.AddCoins(player,-30,"Peças: pneus")
+    A.AddCoins(player,-35,"Compra: Jack")
+    A.AddCoins(player,-20,"Publicidade: panfletos")
+    A.AddCoins(player,10,"Bônus do primeiro serviço")
+    check("V2-08: lançamento classifica estoque, máquina, divulgação e bonificação",
+        profile.FinanceLedger.Groups.Inventory.Out==30
+        and profile.FinanceLedger.Groups.Equipment.Out==35
+        and profile.FinanceLedger.Groups.Marketing.Out==20
+        and profile.FinanceLedger.Groups.Rewards.In==10
+        and profile.Coins==base+15)
+    local cash=profile.Coins
+    local lines=profile.FinanceLedger.Count
+    check("V2-08: flush financeiro no mesmo save do saldo",A.Save(player))
+    A.Remove(player)
+    local B=server(store,"v2-finance-B")
+    B.Load(player)
+    local reloaded=B.Get(player)
+    check("V2-08: reentrada preserva receita/despesa e não duplica agregação",
+        reloaded and reloaded.Coins==cash
+        and reloaded.FinanceLedger.Count==lines
+        and reloaded.FinanceLedger.CashIn==100
+        and reloaded.FinanceLedger.CashOut==85)
+    check("V2-08: repetição após reconexão é recusada",
+        not B.CreditRepairOnce(player,"job_3001",token,
+            90,"Owner","Reparar pneu","Hatch")
+        and reloaded.FinanceLedger.Groups.Service.In==90 and reloaded.Coins==cash)
+end
+do
+    local store=newStore()
+    store.data["u_3002"]={
+        SchemaVersion=13,Coins=660,Employees=0,
+        RepairLedger={},OwnerSettlementProofs={},WorkerSettlementProofs={},
+        WorkerPaidTombstones={},PendingClaims={},PendingClaimAudits={},
+        Transactions={
+            {At=100,Amount=100,Balance=700,Reason="Liquidação de OS: velho"},
+            {At=120,Amount=-40,Balance=660,Reason="Loja de peças"},
+        },
+    }
+    local A=server(store,"v2-finance-legacy")
+    local player=fakePlayer(3002)
+    A.Load(player)
+    local p=A.Get(player)
+    check("V2-08: migração v13 para v14 preserva saldo e recibos",
+        p.SchemaVersion==14 and p.Coins==660
+        and type(p.RepairLedger)=="table"
+        and type(p.OwnerSettlementProofs)=="table")
+    check("V2-08: histórico antigo é explicitamente parcial",
+        p.FinanceLedger.LegacyWindow==true
+        and p.FinanceLedger.OpeningBalance==600
+        and p.FinanceLedger.CashIn==100 and p.FinanceLedger.CashOut==40)
+    A.AddCoins(player,-10,"Salário dos funcionários")
+    check("V2-08: lançamentos após migração não reclassificam histórico",
+        p.FinanceLedger.CashOut==50 and p.FinanceLedger.Groups.Payroll.Out==10)
+end
+do
+    local store=newStore()
+    local A=server(store,"v2-finance-retention")
+    local player=fakePlayer(3003)
+    A.Load(player)
+    for i=1,64 do A.AddCoins(player,1,"Recompensa de missão") end
+    local p=A.Get(player)
+    check("V2-08: extrato limitado 50 sem perder agregados financeiros",
+        #p.Transactions==50 and p.FinanceLedger.CashIn==64
+        and p.FinanceLedger.Count==64 and p.FinanceLedger.Groups.Other.In==64)
+    check("V2-08: agregado limitado preservado no DataStore",A.Save(player))
+end
+
 for _, c in ipairs(clones) do c:Destroy() end
 table.insert(results, failures == 0 and "TODOS OS TESTES PASSARAM" or (failures .. " TESTE(S) FALHARAM"))
 return table.concat(results, "\n")

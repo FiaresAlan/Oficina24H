@@ -146,14 +146,18 @@ P0 = prioridade para o núcleo de lançamento. P1 = opcional condicionado a viab
 **Aceite:** a equipe trabalha de maneira crível e não substitui o dono de imediato.
 
 ## V2-06 — Upgrade físico de negócio sem compras acidentais
-- [ ] [C] Revisar plataformas C16: posição, preço, nível, benefício, saldo, bloqueio de compra involuntária.
-- [ ] [C] Estender upgrades a boxes, recepção, estoque e contratações apropriadas, sem remover a loja de peças.
-- [ ] [C] Feedback visual da melhoria que aconteceu de verdade; tempo, qualidade ou capacidade mensurável.
-- [ ] [C] Compra segura em perfil, reentrada/queda durante save e confirmação para custos grandes.
-- [ ] [A] Testes de pisar/ficar/sair, exploit, jogador vizinho e saldo insuficiente.
-- [ ] [S] Confirmar que pads não bloqueiam passagem e não compram sem intenção.
 
-**Aceite:** entender o investimento e ver o retorno sem abrir menus enormes.
+**Engenharia implementada na PR #27, não homologada em Studio:** [matriz de expansão, compras seguras e QA](V2_FASE_06_EXPANSOES.md).
+
+- [x] [C] Pads não compram ao pisar; interação com ProximityPrompt e confirmação do nível/preço calculado pelo servidor em até 14 segundos.
+- [x] [C] Ampliação do prédio também exige prévia e confirmação: nível, custo, XP, reputação, equipamentos, distância e boxes livres revalidados no servidor.
+- [x] [C] Capacidade real de 1/2/4/6 boxes e vagas de máquinas/funcionários mostrada na Construtora com benefícios mensuráveis, sem inventar ROI.
+- [x] [C] Sinalização física de boxes, recepção, estoque e equipe sem colisão, recriada idempotentemente na troca de nível.
+- [x] [C] Pagamento do upgrade e nível alterados no mesmo perfil sem yield, protegidos contra replay de cotação ou salto para o próximo nível.
+- [x] [A] Testes Luau escritos para quote, preço/nível/saldo, persistência/reconexão, 4 visuais e comportamento não colidível. CI e Rojo verificam contratos.
+- [ ] [S] Studio: testes reais de pisar/ficar/sair, 1/2 cliques, vizinho, saldo, morte/logout, multiplayer, mobile, boxes livres e performance.
+
+**Aceite de código:** investir por decisão explícita e visualizar a nova capacidade, sem compra acidental. **Aceite de produto:** requer QA Studio.
 
 ## V2-07 — Bairro vivo e escalável
 - [ ] [C] Pedestres ambientais com pools e rotas, evitando bloqueio de clientes e tráfego.

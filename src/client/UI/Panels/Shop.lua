@@ -358,7 +358,8 @@ function Shop.new(parent: Instance)
 				priceLayout.Padding = UDim.new(0, 6)
 				priceLayout.Parent = priceRow
 				if owned then
-					PanelKit.chip(priceRow, t("sh_installed"), rgb(70, 225, 105))
+					PanelKit.chip(priceRow, t("sh_installed") .. " · N" ..
+                        tostring((snapshot.Profile.EquipmentLevels or {})[p.Id] or 1), rgb(70, 225, 105))
 				else
 					local coin = HudParts.sprite(priceRow, "dollar", Vector2.new(26, 28))
 					coin.LayoutOrder = 1

@@ -73,6 +73,37 @@ function Pads.Sync(player: Player, owned: any, upgrades: any)
 		if owned[id] == true then
 			index += 1
 			local level = Rules.Level(upgrades, owned, id)
+			local models = plot:FindFirstChild("Equipment")
+			local model = models and models:FindFirstChild("Eq_" .. id)
+			if model and model:IsA("Model") then
+				model:SetAttribute("UpgradeLevel", level)
+				local anchor = model.PrimaryPart or model:FindFirstChildWhichIsA("BasePart", true)
+				if anchor then
+					local badge = anchor:FindFirstChild("UpgradeTier")
+					if level >= 2 then
+						if not badge then
+							badge = Instance.new("BillboardGui")
+							badge.Name = "UpgradeTier"
+							badge.Size = UDim2.fromOffset(110, 28)
+							badge.StudsOffsetWorldSpace = Vector3.new(0, 3.5, 0)
+							badge.MaxDistance = 35
+							badge.Parent = anchor
+							local lbl = Instance.new("TextLabel")
+							lbl.Name = "Tier"
+							lbl.Size = UDim2.fromScale(1, 1)
+							lbl.Font = Enum.Font.GothamBold
+							lbl.TextScaled = true
+							lbl.BackgroundColor3 = Color3.fromRGB(28, 34, 40)
+							lbl.TextColor3 = Color3.fromRGB(245, 205, 95)
+							lbl.Parent = badge
+						end
+						local lbl = badge:FindFirstChild("Tier")
+						if lbl and lbl:IsA("TextLabel") then lbl.Text = "MÁQUINA NÍVEL " .. level end
+					elseif badge then
+						badge:Destroy()
+					end
+				end
+			end
 			local cost = Rules.NextCost(id, level)
 			if slots[index] and cost then
 				keep[id] = true

@@ -2004,7 +2004,8 @@ local function employeeWork(owner: Player, job: any, npc: Model)
     if wrench then wrench:Destroy() end
     npc:SetAttribute("RepairProgress", nil)
     local current = Jobs[job.Id]
-    if current ~= job or job.Status ~= "InProgress" or not owner.Parent then
+    if current ~= job or job.Status ~= "InProgress" or owner.Parent ~= Players
+        or not npc.Parent or not table.find(entry.Npcs, npc) then
         release(nil)
         return
     end

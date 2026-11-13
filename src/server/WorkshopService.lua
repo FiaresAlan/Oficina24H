@@ -532,7 +532,10 @@ function WorkshopService.GetSnapshot(player: Player)
     -- O perfil vivo contém chaves de liquidação: nunca replicar o ledger bruto
     -- com tokens da sessão para a UI. Mostrar somente dados financeiros saneados.
     local profileView = profile and table.clone(profile) or nil
-    if profileView then profileView.RepairLedger = nil end
+    if profileView then
+        profileView.RepairLedger = nil
+        profileView.PendingClaims = nil -- tokens e referências financeiras nunca chegam ao cliente
+    end
     return {
         Ranking = CustomerRules.Rank(ranking),
         Profile = profileView,
@@ -987,6 +990,10 @@ local function confirmDelivery(entry: any)
     if SettlingRepairs[entry.WorkerUserId] ~= entry
         or not SettlementDeliveryRules.Ready(entry) then return false end
     SettlingRepairs[entry.WorkerUserId] = nil
+    if entry.Delegated and entry.Worker.Parent == Players then
+        DataService.DiscardWorkerClaim(entry.Worker, entry.JobId, entry.Token)
+        task.spawn(DataService.Save, entry.Worker) -- limpeza posterior não altera o crédito confirmado
+    end
     if eventSender and entry.Worker.Parent == Players then
         eventSender(entry.Worker, "RepairDone", entry.Receipt)
     end
@@ -1102,33 +1109,48 @@ function WorkshopService.FinishRepair(player: Player, jobId: string, presses: an
             or DataService.HasRepairCredit(workshopOwner, jobId, session.Token)) then
         return finishFailure("Esta ordem já possui crédito registrado. Consulte o histórico.")
     end
-    -- As peças pertencem sempre ao dono da OS, nunca ao estoque particular do contratado.
-    if not DataService.TakeParts(workshopOwner, defect.Parts) then
-        return finishFailure("Faltam peças na oficina.")
-    end
-
-    -- Autoridade: depois do consumo único da peça, qualquer retransmissão não volta a pagar.
+    -- C12: persistir primeiro a reivindicação do executor. Uma queda após
+    -- salvar o dono mas antes do executor poderá ser corrigida no próximo login.
+    -- O preparo acontece ANTES do consumo de peças e de qualquer crédito.
     local delegated = CollaborationRules.IsWorker(job, player.UserId)
-    job.Status = "Completed"
-    VehicleService.Flash(job.Id, Color3.fromRGB(90, 220, 130))
-    VehicleService.Despawn(job.Id)
     local basePrice = job.Price or service.Reward
-    -- Bônus por combo/amigos pertencem ao trabalho individual, não se multiplicam em contratos terceirizados.
     local combo = delegated and 1 or comboMultiplier(player.UserId)
     local friend = delegated and 1 or ProgressService.FriendMultiplier(player)
     local price = math.floor(basePrice * RepairRules.PayMultiplier(result.Quality) * combo * friend + 0.5)
+    local tip = RepairRules.Tip(basePrice, result.Quality)
+    local xp = RepairRules.XPBonus(service.XP, result.Quality)
+    local actorPay, ownerPay = price + tip, 0
+    if delegated then
+        ownerPay, actorPay = CollaborationRules.Split(price + tip, job.CollaborationSplitPercent or 25)
+    end
+    if not DataService.HasParts(workshopOwner, defect.Parts) then
+        return finishFailure("Faltam peças na oficina.")
+    end
+    if delegated and workshopOwner ~= player and type(session.Token) == "string" then
+        local staged = DataService.StageWorkerClaim(player, workshopOwner.UserId,
+            jobId, session.Token, ownerPay, actorPay, xp, result.Quality,
+            service.DisplayName, job.VehicleName, defect.Specialization)
+        if not staged or not DataService.Save(player) then
+            return finishFailure("Não foi possível reservar o pagamento do colaborador. Tente o reparo novamente.")
+        end
+    end
+    -- As peças pertencem sempre ao dono da OS.
+    if not DataService.TakeParts(workshopOwner, defect.Parts) then
+        if delegated and type(session.Token) == "string" then
+            DataService.DiscardWorkerClaim(player, jobId, session.Token)
+        end
+        return finishFailure("Faltam peças na oficina.")
+    end
+    -- A partir daqui a ordem é aplicada uma vez. O dono é salvo ANTES do executor.
+    job.Status = "Completed"
+    VehicleService.Flash(job.Id, Color3.fromRGB(90, 220, 130))
+    VehicleService.Despawn(job.Id)
     if not delegated then
         if result.Quality >= COMBO_MIN_QUALITY then
             Combo[player.UserId] = (Combo[player.UserId] or 0) + 1
         else
             breakCombo(player.UserId)
         end
-    end
-    local tip = RepairRules.Tip(basePrice, result.Quality)
-    local xp = RepairRules.XPBonus(service.XP, result.Quality)
-    local actorPay, ownerPay = price + tip, 0
-    if delegated then
-        ownerPay, actorPay = CollaborationRules.Split(price + tip, job.CollaborationSplitPercent or 25)
     end
     -- O crédito é escrito no perfil junto da marca idempotente; não existe um
     -- comando financeiro público. O modo timing legado mantém a rotina anterior.

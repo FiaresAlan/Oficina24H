@@ -13,10 +13,11 @@ local Config = require(ReplicatedStorage.Shared.Config)
 local Catalog = require(ReplicatedStorage.Shared.Catalog)
 local CustomerRules = require(ReplicatedStorage.Shared.CustomerRules)
 local SettlementLedgerRules = require(ReplicatedStorage.Shared.SettlementLedgerRules)
+local SettlementClaimRules = require(ReplicatedStorage.Shared.SettlementClaimRules)
 
 local DataService = {}
 
-local SCHEMA_VERSION = 5 -- 5: ledger de serviços (crédito e recibo no mesmo perfil)
+local SCHEMA_VERSION = 6 -- 6: reivindicação de remuneração colaborativa para recuperação pós-crash
 local MAX_ATTEMPTS = 4
 local LOCK_TIMEOUT = 360 -- s; maior que 2 autosaves, para um servidor que caiu não prender o jogador para sempre
 local LOCK_WAIT_STEP = 3
@@ -28,6 +29,8 @@ local Profiles: { [number]: any } = {}
 local Dirty: { [number]: boolean } = {}
 local Saving: { [number]: boolean } = {}
 local Removing: { [number]: boolean } = {} -- saída em andamento (grava e solta a trava); Load e BindToClose esperam
+local Reconciling: { [number]: boolean } = {}
+local ClaimCursor: { [number]: number } = {}
 local Store: any = nil
 local JobId: string = game.JobId ~= "" and game.JobId or "studio"
 local MemoryMode = false
@@ -83,6 +86,7 @@ local function makeDefaultData(): any
 		RecentRatings = {}, -- últimas 10: { Stars, Service, At, CommentKey, Customer }
 		OrderHistory = {}, -- últimos serviços concluídos: { At, Vehicle, Customer, Service, Price, Stars }
 		RepairLedger = {}, -- C8: crédito e comprovante por JobId+token, no mesmo perfil persistido
+		PendingClaims = {}, -- C12: provas pendentes do mecânico, privadas, nunca replicadas
 		Onboarding = { Done = false }, -- guia do 1º atendimento (servidor decide; salvo por jogador)
 		Bag = {}, -- peças na mochila do jogador (o resto fica na prateleira da oficina = Parts)
 		Expansion = 0, -- (antigo: anexo; migrado para WorkshopLevel)
@@ -194,6 +198,7 @@ local function reconcile(data: any): any
 	end
 	data.OrderHistory = cleanHistory
 	data.RepairLedger = SettlementLedgerRules.Sanitize(data.RepairLedger)
+	data.PendingClaims = SettlementClaimRules.Sanitize(data.PendingClaims)
 	if type(data.Parts) ~= "table" then
 		data.Parts = {}
 	end
@@ -475,6 +480,92 @@ function DataService.RecentRepairSettlements(player: Player, limit: number?): { 
 	return profile and SettlementLedgerRules.Public(profile.RepairLedger, limit) or {}
 end
 
+-- C12: registra no perfil do MECÂNICO, antes de gastar peças ou pagar, a
+-- reivindicação verificável no ledger persistido do proprietário.
+-- Cada claim é salva antes de qualquer efeito econômico em FinishRepair.
+function DataService.StageWorkerClaim(worker: Player, ownerUserId: number, jobId: string, token: string,
+	ownerPay: number, workerPay: number, xp: number, quality: number,
+	service: string, vehicle: string, spec: string): boolean
+	local profile = Profiles[worker.UserId]
+	if not profile or ownerUserId == worker.UserId or not profile.SkillXP[spec] then return false end
+	profile.PendingClaims = profile.PendingClaims or {}
+	local existing = SettlementClaimRules.Find(profile.PendingClaims, jobId, token)
+	if existing then
+		return existing.OwnerUserId == ownerUserId and existing.OwnerPay == ownerPay
+			and existing.WorkerPay == workerPay and existing.XP == xp
+	end
+	if #profile.PendingClaims >= SettlementClaimRules.MaxPending
+		or DataService.HasRepairCredit(worker, jobId, token) then return false end
+	local claim = SettlementClaimRules.Make(ownerUserId, jobId, token, ownerPay, workerPay,
+		xp, quality, service, vehicle, spec, os.time())
+	if not claim or not SettlementClaimRules.Add(profile.PendingClaims, claim) then return false end
+	Dirty[worker.UserId] = true
+	return true
+end
+
+function DataService.DiscardWorkerClaim(worker: Player, jobId: any, token: any): boolean
+	local profile = Profiles[worker.UserId]
+	if not profile or not SettlementClaimRules.Remove(profile.PendingClaims, jobId, token) then return false end
+	Dirty[worker.UserId] = true
+	return true
+end
+
+-- C13: somente a gravação do dono (não uma promessa do executor) autoriza
+-- restaurar a parcela perdida. Nunca altera um perfil de outro jogador.
+function DataService.ReconcileWorkerClaims(worker: Player): number
+	local userId = worker.UserId
+	local profile = Profiles[userId]
+	if not profile or Reconciling[userId] or MemoryMode or not Store then return 0 end
+	if type(Store.GetAsync) ~= "function" then return 0 end
+	Reconciling[userId] = true
+	local recovered = 0
+	local pending = profile.PendingClaims
+	local total = #pending
+	local start = ClaimCursor[userId] or 1
+	local visited = 0
+	for offset = 0, total - 1 do
+		if visited >= 8 or Profiles[userId] ~= profile or worker.Parent ~= Players then break end
+		local index = ((start + offset - 1) % total) + 1
+		local claim = pending[index]
+		if claim and SettlementClaimRules.Valid(claim) then
+			visited += 1
+			local already = DataService.HasRepairCredit(worker, claim.JobId, claim.Token)
+			local verified = already
+			if not already then
+				local ok, ownerRaw = pcall(function()
+					return Store:GetAsync(keyFor(claim.OwnerUserId))
+				end)
+				if ok and type(ownerRaw) == "table" then
+					verified = SettlementClaimRules.Authorized(claim, ownerRaw.RepairLedger)
+				elseif not ok then
+					warn("[DataService] Falha ao consultar prova de pagamento:", userId, claim.JobId)
+				end
+			end
+			if Profiles[userId] ~= profile or worker.Parent ~= Players then break end
+			if verified then
+				if not already and DataService.CreditRepairOnce(worker, claim.JobId, claim.Token,
+					claim.WorkerPay, "Worker", claim.Service, claim.Vehicle) then
+					DataService.AddSkillXP(worker, claim.Spec, claim.XP)
+					DataService.AttachRepairReceipt(worker, claim.JobId, claim.Token, {
+						JobId = claim.JobId, Token = claim.Token, Price = claim.WorkerPay,
+						Quality = claim.Quality, XP = claim.XP,
+					})
+					recovered += 1
+				end
+				-- Salva saldo+ledger ANTES de descartar a prova. Em erro, claim
+				-- continua disponível e o ledger impede duplo crédito no retry.
+				if DataService.Save(worker) then
+					SettlementClaimRules.Remove(profile.PendingClaims, claim.JobId, claim.Token)
+					Dirty[userId] = true
+				end
+			end
+		end
+	end
+	ClaimCursor[userId] = total > 0 and ((start + visited - 1) % total) + 1 or 1
+	Reconciling[userId] = nil
+	return recovered
+end
+
 -- Encerra o guia do 1º atendimento. Com `bonus` (serviço concluído de verdade) paga uma única vez; pular não paga.
 -- Retorna as moedas pagas (0 se já estava encerrado).
 function DataService.CompleteOnboarding(player: Player, bonus: number): number
@@ -707,6 +798,9 @@ function DataService.Load(player: Player)
 	profile.NewPlayer = nil
 	Profiles[userId] = profile
 	Dirty[userId] = true -- grava a migração/perfil novo no primeiro autosave
+	if #profile.PendingClaims > 0 then
+		task.spawn(DataService.ReconcileWorkerClaims, player)
+	end
 end
 
 function DataService.Save(player: Player): boolean
@@ -746,6 +840,7 @@ function DataService.Remove(player: Player)
 	if Profiles[userId] == profile then -- não apaga um perfil novo carregado depois
 		Profiles[userId] = nil
 		Dirty[userId] = nil
+		ClaimCursor[userId] = nil
 	end
 	Removing[userId] = nil
 end
@@ -763,6 +858,7 @@ function DataService.Start()
 			task.wait(Config.AutoSaveSeconds)
 			for _, player in ipairs(Players:GetPlayers()) do
 				task.spawn(DataService.Save, player) -- sempre grava: renova a trava de sessão
+				task.spawn(DataService.ReconcileWorkerClaims, player) -- recuperação C13 sob trava da própria conta
 			end
 		end
 	end)

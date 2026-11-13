@@ -135,7 +135,7 @@ check("client result correlated with job and token",
 ledger = text(SHARED / "SettlementLedgerRules.lua")
 data_service = text(ROOT / "src" / "server" / "DataService.lua")
 check("ledger bounded and sanitized", "SettlementLedgerRules.MaxEntries" in ledger and "function SettlementLedgerRules.Sanitize" in ledger)
-check("ledger persists in profile schema v5", "local SCHEMA_VERSION = 5" in data_service
+check("ledger persists in profile schema v5", "local SCHEMA_VERSION = 6" in data_service
       and "RepairLedger = {}" in data_service
       and "SettlementLedgerRules.Sanitize(data.RepairLedger)" in data_service)
 check("ledger credit idempotency", "function DataService.CreditRepairOnce" in data_service
@@ -180,6 +180,30 @@ check("UI adapts receipt row to mobile compact",
       "stack(info, 8, not compact, 2)" in orders)
 check("statement test connected to runner",
       '"RepairStatementTest"' in runner and (TOOLS / "RepairStatementTest.luau").is_file())
+
+# C12/C13: pending worker claims are persisted before money/parts and verified
+# using the owner's durable ledger before an idempotent recovery credit.
+claim = text(SHARED / "SettlementClaimRules.lua")
+check("claim bounded sanitized and verified against owner's ledger",
+      "Claims.MaxPending = 64" in claim and "function Claims.Authorized" in claim)
+check("schema v6 keeps private pending claims",
+      "PendingClaims = {}" in data_service
+      and "SettlementClaimRules.Sanitize(data.PendingClaims)" in data_service
+      and "profileView.PendingClaims = nil" in workshop)
+check("server persists worker claim before consuming inventory",
+      'DataService.StageWorkerClaim(player, workshopOwner.UserId,' in workshop
+      and workshop.index("DataService.StageWorkerClaim(player, workshopOwner.UserId,")
+      < workshop.index('DataService.TakeParts(workshopOwner, defect.Parts)'))
+check("recovery requires saved owner evidence",
+      "SettlementClaimRules.Authorized(claim, ownerRaw.RepairLedger)" in data_service
+      and "Store:GetAsync(keyFor(claim.OwnerUserId))" in data_service)
+check("claim recovery persisted before clearing",
+      "if DataService.Save(worker) then" in data_service
+      and "SettlementClaimRules.Remove(profile.PendingClaims, claim.JobId, claim.Token)" in data_service)
+check("claim reconciliation runs on load and autosave",
+      "task.spawn(DataService.ReconcileWorkerClaims, player)" in data_service)
+check("claim tests registered",
+      '"SettlementClaimRulesTest"' in runner and (TOOLS / "SettlementClaimRulesTest.luau").is_file())
 
 check("readme links project checklist", "issues/15" in text(ROOT / "README.md"))
 

@@ -90,15 +90,16 @@ check("C27: snapshot coherence regression registered",
       '"SnapshotCacheRulesTest"' in runner
       and (TOOLS / "SnapshotCacheRulesTest.luau").is_file())
 guard = text(SHARED / "RepairCommitGuard.lua")
+workshop_c28 = text(ROOT / "src" / "server" / "WorkshopService.lua")
 check("C28: revalidate same job/actor after worker claim Save yield",
       "currentJob ~= expectedJob" in guard
       and "CollaborationRules.IsAuthorized(currentJob, actorUserId)" in guard
-      and "RepairCommitGuard.CanSettle(job, Jobs[jobId]" in workshop
-      and workshop.index("if not DataService.Save(player) then") < workshop.index("RepairCommitGuard.CanSettle(job, Jobs[jobId]") < workshop.index("DataService.SettleRepairOwnerOnce(workshopOwner, jobId")
-      and "job.Status = \"Completed\"" in workshop)
+      and "RepairCommitGuard.CanSettle(job, Jobs[jobId]" in workshop_c28
+      and workshop_c28.index("if not DataService.Save(player) then") < workshop_c28.index("RepairCommitGuard.CanSettle(job, Jobs[jobId]") < workshop_c28.index("DataService.SettleRepairOwnerOnce(workshopOwner, jobId")
+      and "job.Status = \"Completed\"" in workshop_c28)
 check("C28: orphan claim cleanup on save failure and removed owner",
-      workshop.count("DataService.DiscardWorkerClaim(player, jobId, session.Token)") >= 3
-      and "task.spawn(DataService.Save, player)" in workshop)
+      workshop_c28.count("DataService.DiscardWorkerClaim(player, jobId, session.Token)") >= 3
+      and "task.spawn(DataService.Save, player)" in workshop_c28)
 check("C28: guard unit suite registered",
       '"RepairCommitGuardTest"' in runner
       and (TOOLS / "RepairCommitGuardTest.luau").is_file())

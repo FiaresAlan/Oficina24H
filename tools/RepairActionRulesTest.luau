@@ -139,4 +139,30 @@ do
 	check("comando vazio rejeitado", not Rules.Apply(p, s, {}))
 end
 
+-- C6: ACK duplicado deve ser identificado sem executar a operação novamente.
+do
+	local p = plan("FlatTire")
+	local state = Rules.New(p)
+	local first = { Revision = 0, Kind = "Spot", Value = "Inner" }
+	check("sem replay antes de executar", not Rules.IsReplay(state, first))
+	check("comando primário aceito", Rules.Apply(p, state, first))
+	check("retransmissão idêntica reconhecida", Rules.IsReplay(state, first))
+	check("retransmissão não é reaplicada", not Rules.Apply(p, state, first))
+	check("replay não altera contadores", state.Commands == 1 and state.Revision == 1)
+	check("mesma revisão com outro valor não é replay",
+		not Rules.IsReplay(state, { Revision = 0, Kind = "Spot", Value = "Outer" }))
+	check("mesma revisão com outro tipo não é replay",
+		not Rules.IsReplay(state, { Revision = 0, Kind = "Pressure", Value = "Inner" }))
+	check("mesma revisão sem tipo não é replay",
+		not Rules.IsReplay(state, { Revision = 0, Value = "Inner" }))
+	check("revisão futura não é replay",
+		not Rules.IsReplay(state, { Revision = 1, Kind = "Spot", Value = "Inner" }))
+	local nextCommand = { Revision = 1, Kind = "Pressure", Value = 30 }
+	check("próxima ação válida", Rules.Apply(p, state, nextCommand))
+	check("ACK do comando antigo não é reprocessado", not Rules.IsReplay(state, first))
+	check("último comando é idempotente", Rules.IsReplay(state, nextCommand))
+	check("replay vazio rejeitado", not Rules.IsReplay(state, nil))
+	check("estado malformado rejeitado", not Rules.IsReplay(nil, first))
+end
+
 return table.concat(results, "\n")

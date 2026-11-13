@@ -864,3 +864,11 @@ Detalhes em `docs/AUDITORIA_GERAL.md`. Resumo:
 - **Regressão:** `SnapshotCacheRulesTest` em `RunAllTests` com expiração, alteração antes de 250 ms, isolamento, corrida e reconexão. CI confere integração e build Rojo (não executa o teste Luau).
 - **Documentação:** [TESTE_C27_CACHE_SNAPSHOT_HUD_2026-11-13.md](TESTE_C27_CACHE_SNAPSHOT_HUD_2026-11-13.md) com QA de Ordens, loja, avaliações, funcionários, dois jogadores e mobile.
 - **Pendências:** Studio Edit e assets reais ainda não validados, V2 apenas documentação.
+
+
+## 2026-11-13 — V1 C28: guarda de OS após salvar claim antes de pagar
+- **Corrida corrigida:** `FinishRepair` fazia `Save(worker)` (yield) e continuava com o objeto da ordem capturado mesmo após `PlayerLeft` remover a OS. A conclusão agora exige a mesma instância em `Jobs`, dono/worker ativos, papel e percentual inalterados **antes** de consumir estoque ou criar crédito.
+- **Reserva cancelada:** se Save inicial falhar ou OS mudar durante o yield, tenta descartar a claim criada e salvar a limpeza; se o segundo Save falhar, não cria dinheiro sem prova no proprietário.
+- **Teste preparado:** `RepairCommitGuardTest` e verificação de ordem no `verify_contracts.py`, mais [QA C28](TESTE_C28_GUARDA_REPARO_COLABORATIVO_2026-11-13.md). CI/Rojo não equivale a Luau executado no Studio.
+- **Fechamento V1:** [cinco portões principais](PORTOES_FINALIZACAO_V1_2026-11-13.md) separam código, importação de assets, 15 serviços, multiplayer/DataStore, aparelhos/licenças e aprovação de publicação. Mais de 100 tarefas abertas no histórico não são 100 fases obrigatórias.
+- **Escopo:** V1 apenas; V2 não iniciada e assets apenas baixados/organizados.

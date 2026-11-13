@@ -104,6 +104,9 @@ check("C28: orphan claim cleanup on save failure and removed owner",
 check("C28: guard unit suite registered",
       '"RepairCommitGuardTest"' in runner
       and (TOOLS / "RepairCommitGuardTest.luau").is_file())
+check("C28: QA and release gates documented",
+      (ROOT / "docs" / "TESTE_C28_GUARDA_REPARO_COLABORATIVO_2026-11-13.md").is_file()
+      and (ROOT / "docs" / "PORTOES_FINALIZACAO_V1_2026-11-13.md").is_file())
 check("C27: snapshot coherence QA guide exists",
       (ROOT / "docs" / "TESTE_C27_CACHE_SNAPSHOT_HUD_2026-11-13.md").is_file()
       and "lastSnapshotBuild" in text(ROOT / "docs" / "TESTE_C27_CACHE_SNAPSHOT_HUD_2026-11-13.md"))

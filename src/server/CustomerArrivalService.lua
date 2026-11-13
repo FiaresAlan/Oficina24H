@@ -16,6 +16,7 @@ local LotPath = require(script.Parent.LotPath)
 local VehicleSceneRules = require(game:GetService("ReplicatedStorage").Shared.VehicleSceneRules)
 local AssetSafetyRules = require(game:GetService("ReplicatedStorage").Shared.AssetSafetyRules)
 local V2PilotRigBuilder = require(game:GetService("ReplicatedStorage").Shared.V2PilotRigBuilder)
+local V2PilotArtProfiles = require(game:GetService("ReplicatedStorage").Shared.V2PilotArtProfiles)
 
 local CustomerArrivalService = {}
 
@@ -160,6 +161,8 @@ function CustomerArrivalService.BuildCar(job: any, cf: CFrame, name: string): (M
 	local car = template:Clone()
 	AssetSafetyRules.StripScripts(car) -- impedir execução de scripts de terceiros antes de inserir no Workspace
     V2PilotRigBuilder.Attach(car, job.VehicleName) -- só hatch/sedã/picape piloto; não altera o template V1
+    local pilotId = car:GetAttribute("V2PilotId")
+    if type(pilotId) == "string" then V2PilotArtProfiles.Apply(car, pilotId) end
 	car.Name = name
 	car:PivotTo(cf)
 	car:SetAttribute("JobId", job.Id)

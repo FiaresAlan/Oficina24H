@@ -481,7 +481,7 @@ function WorkshopService.GetSnapshot(player: Player)
                     Vip = job.Vip == true,
                     Regular = job.Regular == true,
                     Fleet = job.FleetName,
-                    WaitSeconds = os.time() - job.CreatedAt, -- tempo desde a chegada (a paciência acaba em PatienceSeconds)
+                    WaitSeconds = math.max(0, os.time() - job.CreatedAt), -- tempo de espera nunca fica negativo (a paciência acaba em PatienceSeconds)
                     PatienceSeconds = Config.CustomerPatienceSeconds * (job.Regular and Config.RegularPatienceMultiplier or 1),
                     Complaint = job.Complaint,
                     Status = job.Status,
@@ -489,6 +489,10 @@ function WorkshopService.GetSnapshot(player: Player)
                     ScheduledUntil = job.ScheduledUntil or 0,
                     ScheduleUsed = job.ScheduleUsed == true,
                     Diagnosed = job.Diagnosed,
+                    Repairing = employeeReserved(job)
+                        or (Repairs[job.OwnerUserId] ~= nil and Repairs[job.OwnerUserId].JobId == job.Id)
+                        or (job.CollaboratorUserId ~= nil and Repairs[job.CollaboratorUserId] ~= nil
+                            and Repairs[job.CollaboratorUserId].JobId == job.Id),
                     CollaboratorUserId = job.CollaboratorUserId,
                     ServiceName = job.Diagnosed and Catalog.Services[job.ServiceId].DisplayName or nil,
                 }
@@ -710,7 +714,8 @@ function WorkshopService.ScheduleJob(player: Player, jobId: string, seconds: any
         return false, "Agendamento inválido."
     end
     if not nearReception(player) then return false, "Use o balcão de recepção da sua oficina." end
-    if job.ScheduleUsed or CustomerArrivalService.IsArriving(jobId) then
+    if job.ScheduleUsed or CustomerArrivalService.IsArriving(jobId)
+        or os.time() < (job.ArrivesAt or 0) then
         return false, "Este cliente já foi reagendado ou ainda está chegando."
     end
     job.ScheduleUsed = true -- apenas UMA remarcação por OS, sem farmar paciencia
@@ -735,8 +740,8 @@ function WorkshopService.DiscountJob(player: Player, jobId: string, percent: any
     if not amount then return false, "Valor inválido." end
     job.Price = amount
     job.DiscountPercent = percent
-    job.PriceMultiplier = (job.PriceMultiplierOriginal or job.PriceMultiplier or 1) * (100 - percent) / 100
-    job.PriceMultiplierOriginal = job.PriceMultiplierOriginal or (job.PriceMultiplier / ((100 - percent) / 100))
+    job.PriceMultiplierOriginal = job.PriceMultiplierOriginal or job.PriceMultiplier or 1
+    job.PriceMultiplier = job.PriceMultiplierOriginal * (100 - percent) / 100
     return true, "Proposta registrada: " .. tostring(amount) .. " moedas."
 end
 
@@ -2429,10 +2434,23 @@ function refreshPlotDisplays()
                 Color = tier >= 3 and Color3.fromRGB(255, 196, 70) or tier == 2 and Color3.fromRGB(70, 190, 255) or Color3.fromRGB(255, 196, 40),
             })
             local lines = {}
+            local queue = {}
             for _, job in pairs(Jobs) do
                 if job.OwnerUserId == userId and job.Status == "Available" and not CustomerArrivalService.IsArriving(job.Id) and os.time() >= (job.ArrivesAt or 0) then
-                    table.insert(lines, string.format("%s%s · %s", job.Vip and "★ " or (job.Fleet and "📋 " or ""), tostring(job.CustomerName), tostring(job.VehicleName)))
+                    table.insert(queue, {
+                        Id = job.Id, Priority = job.Priority or 0,
+                        WaitSeconds = math.max(0, os.time() - job.CreatedAt),
+                        Customer = tostring(job.CustomerName), Vehicle = tostring(job.VehicleName),
+                        ScheduledUntil = job.ScheduledUntil or 0,
+                    })
                 end
+            end
+            table.sort(queue, V2ReceptionRules.QueueLess)
+            for index, line in ipairs(queue) do
+                if index > 3 then break end
+                local priorityText = line.Priority == 1 and "↑ " or (line.Priority == -1 and "↓ " or "")
+                local scheduled = line.ScheduledUntil > os.time() and " (agendado)" or ""
+                table.insert(lines, priorityText .. line.Customer .. " · " .. line.Vehicle .. scheduled)
             end
             local contract = ContractService.Snapshot(userId)
             if contract.Active then

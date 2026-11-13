@@ -2,6 +2,7 @@
 -- Reivindicações privadas do mecânico; nenhuma é autorizada a pagar sem
 -- verificar o crédito do dono no DataStore persistente.
 local Ledger = require(script.Parent.SettlementLedgerRules)
+local OwnerProofs = require(script.Parent.OwnerSettlementProofRules)
 local Claims = {}
 Claims.MaxPending = 64
 
@@ -77,8 +78,13 @@ function Claims.Remove(raw: any, jobId: any, token: any): boolean
 	return false
 end
 
-function Claims.Authorized(claim: any, ownerLedger: any): boolean
+-- Prova C14 prevalece, incluindo identidade do contratado. Quando há prova
+-- divergente, NÃO recua para o ledger legado de 64 lançamentos.
+function Claims.Authorized(claim: any, ownerLedger: any, ownerProofs: any?, workerId: any?): boolean
 	if not Claims.Valid(claim) then return false end
+	local proof = OwnerProofs.Find(ownerProofs, claim.JobId, claim.Token)
+	if proof then return OwnerProofs.Authorizes(proof, claim, workerId) end
+	-- Compatibilidade com pagamentos antigos (C12/C13, antes do schema 7).
 	local entry = Ledger.Find(ownerLedger, claim.JobId, claim.Token)
 	return type(entry) == "table" and entry.Role == "Owner"
 		and entry.Amount == claim.OwnerPay

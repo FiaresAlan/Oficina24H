@@ -135,7 +135,7 @@ check("client result correlated with job and token",
 ledger = text(SHARED / "SettlementLedgerRules.lua")
 data_service = text(ROOT / "src" / "server" / "DataService.lua")
 check("ledger bounded and sanitized", "SettlementLedgerRules.MaxEntries" in ledger and "function SettlementLedgerRules.Sanitize" in ledger)
-check("ledger persists in profile schema v5", "local SCHEMA_VERSION = 6" in data_service
+check("ledger persists in profile schema v5", "local SCHEMA_VERSION = 7" in data_service
       and "RepairLedger = {}" in data_service
       and "SettlementLedgerRules.Sanitize(data.RepairLedger)" in data_service)
 check("ledger credit idempotency", "function DataService.CreditRepairOnce" in data_service
@@ -195,7 +195,7 @@ check("server persists worker claim before consuming inventory",
       and workshop.index("DataService.StageWorkerClaim(player, workshopOwner.UserId,")
       < workshop.index('DataService.TakeParts(workshopOwner, defect.Parts)'))
 check("recovery requires saved owner evidence",
-      "SettlementClaimRules.Authorized(claim, ownerRaw.RepairLedger)" in data_service
+      "SettlementClaimRules.Authorized(claim, ownerRaw.RepairLedger," in data_service
       and "Store:GetAsync(keyFor(claim.OwnerUserId))" in data_service)
 check("claim recovery persisted before clearing",
       "if DataService.Save(worker) then" in data_service

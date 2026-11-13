@@ -535,6 +535,7 @@ function WorkshopService.GetSnapshot(player: Player)
     if profileView then
         profileView.RepairLedger = nil
         profileView.PendingClaims = nil -- tokens e referências financeiras nunca chegam ao cliente
+        profileView.OwnerSettlementProofs = nil -- arquivo de provas não replicado
     end
     return {
         Ranking = CustomerRules.Rank(ranking),
@@ -1162,7 +1163,7 @@ function WorkshopService.FinishRepair(player: Player, jobId: string, presses: an
         end
         if delegated and workshopOwner ~= player then
             if not DataService.CreditRepairOnce(workshopOwner, jobId, session.Token, ownerPay,
-                "Owner", service.DisplayName, job.VehicleName) then
+                "Owner", service.DisplayName, job.VehicleName, player.UserId, actorPay) then
                 warn("[WorkshopService] Falha ao registrar parte do dono:", jobId, workshopOwner.UserId)
             end
         end

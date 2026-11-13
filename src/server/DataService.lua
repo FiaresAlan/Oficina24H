@@ -14,10 +14,11 @@ local Catalog = require(ReplicatedStorage.Shared.Catalog)
 local CustomerRules = require(ReplicatedStorage.Shared.CustomerRules)
 local SettlementLedgerRules = require(ReplicatedStorage.Shared.SettlementLedgerRules)
 local SettlementClaimRules = require(ReplicatedStorage.Shared.SettlementClaimRules)
+local OwnerSettlementProofRules = require(ReplicatedStorage.Shared.OwnerSettlementProofRules)
 
 local DataService = {}
 
-local SCHEMA_VERSION = 6 -- 6: reivindicação de remuneração colaborativa para recuperação pós-crash
+local SCHEMA_VERSION = 7 -- 7: arquivo privado de provas duráveis do dono
 local MAX_ATTEMPTS = 4
 local LOCK_TIMEOUT = 360 -- s; maior que 2 autosaves, para um servidor que caiu não prender o jogador para sempre
 local LOCK_WAIT_STEP = 3
@@ -87,6 +88,7 @@ local function makeDefaultData(): any
 		OrderHistory = {}, -- últimos serviços concluídos: { At, Vehicle, Customer, Service, Price, Stars }
 		RepairLedger = {}, -- C8: crédito e comprovante por JobId+token, no mesmo perfil persistido
 		PendingClaims = {}, -- C12: provas pendentes do mecânico, privadas, nunca replicadas
+		OwnerSettlementProofs = {}, -- C14: comprovantes compactos de repasse
 		Onboarding = { Done = false }, -- guia do 1º atendimento (servidor decide; salvo por jogador)
 		Bag = {}, -- peças na mochila do jogador (o resto fica na prateleira da oficina = Parts)
 		Expansion = 0, -- (antigo: anexo; migrado para WorkshopLevel)
@@ -199,6 +201,7 @@ local function reconcile(data: any): any
 	data.OrderHistory = cleanHistory
 	data.RepairLedger = SettlementLedgerRules.Sanitize(data.RepairLedger)
 	data.PendingClaims = SettlementClaimRules.Sanitize(data.PendingClaims)
+	data.OwnerSettlementProofs = OwnerSettlementProofRules.Sanitize(data.OwnerSettlementProofs)
 	if type(data.Parts) ~= "table" then
 		data.Parts = {}
 	end
@@ -445,12 +448,27 @@ end
 -- Registro idempotente: saldo e chave de crédito mudam no MESMO perfil sem yield.
 -- Não resolve pagamento multi-conta de modo transacional (cada usuário tem uma chave DataStore).
 function DataService.CreditRepairOnce(player: Player, jobId: string, token: string,
-	amount: number, role: string, serviceName: string, vehicleName: string): boolean
+	amount: number, role: string, serviceName: string, vehicleName: string,
+	workerUserId: number?, workerPay: number?): boolean
 	local profile = Profiles[player.UserId]
 	if not profile then return false end
 	profile.RepairLedger = profile.RepairLedger or {}
+	profile.OwnerSettlementProofs = profile.OwnerSettlementProofs or {}
+	local proof = nil
+	if workerUserId ~= nil or workerPay ~= nil then
+		if role ~= "Owner" then return false end
+		proof = OwnerSettlementProofRules.Make(jobId, token, workerUserId, amount,
+			workerPay, serviceName, vehicleName, os.time())
+		if not proof or OwnerSettlementProofRules.Find(profile.OwnerSettlementProofs, jobId, token) then
+			return false
+		end
+	end
 	if not SettlementLedgerRules.Record(profile.RepairLedger, jobId, token, amount, role,
 		os.time(), serviceName, vehicleName) then return false end
+	if proof then
+		-- Mesmo perfil DataStore: arquivo de prova, ledger e moedas entram no mesmo Save.
+		OwnerSettlementProofRules.Add(profile.OwnerSettlementProofs, proof)
+	end
 	DataService.AddCoins(player, amount, "Liquidação de OS: " .. serviceName)
 	Dirty[player.UserId] = true
 	return true
@@ -538,7 +556,8 @@ function DataService.ReconcileWorkerClaims(worker: Player): number
 					return Store:GetAsync(keyFor(claim.OwnerUserId))
 				end)
 				if ok and type(ownerRaw) == "table" then
-					verified = SettlementClaimRules.Authorized(claim, ownerRaw.RepairLedger)
+					verified = SettlementClaimRules.Authorized(claim, ownerRaw.RepairLedger,
+						ownerRaw.OwnerSettlementProofs, userId)
 				elseif not ok then
 					warn("[DataService] Falha ao consultar prova de pagamento:", userId, claim.JobId)
 				end

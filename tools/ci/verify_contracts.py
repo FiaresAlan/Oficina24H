@@ -712,6 +712,18 @@ check("V2-04: teste adversarial por serviço no runner",
     and "test(\"15 receitas completas" in v2_procs_test
     and '"V2ServiceProcedureRulesTest"' in runner)
 
+check("V2-04: integração de 15 serviços com todos sete modos de minijogo",
+    (TOOLS / "V2ProcedureIntegrationTest.luau").is_file()
+    and '"V2ProcedureIntegrationTest"' in runner
+    and "Modes.Sequence" not in text(TOOLS / "V2ProcedureIntegrationTest.luau")
+    and 'modes.Tire==1' in text(TOOLS / "V2ProcedureIntegrationTest.luau")
+    and "Operations.BuildPlan" in text(TOOLS / "V2ProcedureIntegrationTest.luau"))
+check("V2-04: resultado de qualidade explica erros e retrabalho seguro",
+    "payload.Miss" in operation_game and
+    "Verificação final" in operation_game
+    and "REFAZER SEM COBRAR" in operation_game
+    and "CancelRepair" in text(ROOT / "src" / "server" / "Main.server.lua"))
+
 print(f"\nStatic checks: {passed} passed, {len(failures)} failed")
 if failures:
     raise SystemExit(1)

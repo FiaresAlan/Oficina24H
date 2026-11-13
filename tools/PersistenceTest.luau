@@ -694,6 +694,132 @@ do
 		and B.HasRepairCredit(p, "job_1", token))
 end
 
+-- C22: varredura de provas do proprietário após o contratado ficar offline.
+-- Apenas um perfil do trabalhador efetivamente salvo com crédito + claim
+-- removida é prova suficiente. Falha de leitura => não liberar.
+do
+	local store = newStore()
+	local A = server(store, "ownerSweep22-A")
+	local owner, worker = fakePlayer(2201), fakePlayer(2202)
+	local token = "22222222-1111-aaaa-bbbb-cccccccccccc"
+	A.Load(owner) A.Load(worker)
+	check("C22: claim do contratado é persistida",
+		A.StageWorkerClaim(worker, owner.UserId, "job_2200", token,
+			90, 210, 30, 92, "Freios", "Hatch", "Freios") and A.Save(worker))
+	check("C22: dono registra prova vinculada ao contratado",
+		A.CreditRepairOnce(owner, "job_2200", token, 90, "Owner",
+			"Freios", "Hatch", worker.UserId, 210))
+	A.Get(owner).OwnerSettlementProofs[1].At = os.time() - 1200
+	check("C22: prova do dono salva antes de executar varredura", A.Save(owner))
+	check("C22: claim sem parcela do executor não autoriza limpeza",
+		A.ReconcileOwnerProofs(owner) == 0
+		and #store.data["u_2201"].OwnerSettlementProofs == 1)
+	check("C22: parcela do contratado chega ao DataStore",
+		A.CreditRepairOnce(worker, "job_2200", token, 210,
+			"Worker", "Freios", "Hatch") and A.Save(worker))
+	A._resetProofSweepForTesting(owner.UserId)
+	check("C22: crédito salvo com claim ainda presente preserva prova",
+		A.ReconcileOwnerProofs(owner) == 0
+		and #store.data["u_2201"].OwnerSettlementProofs == 1)
+	check("C22: exclusão da claim do contratado é salva",
+		A.DiscardWorkerClaim(worker, "job_2200", token) and A.Save(worker))
+	store.failGetNext = 1
+	A._resetProofSweepForTesting(owner.UserId)
+	check("C22: leitura GetAsync falha sem descartar prova",
+		A.ReconcileOwnerProofs(owner) == 0
+		and #store.data["u_2201"].OwnerSettlementProofs == 1)
+	A._resetProofSweepForTesting(owner.UserId)
+	check("C22: duas contas confirmadas permitem limpeza da prova",
+		A.ReconcileOwnerProofs(owner) == 1
+		and #store.data["u_2201"].OwnerSettlementProofs == 0
+		and A.HasOwnerProofCapacity(owner))
+	check("C22: segunda consulta durante cooldown não limpa novamente",
+		A.ReconcileOwnerProofs(owner) == 0)
+	A.Remove(owner) A.Remove(worker)
+	local B = server(store, "ownerSweep22-B")
+	B.Load(owner) B.Load(worker)
+	check("C22: reconexão conserva crédito, sem claim nem prova",
+		#B.Get(owner).OwnerSettlementProofs == 0
+		and #B.Get(worker).PendingClaims == 0
+		and B.HasRepairCredit(worker, "job_2200", token))
+end
+
+-- C22: se o extrato limitado do mecânico girou, falta evidência e nunca
+-- presumimos pagamento pelo mero desaparecimento da claim.
+do
+	local store = newStore()
+	local A = server(store, "ownerSweep22-rotation")
+	local owner, worker = fakePlayer(2211), fakePlayer(2212)
+	local token = "22222222-3333-4444-5555-cccccccccccc"
+	A.Load(owner) A.Load(worker)
+	A.CreditRepairOnce(owner, "job_old", token, 80, "Owner",
+		"Freios", "Hatch", worker.UserId, 200)
+	A.Get(owner).OwnerSettlementProofs[1].At = os.time() - 1200
+	check("C22: parcela do contratado é registrada", A.CreditRepairOnce(worker,
+		"job_old", token, 200, "Worker", "Freios", "Hatch"))
+	for i = 1, 70 do
+		local tk = string.format("22222222-aaaa-bbbb-cccc-%012d", i)
+		A.CreditRepairOnce(worker, "later_" .. i, tk, 5, "Worker", "Freios", "Hatch")
+	end
+	check("C22: histórico do trabalhador gira", not A.HasRepairCredit(worker, "job_old", token))
+	check("C22: perfis atuais são persistidos", A.Save(owner) and A.Save(worker))
+	check("C22: histórico girado nunca autoriza exclusão presumida",
+		A.ReconcileOwnerProofs(owner) == 0
+		and #store.data["u_2211"].OwnerSettlementProofs == 1)
+end
+
+-- C22: confirmação offline pode liberar uma vaga num arquivo realmente
+-- cheio, sem remover comprovantes de outras dívidas.
+do
+	local Proofs = require(game.ReplicatedStorage.Shared.OwnerSettlementProofRules)
+	local store = newStore()
+	local A = server(store, "ownerSweep22-full")
+	local owner, worker = fakePlayer(2221), fakePlayer(2222)
+	local token = "22222222-5555-6666-7777-cccccccccccc"
+	A.Load(owner) A.Load(worker)
+	Proofs.Add(A.Get(owner).OwnerSettlementProofs,
+		Proofs.Make("old_paid", token, worker.UserId,
+			60, 140, "Freios", "Hatch", os.time() - 1200))
+	for i = 2, Proofs.MaxEntries do
+		local tk = string.format("22222222-dddd-eeee-ffff-%012d", i)
+		Proofs.Add(A.Get(owner).OwnerSettlementProofs,
+			Proofs.Make("unresolved_" .. i, tk, worker.UserId,
+				10, 20, "Freios", "Hatch", os.time() - 1200))
+	end
+	check("C22: lotação verdadeira bloqueia novos repasses", not A.HasOwnerProofCapacity(owner))
+	check("C22: um crédito real do contratado pode ser comprovado",
+		A.CreditRepairOnce(worker, "old_paid", token, 140, "Worker",
+			"Freios", "Hatch") and A.Save(worker) and A.Save(owner))
+	check("C22: sweep abre vaga sem apagar as outras dívidas",
+		A.ReconcileOwnerProofs(owner) == 1
+		and A.HasOwnerProofCapacity(owner)
+		and #store.data["u_2221"].OwnerSettlementProofs == Proofs.MaxEntries - 1
+		and Proofs.Find(store.data["u_2221"].OwnerSettlementProofs,
+			"unresolved_2", "22222222-dddd-eeee-ffff-000000000002") ~= nil)
+end
+
+-- C22: se a gravação da limpeza falhar, o comprovante ainda está no
+-- DataStore e pode ser restaurado no próximo login; nenhuma dívida some.
+do
+	local store = newStore()
+	local A = server(store, "ownerSweep22-saveFail")
+	local owner, worker = fakePlayer(2231), fakePlayer(2232)
+	local token = "22222222-aaaa-aaaa-bbbb-cccccccccccc"
+	A.Load(owner) A.Load(worker)
+	A.CreditRepairOnce(owner, "job_save_failure", token, 60, "Owner",
+		"Freios", "Hatch", worker.UserId, 100)
+	A.Get(owner).OwnerSettlementProofs[1].At = os.time() - 1200
+	A.CreditRepairOnce(worker, "job_save_failure", token, 100, "Worker", "Freios", "Hatch")
+	check("C22: perfis guardam as provas antes da falha simulada",
+		A.Save(owner) and A.Save(worker))
+	store.failNext = 4
+	check("C22: limpeza sem Save não confirma remoção",
+		A.ReconcileOwnerProofs(owner) == 0
+		and #store.data["u_2231"].OwnerSettlementProofs == 1)
+	check("C22: retentativa normal de Save persiste limpeza com segurança",
+		A.Save(owner) and #store.data["u_2231"].OwnerSettlementProofs == 0)
+end
+
 for _, c in ipairs(clones) do c:Destroy() end
 table.insert(results, failures == 0 and "TODOS OS TESTES PASSARAM" or (failures .. " TESTE(S) FALHARAM"))
 return table.concat(results, "\n")

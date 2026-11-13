@@ -637,7 +637,8 @@ end
 function DataService.ReconcileOwnerProofs(owner: Player): number
 	local userId = owner.UserId
 	local profile = Profiles[userId]
-	if not profile or OwnerProofSweepRunning[userId] or MemoryMode or not Store
+	if not profile or #profile.OwnerSettlementProofs == 0
+		or OwnerProofSweepRunning[userId] or MemoryMode or not Store
 		or type(Store.GetAsync) ~= "function" or Removing[userId] then return 0 end
 	local now = os.time()
 	if now - (OwnerProofSweepLastAt[userId] or 0) < OwnerProofSweepRules.MinIntervalSeconds then

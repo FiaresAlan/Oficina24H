@@ -511,6 +511,7 @@ function Orders.new(parent: Instance)
 		table.insert(parts, table.concat({ tostring(snapshot.Profile.Coins), tostring(snapshot.Profile.Employees),
 			tostring(snapshot.Profile.WorkshopLevel) }, ":"))
 		table.insert(parts, HttpService:JSONEncode(snapshot.RecentSettlements or {}))
+        table.insert(parts, HttpService:JSONEncode(snapshot.UsedMarket or {}))
         local staff=snapshot.Staff or {}
         table.insert(parts, tostring(staff.TotalPaid))
         for _,worker in ipairs(staff.Workers or {}) do
@@ -682,10 +683,10 @@ function Orders.new(parent: Instance)
                     Service="Serviços recebidos",Inventory="Compra de peças",
                     Payroll="Salários",Marketing="Publicidade",
                     Equipment="Equipamentos e melhorias",Building="Expansões",
-                    Hiring="Contratações",Rewards="Bônus e premiações",Other="Outros",
+                    Hiring="Contratações",Rewards="Bônus e premiações",Market="Compra e revenda de usados",Other="Outros",
                 }
                 local categoryOrder={"Service","Inventory","Payroll","Marketing",
-                    "Equipment","Building","Hiring","Rewards","Other"}
+                    "Equipment","Building","Hiring","Rewards","Market","Other"}
                 local lines={}
                 for _,name in ipairs(categoryOrder) do
                     local x=finance.Groups and finance.Groups[name]
@@ -730,6 +731,102 @@ function Orders.new(parent: Instance)
                 end
                 if #last==0 then table.insert(last,"Sem movimentações recentes.") end
                 financialCard(scroll,"FinanceRecent",6,"ÚLTIMAS MOVIMENTAÇÕES",last)
+            end
+            -- V2-09: protótipo opcional de compra/reforma/revenda em
+            -- uma aba de gestão existente: sem botão extra na HUD.
+            local market = snapshot.UsedMarket
+            if type(market) == "table" then
+                financialCard(scroll, "UsedIntro",10,"MERCADO DE USADOS · NEGÓCIO SECUNDÁRIO",{
+                    "A oficina continua focada nas OS de clientes. O carro de revenda não ocupa boxes.",
+                    "Comprar: visite a Loja de Autopeças. Restaurar e vender: esteja no próprio lote.",
+                    string.format("Capacidade: %d carro · operações concluídas: %d · contribuição estimada histórica: %+d",
+                        market.Capacity or 1,market.TotalSales or 0,market.TotalContribution or 0),
+                    {Text=market.CanBuy and "Mercado liberado para sua oficina."
+                        or tostring(market.BlockedReason or "Indisponível."),
+                        Color=market.CanBuy and Theme.Accent or rgb(255,167,85)},
+                    "Os preços abaixo usam peças ao custo de tabela; resultado final não é lucro contábil.",
+                })
+                for i,offer in ipairs(market.Offers or {}) do
+                    local lines={
+                        string.format("Compra: %d · revisão base: %d · risco adicional: 0–%d",
+                            offer.BuyPrice or 0,offer.RepairFee or 0,offer.RiskMax or 0),
+                        string.format("Peças (referência): %d · revenda após restauração: %d",
+                            offer.PartsReferenceCost or 0,offer.SalePrice or 0),
+                        {Text=string.format("Contribuição prevista: %+d a %+d moedas",
+                            offer.EstimatedContributionMin or 0,offer.EstimatedContributionMax or 0),
+                            Color=(offer.EstimatedContributionMin or 0)>=0 and Theme.Accent or rgb(255,167,85)},
+                    }
+                    local card=financialCard(scroll,"UsedOffer_"..offer.Id,10+i,
+                        string.upper(offer.Name or offer.Id),lines)
+                    local thumb,setVehicle=HudParts.vehicleThumb(card,170,84)
+                    thumb.LayoutOrder=12
+                    setVehicle(offer.VehicleModel)
+                    if market.CanBuy then
+                        local buy=PanelKit.button(card,
+                            string.format("COMPRAR · %d MOEDAS",offer.BuyPrice or 0),
+                            "dark",Vector2.new(230,44),function()
+                                Store.Act("UsedMarket",{Operation="Buy",Id=offer.Id})
+                            end)
+                        buy.LayoutOrder=20
+                    end
+                end
+                for i,car in ipairs(market.Owned or {}) do
+                    local name=car.Name or car.Variant
+                    local stage=car.Stage or "Purchased"
+                    local parts={}
+                    for partId,qty in pairs(car.Parts or {}) do
+                        local part=Catalog.Parts[partId]
+                        table.insert(parts,string.format("%s x%d",part and part.DisplayName or partId,qty))
+                    end
+                    table.sort(parts)
+                    local card=financialCard(scroll,"UsedOwned_"..car.Uid,20+i,
+                        "SEU VEÍCULO · "..string.upper(name),{
+                            "Etapa: "..stage.." · acabamento: "..tostring(car.Style),
+                            string.format("Reforma total: %d (inclui risco já inspecionado: %d)",
+                                car.RepairFee or 0,car.RiskFee or 0),
+                            "Peças necessárias: "..(#parts>0 and table.concat(parts,", ") or "nenhuma"),
+                            string.format("Venda no estado atual: %d moedas",car.SellPrice or 0),
+                        })
+                    local thumb,setVehicle=HudParts.vehicleThumb(card,170,84)
+                    thumb.LayoutOrder=10
+                    setVehicle(car.VehicleModel)
+                    local nextAction=stage=="Purchased" and "Inspect"
+                        or stage=="Inspected" and "Strip"
+                        or stage=="Stripped" and "Restore" or nil
+                    local nextLabel=stage=="Purchased" and "INSPECIONAR"
+                        or stage=="Inspected" and "DESMONTAR"
+                        or stage=="Stripped" and "INSTALAR E RESTAURAR" or nil
+                    if nextAction and nextLabel then
+                        local action=PanelKit.button(card,nextLabel,"dark",Vector2.new(240,44),function()
+                            Store.Act("UsedMarket",{Operation=nextAction,Id=car.Uid})
+                        end)
+                        action.LayoutOrder=20
+                        local scrap=PanelKit.button(card,"VENDER COMO SUCATA",
+                            "dark",Vector2.new(230,44),function()
+                                Store.Act("UsedMarket",{Operation="Scrap",Id=car.Uid})
+                            end)
+                        scrap.LayoutOrder=21
+                    elseif stage=="Restored" then
+                        if car.Style=="Factory" then
+                            for order,paint in ipairs({"Blue","Red"}) do
+                                local colorButton=PanelKit.button(card,
+                                    "PINTURA "..(paint=="Blue" and "AZUL" or "VERMELHA")
+                                    .." · "..tostring(market.StyleCost or 40),
+                                    "dark",Vector2.new(230,44),function()
+                                        Store.Act("UsedMarket",{
+                                            Operation="Paint",Id=car.Uid,Style=paint})
+                                    end)
+                                colorButton.LayoutOrder=20+order
+                            end
+                        end
+                        local sell=PanelKit.button(card,
+                            "VENDER · "..tostring(car.SellPrice or 0).." MOEDAS",
+                            "dark",Vector2.new(230,44),function()
+                                Store.Act("UsedMarket",{Operation="Sell",Id=car.Uid})
+                            end)
+                        sell.LayoutOrder=24
+                    end
+                end
             end
         elseif id == "team" then
             -- V2-05: supervisionar até dois mecânicos sem UI sobreposta ou

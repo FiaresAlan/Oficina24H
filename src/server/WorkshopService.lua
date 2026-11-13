@@ -509,6 +509,20 @@ function WorkshopService.GetSnapshot(player: Player)
                     entry.PrepComplete = RepairPrepRules.Ready(job.DefectId, job.PreparationStep)
                     local defect = Catalog.Defects[job.DefectId]
                     local service = Catalog.Services[job.ServiceId]
+                    local states, pilotId = VehicleService.ComponentStates(job.Id)
+                    if pilotId then
+                        local ready, instruction = V2ComponentRules.ReadyToRepair(job.DefectId, pilotId, states)
+                        entry.Mechanics = {
+                            PilotId = pilotId,
+                            Hood = states.Hood,
+                            WheelFL = states.WheelFL,
+                            WheelFR = states.WheelFR,
+                            WheelRL = states.WheelRL,
+                            WheelRR = states.WheelRR,
+                            Ready = ready,
+                            Next = ready and "" or instruction,
+                        }
+                    end
                     entry.Requirement = {
                         Specialization = defect.Specialization,
                         Level = defect.RequiredLevel,

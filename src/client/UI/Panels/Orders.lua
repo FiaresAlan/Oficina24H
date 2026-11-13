@@ -315,6 +315,18 @@ function Orders.new(parent: Instance)
 			LayoutOrder = 2,
 		})
 		requirement(info, job, snapshot, 4)
+        if job.Mechanics then
+            local mechanics = job.Mechanics
+            local panelHint = not mechanics.Ready and mechanics.Next or
+                (mechanics.Hood == "Open" and "Capô aberto — feche antes da saída" or
+                    mechanics.WheelFL == "Detached" and "Roda dianteira esquerda removida" or
+                    "Componentes prontos para o serviço")
+            HudParts.text(info, "OFICINA 3D · " .. panelHint, 19, {
+                Font = Theme.FontSemi, TextColor3 = Theme.Accent,
+                LayoutOrder = 4, TextWrapped = true, AutomaticSize = Enum.AutomaticSize.Y,
+                Size = UDim2.new(1, 0, 0, 0),
+            })
+        end
         local reception = job.Reception or {}
         if job.Diagnosed and reception.EstimatedPartsCost ~= nil then
             HudParts.text(info, string.format(
@@ -435,6 +447,9 @@ function Orders.new(parent: Instance)
             table.insert(parts, table.concat({
                 tostring(reception.Priority), tostring(reception.ScheduledUntil),
                 tostring(reception.DiscountPercent), tostring(reception.Stage),
+                tostring(job.Mechanics and job.Mechanics.Hood),
+                tostring(job.Mechanics and job.Mechanics.WheelFL),
+                tostring(job.Mechanics and job.Mechanics.Ready),
             }, ":"))
 		end
 		for _, job in ipairs(snapshot.CollabJobs or {}) do

@@ -1,0 +1,17 @@
+local R=require(game:GetService("ReplicatedStorage").Shared.V2VisualBudgetRules)
+local Art=require(game:GetService("ReplicatedStorage").Shared.V2PilotArtProfiles)
+local out={}
+local function check(n,v)table.insert(out,(v and "PASS " or "FAIL ")..n)end
+check("LOD junto exibe detalhe",R.Show("High",25,true))
+check("LOD mobile remove detalhe distante",not R.Show("High",100,true) and R.Show("Medium",100,true))
+check("LOD pc preserva detalhe moderado",R.Show("High",100,false))
+check("LOD nao esconde sempre ou parte nao marcada",R.Show("Always",9999,true) and R.Show(nil,9999,true))
+check("LOD tolera NaN",not R.Show("High",0/0,false))
+local m=Instance.new("Model")
+local body=Instance.new("Part")body.Parent=m body.Color=Color3.fromRGB(1,2,3)
+check("arte nao altera componentes nao marcados",Art.Apply(m,"Hatch")==0 and body.Color==Color3.fromRGB(1,2,3))
+body:SetAttribute("V2ArtRole","Paint")
+check("arte estiliza somente o explicitamente marcado",Art.Apply(m,"Hatch")==1 and body.Material==Enum.Material.Metal)
+check("arte possui tres referencias",Art.Styles.Hatch~=nil and Art.Styles.Sedan~=nil and Art.Styles.Pickup~=nil)
+m:Destroy()
+return table.concat(out,"\n")

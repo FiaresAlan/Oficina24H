@@ -386,7 +386,7 @@ function OperationRepairGame.new(gui: ScreenGui)
             local retry = button(content, "REFAZER SEM COBRAR", 16, 265, 270, 48, function()
                 if active and not waiting and not pendingAction then
                     close(true)
-                    Store.Message:Fire("Tentativa cancelada sem cobrar. Volte ao carro para refazer.",true,"CancelRepair")
+                    Store.Message:Fire("Solicitando cancelamento da tentativa. Aguarde a confirmação do servidor.",false,"CancelRepair")
                 end
             end)
             retry.BackgroundColor3 = Color3.fromRGB(55, 68, 86)

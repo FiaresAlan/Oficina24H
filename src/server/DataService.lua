@@ -1,11 +1,12 @@
 --!strict
--- DataService: perfil persistente do jogador (schema v14).
+-- DataService: perfil persistente do jogador (schema v15).
 -- Garantias: retentativas com backoff, trava de sessão (um servidor por jogador), migração por reconcile,
 -- histórico de transações limitado, salvamento só quando houve mudança (ou para renovar a trava),
 -- liberação da trava ao sair, BindToClose paralelo. Em falha de leitura fora do Studio o jogador é expulso
 -- (nunca cria perfil padrão que sobrescreveria dados existentes).
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
+local HttpService = game:GetService("HttpService")
 local DataStoreService = game:GetService("DataStoreService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -24,10 +25,11 @@ local EquipmentUpgradeRules = require(ReplicatedStorage.Shared.EquipmentUpgradeR
 local V2SupplyRules = require(ReplicatedStorage.Shared.V2SupplyRules)
 local V2StaffRules = require(ReplicatedStorage.Shared.V2StaffRules)
 local V2FinancialRules = require(ReplicatedStorage.Shared.V2FinancialRules)
+local V2UsedMarketRules = require(ReplicatedStorage.Shared.V2UsedMarketRules)
 
 local DataService = {}
 
-local SCHEMA_VERSION = 14 -- V2-08: caixa categorizado aditivo; preserva recibos v11–v13
+local SCHEMA_VERSION = 15 -- V2-09: mercado de usados aditivo; preserva comprovantes e livro caixa v14
 local MAX_ATTEMPTS = 4
 local LOCK_TIMEOUT = 360 -- s; maior que 2 autosaves, para um servidor que caiu não prender o jogador para sempre
 local LOCK_WAIT_STEP = 3
@@ -100,6 +102,7 @@ local function makeDefaultData(): any
         TelemetryV2 = { FirstUpgrade = false, FirstEmployee = false }, -- eventos anonimos de primeiro progresso
 		Transactions = {},
         FinanceLedger = V2FinancialRules.New(Config.StartingCoins,os.time()), -- agregados desde a abertura
+        UsedMarket = V2UsedMarketRules.New(), -- revenda isolada das vagas e do crédito de OS
 		TotalEarned = 0,
 		PriceMultiplier = 1, -- preço da oficina em relação à tabela (0.7 a 1.5)
 		RatingCount = 0, -- avaliações recebidas dos clientes (1 a 5 estrelas)
@@ -333,6 +336,7 @@ local function reconcile(data: any): any
     end
     -- V2-08: transações anteriores são limitadas a 50; migração
     -- conservadora marca o histórico como PARCIAL, sem inventar a vida toda.
+    data.UsedMarket = V2UsedMarketRules.Sanitize(data.UsedMarket)
     data.Transactions=V2FinancialRules.CleanTransactions(data.Transactions)
     if hadFinanceLedger then
         data.FinanceLedger=V2FinancialRules.Sanitize(data.FinanceLedger,data.Coins,os.time())
@@ -1050,6 +1054,31 @@ function DataService.TakeParts(player: Player, needed: { [string]: number }?): b
 	end
 	Dirty[player.UserId] = true
 	return true
+end
+
+-- V2-09: operacoes atômicas do mercado no MESMO perfil, sem yield nem fonte
+-- de preço/risco controlada pelo cliente. Nunca substitui a OS de clientes.
+function DataService.TradeUsedCar(player: Player, operation: any, itemId: any, style: any?): (boolean, string)
+    local profile = Profiles[player.UserId]
+    if not profile then return false, "Perfil indisponível." end
+    local newUid = HttpService:GenerateGUID(false)
+    local risk: any = style
+    if operation == "Buy" and type(itemId) == "string" then
+        local offer = V2UsedMarketRules.Offers[itemId]
+        risk = offer and math.random(0, offer.RiskMax) or 0
+    end
+    local planned, err = V2UsedMarketRules.Plan(profile, operation, itemId, os.time(), newUid, risk)
+    if not planned then return false, err end
+    if planned.Parts and not DataService.TakeParts(player, planned.Parts) then
+        return false, "Estoque mudou; restauração cancelada sem cobrança."
+    end
+    -- Todas as mudanças financeiras e de veículo são gravadas no mesmo
+    -- DataStore e não existe yield entre elas. Se não houver saldo não
+    -- fica estado parcial: essa condição foi validada no plano.
+    profile.UsedMarket = planned.Market
+    DataService.AddCoins(player, planned.Delta, planned.Reason)
+    Dirty[player.UserId] = true
+    return true, planned.Message
 end
 
 -- C20: liquida um reparo de NPC com peças + crédito idempotente no MESMO

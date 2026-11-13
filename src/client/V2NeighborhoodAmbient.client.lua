@@ -293,6 +293,17 @@ local function refresh(now: number,focus: Vector3,budget: any)
         spawn(Rules.Courier,focus,now)
     end
     for _,route in ipairs(routes) do spawn(route,focus,now) end
+    -- Métricas só no clone local (QA mobile/streaming, sem remotes ou dados
+    -- pessoais). Não medem FPS de GPU, mas permitem conferir o orçamento.
+    local pedestrians,vehicles=0,0
+    for _,actor in pairs(live) do
+        if actor.Kind=="Pedestrian" then pedestrians+=1 else vehicles+=1 end
+    end
+    ambient:SetAttribute("V2ActivePedestrians",pedestrians)
+    ambient:SetAttribute("V2ActiveVehicles",vehicles)
+    ambient:SetAttribute("V2PooledModels",totalPooled())
+    ambient:SetAttribute("V2EstimatedFps",math.floor(fps+0.5))
+    ambient:SetAttribute("V2DrawDistance",budget.Range)
 end
 
 local actionEvent=ReplicatedStorage:WaitForChild("OficinaRemotes",30)

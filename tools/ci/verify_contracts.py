@@ -89,6 +89,19 @@ check("C27: prompts/actions/upgrades and logout invalidate snapshot",
 check("C27: snapshot coherence regression registered",
       '"SnapshotCacheRulesTest"' in runner
       and (TOOLS / "SnapshotCacheRulesTest.luau").is_file())
+guard = text(SHARED / "RepairCommitGuard.lua")
+check("C28: revalidate same job/actor after worker claim Save yield",
+      "currentJob ~= expectedJob" in guard
+      and "CollaborationRules.IsAuthorized(currentJob, actorUserId)" in guard
+      and "RepairCommitGuard.CanSettle(job, Jobs[jobId]" in workshop
+      and workshop.index("if not DataService.Save(player) then") < workshop.index("RepairCommitGuard.CanSettle(job, Jobs[jobId]") < workshop.index("DataService.SettleRepairOwnerOnce(workshopOwner, jobId")
+      and "job.Status = \"Completed\"" in workshop)
+check("C28: orphan claim cleanup on save failure and removed owner",
+      workshop.count("DataService.DiscardWorkerClaim(player, jobId, session.Token)") >= 3
+      and "task.spawn(DataService.Save, player)" in workshop)
+check("C28: guard unit suite registered",
+      '"RepairCommitGuardTest"' in runner
+      and (TOOLS / "RepairCommitGuardTest.luau").is_file())
 check("C27: snapshot coherence QA guide exists",
       (ROOT / "docs" / "TESTE_C27_CACHE_SNAPSHOT_HUD_2026-11-13.md").is_file()
       and "lastSnapshotBuild" in text(ROOT / "docs" / "TESTE_C27_CACHE_SNAPSHOT_HUD_2026-11-13.md"))

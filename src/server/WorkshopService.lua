@@ -12,6 +12,7 @@ local RepairRules = require(ReplicatedStorage.Shared.RepairRules)
 local RepairSessionRules = require(ReplicatedStorage.Shared.RepairSessionRules)
 local CollaborationRules = require(ReplicatedStorage.Shared.CollaborationRules)
 local JobExitRules = require(ReplicatedStorage.Shared.JobExitRules)
+local RepairCommitGuard = require(ReplicatedStorage.Shared.RepairCommitGuard)
 local RepairOperations = require(ReplicatedStorage.Shared.RepairOperations)
 local RepairActionRules = require(ReplicatedStorage.Shared.RepairActionRules)
 local RepairReceiptRules = require(ReplicatedStorage.Shared.RepairReceiptRules)
@@ -1200,8 +1201,32 @@ function WorkshopService.FinishRepair(player: Player, jobId: string, presses: an
         local staged = DataService.StageWorkerClaim(player, workshopOwner.UserId,
             jobId, session.Token, ownerPay, actorPay, xp, result.Quality,
             service.DisplayName, job.VehicleName, defect.Specialization)
-        if not staged or not DataService.Save(player) then
+        if not staged then
             return finishFailure("Não foi possível reservar o pagamento do colaborador. Tente o reparo novamente.")
+        end
+        if not DataService.Save(player) then
+            -- Save falhou ou lock foi perdido: não manter uma claim criada
+            -- por este reparo como se a OS já tivesse crédito confirmado.
+            if DataService.DiscardWorkerClaim(player, jobId, session.Token) then
+                task.spawn(DataService.Save, player)
+            end
+            return finishFailure("Não foi possível salvar a reserva do colaborador. Tente o reparo novamente.")
+        end
+        -- Save(worker) pode ceder execução: PlayerLeft do proprietário
+        -- remove a OS, ou outro caminho pode mudar quem é o responsável.
+        -- Não debitar peças/pagar o dono usando referências capturadas
+        -- antes desse yield. Se a limpeza falhar, a reivindicação antiga
+        -- permanece auditável e NÃO prova crédito do dono (C25).
+        local stillValid = RepairCommitGuard.CanSettle(job, Jobs[jobId],
+            workshopOwner.UserId, player.UserId, delegated,
+            workshopOwner.Parent == Players and DataService.Get(workshopOwner) ~= nil
+                and getWorkshop(workshopOwner) ~= nil,
+            player.Parent == Players and DataService.Get(player) ~= nil)
+        if not stillValid then
+            if DataService.DiscardWorkerClaim(player, jobId, session.Token) then
+                task.spawn(DataService.Save, player)
+            end
+            return finishFailure("A oficina ou a ordem mudou durante a reserva. Nenhuma peça foi consumida.")
         end
     end
     -- A preparação da claim envolve Save(worker), portanto outra OS pode

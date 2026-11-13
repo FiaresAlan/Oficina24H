@@ -940,6 +940,7 @@ function WorkshopService.CheckRepairOutcome(player: Player, jobId: any, token: a
     local userId = player.UserId
     local answer = { JobId = jobId, Token = token, Status = "Unknown" }
     local receipt = RepairReceiptRules.Lookup(RepairReceipts[userId], jobId, token, os.clock())
+        or DataService.GetRepairReceipt(player, jobId, token)
     if receipt then
         answer.Status = "Completed"
         answer.Result = receipt
@@ -978,6 +979,7 @@ function WorkshopService.FinishRepair(player: Player, jobId: string, presses: an
         -- Reenvie o MESMO comprovante; jamais chame as rotinas financeiras outra vez.
         local token = type(presses) == "table" and presses.Token
         local receipt = RepairReceiptRules.Lookup(RepairReceipts[player.UserId], jobId, token, os.clock())
+            or DataService.GetRepairReceipt(player, jobId, token)
         if receipt then
             if eventSender then eventSender(player, "RepairDone", receipt) end
             return true, "Entrega já concluída. Comprovante recuperado."
@@ -1032,8 +1034,15 @@ function WorkshopService.FinishRepair(player: Player, jobId: string, presses: an
     if not result.Valid then
         return finishFailure("Reparo inválido (" .. tostring(result.Reason) .. ").")
     end
-    -- As peças pertencem sempre ao dono da OS, nunca ao estoque particular do contratado.
+    -- Evita reaplicar mesmo uma liquidação preservada de outra sessão de servidor.
+    -- Essa checagem ocorre ANTES de retirar peças; cada token de operação é único.
     local workshopOwner = owner :: Player
+    if type(session.Token) == "string"
+        and (DataService.HasRepairCredit(player, jobId, session.Token)
+            or DataService.HasRepairCredit(workshopOwner, jobId, session.Token)) then
+        return finishFailure("Esta ordem já possui crédito registrado. Consulte o histórico.")
+    end
+    -- As peças pertencem sempre ao dono da OS, nunca ao estoque particular do contratado.
     if not DataService.TakeParts(workshopOwner, defect.Parts) then
         return finishFailure("Faltam peças na oficina.")
     end
@@ -1060,12 +1069,30 @@ function WorkshopService.FinishRepair(player: Player, jobId: string, presses: an
     local actorPay, ownerPay = price + tip, 0
     if delegated then
         ownerPay, actorPay = CollaborationRules.Split(price + tip, job.CollaborationSplitPercent or 25)
+    end
+    -- O crédito é escrito no perfil junto da marca idempotente; não existe um
+    -- comando financeiro público. O modo timing legado mantém a rotina anterior.
+    if type(session.Token) == "string" then
+        local role = delegated and "Worker" or "Owner"
+        if not DataService.CreditRepairOnce(player, jobId, session.Token, actorPay,
+            role, service.DisplayName, job.VehicleName) then
+            warn("[WorkshopService] Falha ao registrar crédito de reparo:", jobId, player.UserId)
+        end
+        if delegated and workshopOwner ~= player then
+            if not DataService.CreditRepairOnce(workshopOwner, jobId, session.Token, ownerPay,
+                "Owner", service.DisplayName, job.VehicleName) then
+                warn("[WorkshopService] Falha ao registrar parte do dono:", jobId, workshopOwner.UserId)
+            end
+        end
+    elseif delegated then
         DataService.AddCoins(player, actorPay, "Reparo contratado: " .. service.DisplayName)
         DataService.AddCoins(workshopOwner, ownerPay, "Reparo colaborativo: " .. service.DisplayName)
+    else
+        DataService.AddCoins(player, actorPay, "Serviço: " .. service.DisplayName)
+    end
+    if delegated then
         player:SetAttribute("CollaborationOwnerUserId", nil)
         player:SetAttribute("CollaborationJobId", nil)
-    else
-        DataService.AddCoins(player, actorPay, "Serviço: " .. service.DisplayName .. (tip > 0 and " (+gorjeta)" or ""))
     end
     DataService.AddSkillXP(player, defect.Specialization, xp)
     DataService.AddReputation(workshopOwner, service.Reputation)
@@ -1086,12 +1113,34 @@ function WorkshopService.FinishRepair(player: Player, jobId: string, presses: an
         XP = xp, Stars = stars, Combo = combo, NextCombo = delegated and 1 or comboMultiplier(player.UserId),
     }
     if type(session.Token) == "string" then
+        -- Mesmo perfil DataStore: marca de crédito e recibo seguem a mesma gravação.
+        DataService.AttachRepairReceipt(player, jobId, session.Token, receiptPayload)
+        if delegated and workshopOwner ~= player then
+            DataService.AttachRepairReceipt(workshopOwner, jobId, session.Token, {
+                JobId = jobId, Token = session.Token,
+                Quality = result.Quality, Price = ownerPay, Tip = 0, XP = 0,
+                Stars = stars, Bonus = bonus,
+            })
+        end
         local receipts = RepairReceipts[player.UserId]
         if not receipts then
             receipts = {}
             RepairReceipts[player.UserId] = receipts
         end
         RepairReceiptRules.Remember(receipts, jobId, session.Token, receiptPayload, os.clock())
+    end
+    -- Força a tentativa de persistir ANTES de confirmar a entrega ao jogador.
+    -- Em falha transitória, o autosave tentará de novo; não declarar durabilidade.
+    local ownerSaved = DataService.Save(workshopOwner)
+    local workerSaved = workshopOwner == player and ownerSaved or DataService.Save(player)
+    if not ownerSaved or not workerSaved then
+        warn("[WorkshopService] Liquidado em memória, pendente de DataStore:", jobId)
+        if eventSender then
+            eventSender(player, "Notice", {
+                Message = "Serviço concluído, mas o salvamento falhou. Evite sair até recuperar a conexão.",
+                Success = false,
+            })
+        end
     end
     SettlingRepairs[player.UserId] = nil
     if eventSender then

@@ -1176,6 +1176,7 @@ function WorkshopService.FinishRepair(player: Player, jobId: string, presses: an
     -- salvar o dono mas antes do executor poderá ser corrigida no próximo login.
     -- O preparo acontece ANTES do consumo de peças e de qualquer crédito.
     local delegated = CollaborationRules.IsWorker(job, player.UserId)
+    local splitAtClaim = job.CollaborationSplitPercent
     local basePrice = job.Price or service.Reward
     local combo = delegated and 1 or comboMultiplier(player.UserId)
     local friend = delegated and 1 or ProgressService.FriendMultiplier(player)
@@ -1221,7 +1222,8 @@ function WorkshopService.FinishRepair(player: Player, jobId: string, presses: an
             workshopOwner.UserId, player.UserId, delegated,
             workshopOwner.Parent == Players and DataService.Get(workshopOwner) ~= nil
                 and getWorkshop(workshopOwner) ~= nil,
-            player.Parent == Players and DataService.Get(player) ~= nil)
+            player.Parent == Players and DataService.Get(player) ~= nil,
+            splitAtClaim)
         if not stillValid then
             if DataService.DiscardWorkerClaim(player, jobId, session.Token) then
                 task.spawn(DataService.Save, player)

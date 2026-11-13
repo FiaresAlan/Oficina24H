@@ -94,6 +94,7 @@ workshop_c28 = text(ROOT / "src" / "server" / "WorkshopService.lua")
 check("C28: revalidate same job/actor after worker claim Save yield",
       "currentJob ~= expectedJob" in guard
       and "CollaborationRules.IsAuthorized(currentJob, actorUserId)" in guard
+      and "currentJob.CollaborationSplitPercent == expectedSplit" in guard
       and "RepairCommitGuard.CanSettle(job, Jobs[jobId]" in workshop_c28
       and workshop_c28.index("if not DataService.Save(player) then") < workshop_c28.index("RepairCommitGuard.CanSettle(job, Jobs[jobId]") < workshop_c28.index("DataService.SettleRepairOwnerOnce(workshopOwner, jobId")
       and "job.Status = \"Completed\"" in workshop_c28)

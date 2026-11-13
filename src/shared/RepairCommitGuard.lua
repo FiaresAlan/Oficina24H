@@ -8,7 +8,7 @@ local Guard = {}
 
 function Guard.CanSettle(expectedJob: any, currentJob: any,
 	ownerUserId: number, actorUserId: number, delegated: boolean,
-	ownerConnected: boolean, actorConnected: boolean): boolean
+	ownerConnected: boolean, actorConnected: boolean, expectedSplit: number?): boolean
 	if type(expectedJob) ~= "table" or currentJob ~= expectedJob
 		or type(ownerUserId) ~= "number" or type(actorUserId) ~= "number"
 		or ownerConnected ~= true or actorConnected ~= true
@@ -18,8 +18,12 @@ function Guard.CanSettle(expectedJob: any, currentJob: any,
 	if not CollaborationRules.IsAuthorized(currentJob, actorUserId) then
 		return false
 	end
-	-- Não permitir que a divisão mude enquanto a claim é salva.
-	return CollaborationRules.IsWorker(currentJob, actorUserId) == delegated
+	-- Não permitir que o beneficiário ou a porcentagem do acordo
+	-- sejam trocados enquanto a claim é salva (valores calculados antes do yield).
+	if CollaborationRules.IsWorker(currentJob, actorUserId) ~= delegated then
+		return false
+	end
+	return not delegated or currentJob.CollaborationSplitPercent == expectedSplit
 end
 
 return Guard

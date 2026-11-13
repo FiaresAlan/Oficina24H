@@ -45,6 +45,13 @@ job.CollaboratorUserId = 2802
 check("C28: dono/worker invertidos não passam guarda",
 	not Guard.CanSettle(job, job, 2802, 2801, true, true, true)
 	and not Guard.CanSettle(job, job, 2801, 2802, false, true, true))
+job.CollaborationSplitPercent = 30
+check("C28: percentual contratado permanece válido durante Save",
+	Guard.CanSettle(job, job, 2801, 2802, true, true, true, 30))
+job.CollaborationSplitPercent = 45
+check("C28: mudança de percentual durante Save cancela o pagamento antigo",
+	not Guard.CanSettle(job, job, 2801, 2802, true, true, true, 30))
+job.CollaborationSplitPercent = 30
 check("C28: dados inválidos falham fechados",
 	not Guard.CanSettle(nil, nil, 2801, 2802, true, true, true)
 	and not Guard.CanSettle(job, job, 0, 2802, true, true, true))

@@ -908,8 +908,10 @@ function WorkshopService.RepairAction(player: Player, jobId: string, token: any,
         VehicleService.SetRepairing(jobId, false)
         return false, "Sessão expirada. Inicie novamente.", 0
     end
-    -- Resposta idempotente ao mesmo comando após ACK perdido. Não altera progresso,
-    -- não incrementa qualidade e não perde uma ação por limitação de frequência.
+    local ok, message = checkRepairable(player, jobId)
+    if not ok then return false, message, session.Progress.Revision end
+    -- Resposta idempotente ao mesmo comando após ACK perdido. Autoridade e
+    -- proximidade são novamente verificadas antes de confirmar a retransmissão.
     if RepairActionRules.IsReplay(session.Progress, command) then
         return true, "", session.Progress.Revision
     end
@@ -917,8 +919,6 @@ function WorkshopService.RepairAction(player: Player, jobId: string, token: any,
     if session.LastActionAt and now - session.LastActionAt < 0.07 then
         return false, "Aguarde a confirmação do ajuste anterior.", session.Progress.Revision
     end
-    local ok, message = checkRepairable(player, jobId)
-    if not ok then return false, message, session.Progress.Revision end
     local accepted, reason = RepairActionRules.Apply(session.Plan, session.Progress, command)
     if accepted then
         session.LastActionAt = now

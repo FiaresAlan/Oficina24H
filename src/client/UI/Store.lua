@@ -16,6 +16,8 @@ Store.Invite = Instance.new("BindableEvent") -- convite de trabalho recebido
 Store.RepairStart = Instance.new("BindableEvent") -- servidor sorteou o desafio do minijogo (Plan, Vehicle, Service)
 Store.RepairActionAck = Instance.new("BindableEvent") -- servidor confirmou/rejeitou um ajuste do procedimento
 Store.RepairOutcome = Instance.new("BindableEvent") -- consulta idempotente do comprovante de entrega
+Store.RepairQualityPending = Instance.new("BindableEvent") -- V2-13: avaliação mecânica selada, sem crédito
+Store.DriveCue = Instance.new("BindableEvent") -- V2-12: sinal seguro emitido pelo servidor no test-drive
 Store.DiagnoseStart = Instance.new("BindableEvent") -- servidor enviou as opções de diagnóstico (Options, Complaint...)
 Store.DiagnoseDone = Instance.new("BindableEvent") -- diagnóstico correto
 Store.RepairDone = Instance.new("BindableEvent") -- resultado do reparo (Quality, Tip, Stars...)
@@ -73,6 +75,11 @@ actionEvent.OnClientEvent:Connect(function(kind: string, payload: any)
 		Store.RepairStart:Fire(payload)
 	elseif kind == "RepairDone" then
 		Store.RepairDone:Fire(payload)
+    elseif kind == "RepairQualityPending" then
+        Store.RepairQualityPending:Fire(payload)
+        task.delay(0.15,Store.Refresh)
+    elseif kind == "DriveCue" then
+        Store.DriveCue:Fire(payload)
 	end
 end)
 

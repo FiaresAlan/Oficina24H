@@ -746,6 +746,9 @@ function WorkshopService.DeclineJob(player: Player, jobId: string)
     if job.Status ~= "InProgress" then
         return false, "Esta ordem não pode ser abandonada."
     end
+    if job.V2QualityReviewPending then
+        return false,"Há um reparo validado aguardando sua decisão de qualidade; conclua-o primeiro."
+    end
     if job.CollaboratorUserId then
         return false, "Há um colaborador nesta ordem; aguarde ele concluir ou sair."
     end
@@ -1279,6 +1282,14 @@ function WorkshopService.CheckRepairOutcome(player: Player, jobId: any, token: a
     end
     local userId = player.UserId
     local answer = { JobId = jobId, Token = token, Status = "Unknown" }
+    -- A qualidade está reservada mas o pagamento AINDA NÃO ocorreu.
+    -- O minijogo fecha e devolve o controle à aba de OS/QA.
+    local review=PendingQuality[userId]
+    if review and review.JobId==jobId and review.Token==token then
+        answer.Status="QualityPending"
+        answer.Review=V2QualityDriveRules.Public(review)
+        return answer
+    end
     -- Um recibo em memória não prova que as duas contas já foram gravadas.
     local settling = SettlingRepairs[userId]
     if SettlementDeliveryRules.Matches(settling, jobId, token) then
@@ -1712,6 +1723,59 @@ function WorkshopService.FinishRepair(player: Player, jobId: string, presses: an
     return settleEvaluatedRepair(player,jobId,session,result,job,defect,service,owner,now)
 end
 
+-- V2-13: somente o proprietário com resultado MECÂNICO já validado
+-- decide entregar, testar ou refazer. Nada vem de Touched/qualidade
+-- enviada pelo cliente. Qualquer entrega reutiliza a liquidação V1.
+function WorkshopService.QualityReview(player: Player,jobId: any,
+    operation: any): (boolean,string)
+    if not V2DriveScenarioRules.LiveEnabled
+        or type(jobId)~="string" or #jobId>80
+        or type(operation)~="string" then
+        return false,"Inspeção ainda bloqueada pelo gate da física V2-11."
+    end
+    local pending=PendingQuality[player.UserId]
+    local job=Jobs[jobId]
+    if not pending or pending.JobId~=jobId or pending.Owner~=player
+        or pending.Job~=job or job.OwnerUserId~=player.UserId
+        or job.Status~="InProgress" then
+        return false,"Inspeção inexistente, encerrada ou de outro jogador."
+    end
+    if V2DriveService.BusyJob(jobId) then
+        return false,"Devolva o veículo ao box antes de decidir a entrega."
+    end
+    local allowed,reason=V2QualityDriveRules.CanFinalize(pending,operation)
+    if not allowed then return false,reason end
+    if operation=="Redo" then
+        -- Nenhum crédito/peça foi consumido nesta OS. O segundo reparo
+        -- substitui o primeiro resultado de qualidade, sem cobranças
+        -- e sem criar outro JobId ou fazer claim duplicada.
+        job.V2ReworkCount=(job.V2ReworkCount or 0)+1
+        PendingQuality[player.UserId]=nil
+        SettlingRepairs[player.UserId]=nil
+        job.V2QualityReviewPending=nil
+        job.AcceptedAt=os.time()
+        VehicleService.SetStage(jobId,"Repair")
+        return true,"Retrabalho liberado, sem consumo adicional. Execute novamente o minijogo de reparo."
+    end
+    -- Skip preserva a nota REAL; não concede bônus de qualidade,
+    -- nem pune por problema de rede. Após reprovação há escolha clara
+    -- de retrabalho OU entrega com a qualidade original registrada.
+    PendingQuality[player.UserId]=nil
+    job.V2QualityReviewPending=nil
+    local success,message=settleEvaluatedRepair(player,jobId,
+        pending.Session,pending.Result,pending.Job,
+        pending.Defect,pending.Service,pending.Owner,pending.FinalAt)
+    if not success then
+        -- Falha antes da cobrança libera o caminho de novo reparo;
+        -- qualquer claim já criada continua coberta pelos comprovantes V1.
+        if Jobs[jobId]==job and job.Status=="InProgress" then
+            job.AcceptedAt=os.time()
+        end
+        return false,message
+    end
+    return true,(reason~="" and reason.." " or "")..message
+end
+
 -- Atualiza a fachada conforme o total ganho; avisa o jogador quando a oficina evolui de tipo.
 function WorkshopService.UpdateSkin(player: Player)
     local profile = DataService.Get(player)
@@ -1916,6 +1980,9 @@ function WorkshopService.Checkout(player: Player, items: any)
 end
 
 function WorkshopService.InviteWorker(owner: Player, workerUserId: number, jobId: string, splitPercent: number)
+    if Jobs[jobId] and Jobs[jobId].V2QualityReviewPending then
+        return false,"Aguarde ou conclua a conferência antes de convidar outro mecânico."
+    end
     if V2DriveService.BusyJob(jobId) then
         return false,"O carro está em test-drive; devolva-o antes de convidar mecânico."
     end
@@ -1975,6 +2042,9 @@ function WorkshopService.RespondInvite(worker: Player, inviteId: string, accepte
     end
 
     local job = Jobs[invite.JobId]
+    if Jobs[invite.JobId] and Jobs[invite.JobId].V2QualityReviewPending then
+        return false,"A conferência do reparo já está em andamento."
+    end
     if V2DriveService.BusyJob(invite.JobId) then
         return false,"O carro está em condução; aguarde o retorno ao box."
     end
@@ -2056,6 +2126,9 @@ local function confirmNpcSave(owner: Player, jobId: string, token: string, messa
 end
 
 function WorkshopService.HireNpc(player: Player, jobId: string)
+    if Jobs[jobId] and Jobs[jobId].V2QualityReviewPending then
+        return false,"Reparo aguardando conferência de qualidade; NPC não pode liquidar essa OS."
+    end
     if V2DriveService.BusyJob(jobId) then
         return false,"Devolva o carro ao box antes de contratar um mecânico NPC."
     end
@@ -2229,6 +2302,7 @@ end
 -- Todos os jobs do dono são removidos; eventos de reparo do contratado são cancelados.
 function WorkshopService.PlayerLeft(userId: number)
     V2UsedMarketDisplay.Clear(userId)
+    PendingQuality[userId]=nil -- perfil sem crédito não exige compensação
     local ownSession = Repairs[userId]
     if ownSession then
         VehicleService.SetRepairing(ownSession.JobId, false)
@@ -2601,6 +2675,10 @@ function WorkshopService.SetStaffPolicy(player: Player,index: any,key: any,value
 end
 
 function WorkshopService.AssignStaffJob(player: Player,jobId: any,index: any): (boolean,string)
+    if type(jobId)=="string" and Jobs[jobId]
+        and Jobs[jobId].V2QualityReviewPending then
+        return false,"Esta OS está reservada para conferência pós-reparo."
+    end
     local profile=DataService.Get(player)
     local job=type(jobId)=="string" and Jobs[jobId] or nil
     if not profile or not getWorkshop(player) or not nearStaffConsole(player) then
@@ -2926,6 +3004,7 @@ local function staffTick()
             local waiting,oldestWait=0,0
             for jobId,job in pairs(Jobs) do
                 if job.OwnerUserId==userId and job.Status=="InProgress"
+                    and not job.V2QualityReviewPending
                     and not entry.Busy[jobId] and not job.CollaboratorUserId
                     and VehicleService.IsParked(jobId)
                     and not (Repairs[userId] and Repairs[userId].JobId==jobId)
@@ -3150,6 +3229,31 @@ function WorkshopService.Start()
                     settling.At = receiptNow
                 end
             end
+            -- Test-drive pós-reparo opcional nunca pode prender salário/OS
+            -- indefinidamente. Se o jogador ficar inativo 5 min após
+            -- conclusão mecânica, entrega a qualidade já validada, sem
+            -- acrescentar bônus nem impor repetição de percurso.
+            for userId,pending in pairs(PendingQuality) do
+                if V2QualityDriveRules.Timeout(pending,receiptNow)
+                    and not V2DriveService.BusyJob(pending.JobId) then
+                    local player=Players:GetPlayerByUserId(userId)
+                    if player then
+                        local action=pending.State=="Offer" and "Skip" or
+                            ((pending.State=="Approved" or pending.State=="Rework")
+                                and "Finalize" or nil)
+                        if action then
+                            local accepted,msg=WorkshopService.QualityReview(
+                                player,pending.JobId,action)
+                            if eventSender then
+                                eventSender(player,"Notice",{
+                                    Message=accepted and
+                                        "Revisão excedeu prazo; serviço entregue sem punição de teste. "..msg
+                                        or msg,Success=accepted})
+                            end
+                        end
+                    end
+                end
+            end
             for userId, session in pairs(Repairs) do
                 if not RepairSessionRules.IsActive(session, os.clock(), RepairRules.MaxSessionSeconds + 5) then
                     Repairs[userId] = nil -- sessão esquecida não prende a ordem
@@ -3190,7 +3294,9 @@ function WorkshopService.Start()
                     if owner and eventSender then
                         eventSender(owner, "Notice", { Message = "O colaborador demorou demais: a ordem voltou para você.", Success = false })
                     end
-                elseif job.Status == "InProgress" and not job.CollaboratorUserId and os.time() - (job.AcceptedAt or job.CreatedAt) > Config.InProgressMaxSeconds
+                elseif job.Status == "InProgress" and not job.V2QualityReviewPending
+                    and not job.CollaboratorUserId
+                    and os.time() - (job.AcceptedAt or job.CreatedAt) > Config.InProgressMaxSeconds
                     and not (Repairs[job.OwnerUserId] and Repairs[job.OwnerUserId].JobId == jobId) then
                     -- aceita e esquecida: o cliente leva o carro embora e a vaga é liberada (-1 de reputação, como abandonar)
                     VehicleService.Despawn(job.Id)

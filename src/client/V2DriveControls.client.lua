@@ -28,6 +28,13 @@ local touchPresses: {[InputObject]: string}={}
 local touchEndConnection: RBXScriptConnection?=nil
 local cueText=""
 local lastCueAt=-math.huge
+-- Acessibilidade: jamais exigir áudio/vibração para perceber um defeito.
+-- O aviso textual e a cor continuam sempre no painel.
+local function preferences():any
+    local profile=Store.Snapshot and Store.Snapshot.Profile
+    return type(profile)=="table" and type(profile.Accessibility)=="table"
+        and profile.Accessibility or nil
+end
 
 local function hudForDrive(): (ScreenGui,TextLabel)
     local gui=Instance.new("ScreenGui")
@@ -147,7 +154,7 @@ local function start(seat: VehicleSeat)
         prevFov=camera.FieldOfView
         camera.CameraType=Enum.CameraType.Custom
         camera.CameraSubject=seat
-        camera.FieldOfView=76
+        camera.FieldOfView=preferences() and preferences().LowDetail and 70 or 76
     end
     local newGui,label=hudForDrive()
     hud=newGui
@@ -258,7 +265,9 @@ Store.DriveCue.Event:Connect(function(payload: any)
             end
         end)
     end
-    local soundId=type(payload.Sound)=="string" and SoundIds[payload.Sound]
+    local accessibility=preferences()
+    local soundId=(not accessibility or accessibility.DriveSfx~=false)
+        and type(payload.Sound)=="string" and SoundIds[payload.Sound]
     if type(soundId)=="string" and string.sub(soundId,1,13)=="rbxassetid://" then
         local sound=Instance.new("Sound")
         sound.Name="V2DriveSignalSfx"
@@ -269,6 +278,7 @@ Store.DriveCue.Event:Connect(function(payload: any)
         sound:Play()
         task.delay(2.5,function() sound:Destroy() end)
     end
+    if not accessibility or accessibility.DriveHaptics~=false then
     pcall(function()
         if Haptics:IsMotorSupported(Enum.UserInputType.Gamepad1,
             Enum.VibrationMotor.Small) then
@@ -280,6 +290,7 @@ Store.DriveCue.Event:Connect(function(payload: any)
             end)
         end
     end)
+    end
 end)
 
 local function listen(character: Model)

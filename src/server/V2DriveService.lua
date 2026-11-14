@@ -77,17 +77,19 @@ local function visualShell(rig: Model,car: Model,chassis: BasePart)
         Safety.StripScripts(model)
         local parts={}
         for _,node in ipairs(model:GetDescendants()) do
-            if node:IsA("BasePart") then
-                table.insert(parts,node)
-            elseif node:IsA("ProximityPrompt")
-                or node:IsA("Seat") or node:IsA("VehicleSeat")
-                or node:IsA("Constraint") or node:IsA("JointInstance") then
+            if node:IsA("ProximityPrompt") or node:IsA("Seat")
+                or node:IsA("VehicleSeat") or node:IsA("Constraint")
+                or node:IsA("JointInstance") then
                 node:Destroy()
+            elseif node:IsA("BasePart") then
+                table.insert(parts,node)
             end
         end
         -- Limite físico mesmo diante de asset enorme do Creator Store:
         -- não gerar dezenas de massas/juntas no carro piloto.
-        if #parts>0 and #parts<=95 then
+        local size=model:GetExtentsSize()
+        if #parts>0 and #parts<=95
+            and size.X<50 and size.Y<25 and size.Z<60 then
             model.Name="VisualSanitizado"
             model:PivotTo(chassis.CFrame*CFrame.new(0,-3.3,0))
             for _,p in ipairs(parts) do
@@ -194,6 +196,13 @@ local function buildRig(car: Model,owner: Player,jobId: string): (Model,VehicleS
                 Color3.fromRGB(24,27,30),true)
             wheel.Shape=Enum.PartType.Cylinder
             wheel.CustomPhysicalProperties=PhysicalProperties.new(0.85,1.9,0,100,100)
+            -- Hinge é a única conexão física entre roda e chassi:
+            -- contato roda/chassi causaria tremor severo no primeiro giro.
+            local excludeSelf=Instance.new("NoCollisionConstraint")
+            excludeSelf.Name="NaoColidirChassi"
+            excludeSelf.Part0=wheel
+            excludeSelf.Part1=chassis
+            excludeSelf.Parent=rig
             local shaft=attachment(knuckle,"Eixo",
                 Vector3.zero,Vector3.xAxis,Vector3.yAxis)
             local rotor=attachment(wheel,"Eixo",

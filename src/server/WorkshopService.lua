@@ -739,6 +739,7 @@ function WorkshopService.DiagnoseJob(player: Player, jobId: string, choice: any?
     if job.Status ~= "InProgress" or job.AssignedWorkerUserId ~= player.UserId then
         return false, "Você não está responsável por esta ordem."
     end
+    job.OwnerTouchedAt = os.time() -- o dono está atendendo: o funcionário NPC não toma esta OS
     local nearCustomer = CustomerNpcService.IsNear(player, job.Id, Config.TalkDistance)
     local nearVehicle = VehicleService.IsNear(player, job.Id, Config.InteractDistance)
     if choice ~= nil and job.DiagnoseOptions then
@@ -811,6 +812,7 @@ function WorkshopService.ExamineJob(player: Player, jobId: string, examId: any)
     if not VehicleService.IsNearInspectionPoint(player, job.Id, examId) then
         return false, "Vá até o ponto de inspeção correspondente no carro. Procure o marcador iluminado."
     end
+    job.OwnerTouchedAt = os.time()
     job.DiagnoseExams = job.DiagnoseExams or {}
     job.DiagnoseExams[examId] = true
     VehicleService.MarkInspected(job.Id, examId)
@@ -891,6 +893,7 @@ function WorkshopService.PrepareRepairStep(player: Player, jobId: string, stepId
         return false, "Aproxime-se do componente indicado para trabalhar."
     end
     job.PreparationStep = nextStep
+    job.OwnerTouchedAt = os.time()
     VehicleService.SetRepairPrepProgress(job.Id, job.DefectId, nextStep)
     if RepairPrepRules.Ready(job.DefectId, nextStep) then
         return true, "Preparação concluída. Use a ferramenta no carro ou a máquina da oficina."
@@ -2222,7 +2225,8 @@ local function staffTick()
             for jobId, job in pairs(Jobs) do
                 if job.OwnerUserId == userId and job.Status == "InProgress" and not entry.Busy[jobId] and not job.CollaboratorUserId
                     and VehicleService.IsParked(jobId) and not (Repairs[userId] and Repairs[userId].JobId == jobId)
-                    and not (RepairPrepRules.Requires(job.DefectId) and (job.PreparationStep or 1) > 1) then
+                    and not (RepairPrepRules.Requires(job.DefectId) and (job.PreparationStep or 1) > 1)
+                    and not StaffAssignmentRules.OwnerIsWorking(job.OwnerTouchedAt, os.time()) then
                     waiting += 1
                     oldestWait = math.max(oldestWait, os.time() - (job.AcceptedAt or os.time()))
                 end
@@ -2237,6 +2241,7 @@ local function staffTick()
                         and not (Repairs[userId] and Repairs[userId].JobId == jobId)
                         and not (RepairPrepRules.Requires(job.DefectId) and (job.PreparationStep or 1) > 1)
                         and os.time() >= (job.EmployeeRetryAt or 0)
+                        and not StaffAssignmentRules.OwnerIsWorking(job.OwnerTouchedAt, os.time())
                         and StaffAssignmentRules.EligibleJob(waiting, os.time() - (job.AcceptedAt or os.time())) then
                         local free: Model? = nil
                         for _, npc in ipairs(entry.Npcs) do

@@ -478,6 +478,7 @@ check("employee physically walks before working",
 check("staff starts at 2 bays and waits 25 seconds for one car",
       "MaxEmployees = 1" in text(SHARED / "WorkshopLevels.lua")
       and "StaffAssignmentRules.ShouldDispatch" in workshop
+      and workshop.count("StaffAssignmentRules.OwnerIsWorking(job.OwnerTouchedAt") >= 2
       and "Rules.SoloWaitSeconds = 25" in staff_rules)
 check("NPC reservation is created before asynchronous work and enforced at interaction entry",
       "StaffAssignmentRules.TryReserve(entry.Busy, jobId)" in workshop

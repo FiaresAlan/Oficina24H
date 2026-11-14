@@ -1648,6 +1648,36 @@ do
         and #persisted.FleetAccounts.History==2)
 end
 
+-- V2-15: preferências cosméticas independem de dinheiro e
+-- permanecem desligadas depois de um logout/reconexão.
+do
+    local store=newStore()
+    local player=fakePlayer(5201)
+    local A=server(store,"v2-accessibility-A")
+    A.Load(player)
+    local p=A.Get(player)
+    local originalCoins=p.Coins
+    local originalRep=p.Reputation
+    local noHaptic=A.SetAccessibility(player,"DriveHaptics",false)
+    local noSound=A.SetAccessibility(player,"DriveSfx",false)
+    local lowDetail=A.SetAccessibility(player,"LowDetail",true)
+    local denied=A.SetAccessibility(player,"Coins",true)
+    check("V2-15: apenas opções cosméticas válidas podem ser alteradas",
+        noHaptic and noSound and lowDetail and not denied
+        and p.Coins==originalCoins and p.Reputation==originalRep)
+    check("V2-15: acessibilidade é persistida no perfil",A.Save(player))
+    A.Remove(player)
+    local B=server(store,"v2-accessibility-B")
+    B.Load(player)
+    local q=B.Get(player)
+    check("V2-15: explicitamente false continua false após Save/Load",
+        q and q.Accessibility.DriveHaptics==false
+        and q.Accessibility.DriveSfx==false
+        and q.Accessibility.LowDetail==true)
+    check("V2-15: settings não alteram score, saldo nem reputação",
+        q and q.Coins==originalCoins and q.Reputation==originalRep)
+end
+
 for _, c in ipairs(clones) do c:Destroy() end
 table.insert(results, failures == 0 and "TODOS OS TESTES PASSARAM" or (failures .. " TESTE(S) FALHARAM"))
 return table.concat(results, "\n")

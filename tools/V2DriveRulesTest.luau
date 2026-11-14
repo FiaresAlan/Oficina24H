@@ -33,8 +33,8 @@ check("proíbe motorista de outra conta no banco",
     and not R.PermittedOccupant(0,0))
 local gas,angle=R.Controls(4,-8)
 check("input clamped, torque/ângulo no servidor",
-    gas==R.MotorAngularSpeed
-    and angle==-R.SteerAngle)
+    gas==-R.MotorAngularSpeed
+    and angle==R.SteerAngle)
 local reverse,turn=R.Controls(-1,0.5)
 check("ré limitada e esterço proporcional",
     reverse<0 and math.abs(reverse)<gas and turn==R.SteerAngle/2)

@@ -346,6 +346,19 @@ function Orders.new(parent: Instance)
                 Size = UDim2.new(1, 0, 0, 0),
             })
         end
+                -- V2-11: progresso consultivo da rota, sem recompensa ou
+        -- alteração de diagnóstico/avaliação de cliente.
+        if type(job.Drive)=="table" then
+            local drive=job.Drive
+            HudParts.text(info,drive.Active and string.format(
+                "TEST-DRIVE · %d/%d pontos · %ds restantes (sem recompensa)",
+                drive.Passed or 0,drive.Total or 4,drive.SecondsRemaining or 0)
+                or "HATCH PILOTO · direção opcional · sem crédito de OS",
+                19,{Font=Theme.FontSemi,TextColor3=Theme.Accent,
+                    LayoutOrder=4,TextWrapped=true,
+                    AutomaticSize=Enum.AutomaticSize.Y,
+                    Size=UDim2.new(1,0,0,0)})
+        end
         local reception = job.Reception or {}
         if job.Diagnosed and reception.EstimatedPartsCost ~= nil then
             HudParts.text(info, string.format(
@@ -364,7 +377,23 @@ function Orders.new(parent: Instance)
             })
 		local actions = stack(content, 8, false, 3)
 		actions.Name = "Actions"
-		if goal.Kind == "Delegated" then
+		        if type(job.Drive)=="table" then
+            local drive=job.Drive
+            local driveButton=PanelKit.button(actions,
+                drive.Active and "DEVOLVER CARRO AO BOX"
+                    or "DIRIGIR HATCH · TESTE PILOTO",
+                drive.Active and "orange" or "blue",
+                Vector2.new(240,48),function()
+                    if drive.Active then
+                        Store.Act("DriveCar",{JobId=job.Id,Mode="Return"})
+                    else
+                        window.Close()
+                        Store.Act("DriveCar",{JobId=job.Id,Mode="Start"})
+                    end
+                end)
+            driveButton.LayoutOrder=-3
+        end
+        if goal.Kind == "Delegated" then
 			HudParts.text(actions, "O profissional convidado está responsável por esta OS.", 20, {
 				Font = Theme.FontSemi, TextColor3 = Theme.Muted, TextWrapped = true,
 				AutomaticSize = Enum.AutomaticSize.Y, Size = UDim2.fromOffset(210, 0),
@@ -501,6 +530,8 @@ function Orders.new(parent: Instance)
                 tostring(job.Mechanics and job.Mechanics.Hood),
                 tostring(job.Mechanics and job.Mechanics.WheelFL),
                 tostring(job.Mechanics and job.Mechanics.Ready),
+                tostring(job.Drive and job.Drive.Active),
+                tostring(job.Drive and job.Drive.Passed),
                 tostring(job.Procedure and job.Procedure.Completed),
                 tostring(job.Procedure and job.Procedure.StepName),
                 tostring(job.EmployeeAssignedSlot),

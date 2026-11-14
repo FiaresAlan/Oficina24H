@@ -5,7 +5,7 @@ local out={}
 local function check(n,ok)table.insert(out,(ok and "PASS " or "FAIL ")..n)end
 check("catálogo de autoria tem entradas auditáveis",
     #R.Entries>=10 and #R.Validate()==0)
-local found={Veículos=false,Cidade=false,Oficina=false,Áudio=false}
+local found={["Veículos"]=false,Cidade=false,Oficina=false,["Áudio"]=false}
 for _,entry in ipairs(R.Entries) do
     if found[entry.Group]~=nil then found[entry.Group]=true end
     check("autor identificável: "..entry.Name,

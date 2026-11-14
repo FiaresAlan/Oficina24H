@@ -25,6 +25,9 @@ local contracts:{[number]:Contract}={}
 local proposals:{[number]:any}={}
 local nextAt:{[number]:number}={}
 local lastResult:{[number]:{Text:string,Success:boolean,At:number}}={}
+-- Ligação ao mesmo Player que aceitou/recebeu a proposta. Não
+-- armazenamos perfis, cópias de dinheiro nem tokens em snapshot público.
+local playersByUserId:{[number]:Player}={}
 local tokens=0
 
 function Service.Init(dataService:any,notifier:(Player,string,boolean)->(),
@@ -146,6 +149,7 @@ function Service.Offer(player:Player):boolean
         return false
     end
     tokens+=1
+    playersByUserId[player.UserId]=player
     proposals[player.UserId]={
         Token=tokens,Offer=offer,ExpiresAt=os.time()+FleetRules.ProposalSeconds,
     }
@@ -201,6 +205,7 @@ end
 function Service.Snapshot(userId:number):any
     local now=os.time()
     local accountPlayer=Players:GetPlayerByUserId(userId)
+        or playersByUserId[userId]
     local accounts=accountPlayer and data and data.FleetAccountSummary(accountPlayer)
         or {Partners={},History={},Completed=0,Expired=0}
     local c=Service.Active(userId)
@@ -253,6 +258,7 @@ function Service.Start()
         proposals[player.UserId]=nil
         nextAt[player.UserId]=nil
         lastResult[player.UserId]=nil
+        playersByUserId[player.UserId]=nil
     end)
     task.spawn(function()
         while true do

@@ -4,6 +4,7 @@
 local ServerStorage=game:GetService("ServerStorage")
 local ReplicatedStorage=game:GetService("ReplicatedStorage")
 local AssetSafetyRules=require(ReplicatedStorage.Shared.AssetSafetyRules)
+local VisualBudget=require(ReplicatedStorage.Shared.V2VisualBudgetRules)
 local Service={}
 Service.MaxTemplates=3
 Service.MaxPartsPerTemplate=80
@@ -30,7 +31,8 @@ function Service.Publish(): number
         for _,node in ipairs(template:GetDescendants()) do
             if node:IsA("BasePart") then parts+=1 end
         end
-        if parts<=Service.MaxPartsPerTemplate then
+        local accepted=VisualBudget.PreflightTemplate(template,"Ambient")
+        if accepted and parts<=Service.MaxPartsPerTemplate then
             local copy=template:Clone()
             AssetSafetyRules.StripScripts(copy)
             copy.Name="Ped_"..(count+1)

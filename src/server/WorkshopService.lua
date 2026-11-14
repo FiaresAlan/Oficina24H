@@ -32,11 +32,13 @@ local V2ManagementSummaryRules = require(ReplicatedStorage.Shared.V2ManagementSu
 local V2UpgradePurchaseRules = require(ReplicatedStorage.Shared.V2UpgradePurchaseRules)
 local V2FinancialRules = require(ReplicatedStorage.Shared.V2FinancialRules)
 local V2UsedMarketRules = require(ReplicatedStorage.Shared.V2UsedMarketRules)
+local V2DriveRules = require(ReplicatedStorage.Shared.V2DriveRules)
 
 local WorkshopService = {}
 
 local PlotService = require(script.Parent.PlotService)
 local VehicleService = require(script.Parent.VehicleService)
+local V2DriveService = require(script.Parent.V2DriveService)
 local CustomerArrivalService = require(script.Parent.CustomerArrivalService)
 local EquipmentService = require(script.Parent.EquipmentService)
 local EquipmentUpgradePads = require(script.Parent.EquipmentUpgradePads)
@@ -516,6 +518,12 @@ function WorkshopService.GetSnapshot(player: Player)
                     EmployeeAssignedSlot = job.EmployeeAssignedSlot,
                     ServiceName = job.Diagnosed and Catalog.Services[job.ServiceId].DisplayName or nil,
                 }
+                -- Um Hatch aceito recebe botão "Dirigir" sem divulgar defeito
+                -- oculto, sessão privada, validação de movimento ou valores.
+                local _,drivePilot=VehicleService.ComponentStates(job.Id)
+                if V2DriveRules.PilotEligible(job.VehicleName,drivePilot) then
+                    entry.Drive=V2DriveService.Status(job.Id)
+                end
                 -- Requisitos e pagamento só são revelados após o diagnóstico (o defeito real fica no servidor).
                 if job.Diagnosed then
                     entry.PrepRequired = RepairPrepRules.Requires(job.DefectId)
@@ -842,6 +850,44 @@ function WorkshopService.AcceptJob(player: Player, jobId: string)
     job.AssignedWorkerUserId = player.UserId
     VehicleService.SetRepairActor(job.Id, player.UserId)
     return true, "Ordem aceita. " .. placeMessage
+end
+
+-- V2-11: teste de dirigibilidade sem recompensas; o veículo físico
+-- transitório não modifica Job.Status nem a OS financeira.
+function WorkshopService.DriveCar(player: Player,jobId: any,mode: any): (boolean,string)
+    if type(jobId)~="string" or #jobId<1 or #jobId>80
+        or (mode~="Start" and mode~="Return") then
+        return false,"Solicitação de direção inválida."
+    end
+    if mode=="Return" then
+        return V2DriveService.End(player,jobId)
+    end
+    local job=Jobs[jobId]
+    if not job then return false,"Ordem não encontrada." end
+    local car=VehicleService.DriveInfo(jobId)
+    local _,pilot=VehicleService.ComponentStates(jobId)
+    local character=player.Character
+    local humanoid=character and character:FindFirstChildOfClass("Humanoid")
+    local ctx={
+        Owner=job.OwnerUserId==player.UserId,
+        Active=job.Status=="InProgress",
+        VehicleName=job.VehicleName,PilotId=pilot,
+        Parked=VehicleService.IsParked(jobId),
+        Repairing=Repairs[player.UserId]~=nil
+            or (car and car:GetAttribute("Reparando")==true),
+        Delegated=job.CollaboratorUserId~=nil
+            or job.AssignedWorkerUserId~=player.UserId,
+        EmployeeBusy=employeeReserved(job) or job.EmployeeAssignedSlot~=nil,
+        ComponentsClosed=V2ComponentRules.MayDrive(VehicleService.ComponentStates(jobId)),
+        SupportRaised=car and car:GetAttribute("V2SupportPlaced")==true,
+        Near=VehicleService.IsNear(player,jobId,16),
+        CharacterReady=humanoid~=nil and humanoid.Health>0 and humanoid.Sit==false,
+        OtherSession=V2DriveService.BusyFor(player.UserId),
+        JobSession=V2DriveService.BusyJob(jobId),
+    }
+    local allowed,why=V2DriveRules.CanLaunch(ctx)
+    if not allowed then return false,why end
+    return V2DriveService.Start(player,jobId)
 end
 
 -- Exames e hipóteses formam a MESMA ordem: o servidor guarda o defeito verdadeiro.

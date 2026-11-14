@@ -1458,9 +1458,12 @@ check("V2-16: matriz física cobre exatamente os 15 defeitos existentes",
     len(qa_matrix)==15
     and len({r["DefectId"] for r in qa_matrix})==15
     and {r["DefectId"] for r in qa_matrix}==set(ids))
-check("V2-16: nenhuma linha de QA de serviço afirma execução em Studio",
-    all(r["Status"]=="PENDENTE"
-        and not r["LinkEvidencia"] and not r["ShaDoBuild"]
+check("V2-16: QA pendente não finge prova, QA aprovado exige URL e SHA",
+    all(r["Status"] in {"PENDENTE","APROVADO","FALHOU","BLOQUEADO"}
+        and (r["Status"]!="APROVADO"
+            or (r["LinkEvidencia"].startswith("https://")
+                and re.fullmatch(r"[0-9a-fA-F]{40}",r["ShaDoBuild"]) is not None))
+        and (r["Status"]!="PENDENTE" or (not r["LinkEvidencia"] and not r["ShaDoBuild"]))
         for r in qa_matrix))
 check("V2-16: release gate possui 16 requisitos com fonte inequívoca",
     '#Rules.Gates' in release_rules
@@ -1475,14 +1478,17 @@ check("V2-16: gate sempre requer evidência atrelada ao SHA atual",
     and 'entry.Source~=gate.Source' in release_rules
     and 'entry.Status~="Passed"' in release_rules
     and 'elegível' not in text(SHARED/"V2DriveScenarioRules.lua").lower())
-check("V2-16: template inicial não possui nenhuma aprovação artificial",
+check("V2-16: manifest tem schema completo e prova verificada ao aprovar",
     release_manifest.get("Version")==1
     and len(release_manifest.get("Entries",{}))==16
-    and all(x.get("Status") in ("Pending","Blocked")
-        and not x.get("Proof") and not x.get("BuildSha")
-        for x in release_manifest["Entries"].values())
-    and all(release_manifest["Entries"][id]["Status"]=="Blocked"
-        for id in ("merge_main","inventory_fifo","licenses")))
+    and all(isinstance(x,dict)
+        and x.get("Status") in ("Pending","Blocked","Failed","Passed")
+        and (x["Status"]!="Passed"
+            or (x.get("Source") and x.get("Proof","").startswith("https://")
+                and len(x.get("Notes",""))>=12
+                and re.fullmatch(r"[0-9a-fA-F]{40}",x.get("BuildSha","")) is not None))
+        and (x["Status"]!="Pending" or not x.get("Proof"))
+        for x in release_manifest["Entries"].values()))
 check("V2-16: release enforcer é independente do CI verde",
     'def evaluate(manifest:' in release_cli
     and 'if opts.mode == "enforce" and not result["Approved"]' in release_cli

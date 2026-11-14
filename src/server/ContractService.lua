@@ -260,6 +260,16 @@ function Service.Snapshot(userId:number):any
     }
 end
 
+-- Retentativa exclusiva do servidor após falha de Save. Não permite
+-- criar nova OS ou repetir bônus; serve ao watchdog e aos testes em Edit.
+function Service.RetryPending(player:Player):boolean
+    local c=contracts[player.UserId]
+    if not c or c.Settling then return false end
+    if c.Done>=c.Offer.Target then return endContract(player,c,true) end
+    if os.time()>=c.EndsAt then return endContract(player,c,false) end
+    return false
+end
+
 -- QA SOMENTE em Studio/rota de comando administrativo existente.
 function Service.QaOfferNow(player:Player):boolean
     if not game:GetService("RunService"):IsStudio() then return false end
@@ -288,11 +298,7 @@ function Service.Start()
                 local c=contracts[id]
                 local p=proposals[id]
                 if c then
-                    if c.Done>=c.Offer.Target then
-                        endContract(player,c,true)
-                    elseif now>=c.EndsAt then
-                        endContract(player,c,false)
-                    end
+                    Service.RetryPending(player)
                 elseif p then
                     if now>=p.ExpiresAt then
                         proposals[id]=nil

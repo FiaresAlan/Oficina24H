@@ -69,6 +69,21 @@ for mode in ("Tire", "Battery", "Cooling", "Sequence", "Calibration", "Circuit",
 
 check("diagnosis must require evidence", "HasRelevantExam" in text(ROOT / "src" / "server" / "WorkshopService.lua"))
 check("server evaluates new repair families", "WorkshopProcedures.Evaluate" in operations)
+check("V1 security: repair answer keys never replicated to client",
+    not (SHARED / "RepairOperations.lua").exists()
+    and not (SHARED / "WorkshopProcedures.lua").exists()
+    and (ROOT/"src"/"server"/"RepairOperations.lua").is_file()
+    and (ROOT/"src"/"server"/"WorkshopProcedures.lua").is_file()
+    and "require(script.Parent.RepairOperations)" in text(ROOT/"src"/"server"/"WorkshopService.lua")
+    and all("Shared.RepairOperations" not in file.read_text(encoding="utf-8")
+            and "Shared.WorkshopProcedures" not in file.read_text(encoding="utf-8")
+            for file in (ROOT/"src").rglob("*.lua")))
+check("V1 security: tests require server-only answers",
+    all("Shared.RepairOperations" not in file.read_text(encoding="utf-8")
+            and "Shared.WorkshopProcedures" not in file.read_text(encoding="utf-8")
+            and "require(Shared.RepairOperations)" not in file.read_text(encoding="utf-8")
+            for file in (ROOT/"tools").glob("*.luau")))
+
 check("unvalidated remote finish removed from Orders panel", 'Store.Act("CompleteJob"' not in text(CLIENT / "UI" / "Panels" / "Orders.lua"))
 runner = text(TOOLS / "RunAllTests.luau")
 suite_ids = re.findall(r'"([A-Za-z0-9_]+Test|StudioPlaceAudit)"', runner)
@@ -1282,7 +1297,16 @@ check("V2-14: sucesso aceito só para contrato aberto + JobId único",
     and 'c.DoneJobs[jobId]=true' in fleet_service
     and 'c.Token~=token' in fleet_service
     and 'Service.Active(owner.UserId)' in fleet_service
-    and 'ContractService.FleetDone(owner,job.Fleet,job.Id' in workshop)
+    and 'ContractService.FleetDone(entry.Owner,' in workshop
+    and 'entry.FleetToken = job.Fleet' in workshop
+    and 'if DataService.Save(player) then' in workshop)
+check("V2 audit: fleet payment comes after repair receipt Save, not inside rating",
+    "entry.FleetMethod = delegated and" in workshop
+    and "ContractService.FleetDone(entry.Owner," in workshop
+    and "ContractService.FleetDone(owner,fleetToken,jobId," in workshop
+    and "job.Price or service.Reward,\"Npc\"" in workshop
+    and workshop.index("local stars = rateService(") < workshop.index("local function confirmNpcSave(")
+    and "ContractService.FleetDone(owner,job.Fleet,job.Id" not in workshop)
 check("V2-14: bônus de frota próprio e idempotente no mesmo perfil",
     'function DataService.RecordFleetOutcomeOnce(' in data_service
     and 'V2FleetBusinessRules.Record(profile.FleetAccounts' in data_service
@@ -1303,7 +1327,8 @@ check("V2-14: parceiro persistido e resumo não expõe chave de crédito",
     and 'MaxCreditKeys=96' in fleet_rules
     and 'MaxHistory=20' in fleet_rules)
 check("V2-14: decisão de equipe/terceiro não duplica OS",
-    '(job.EmployeeAssignedSlot or job.V2EmployeeSlot) and "Staff"' in workshop
+    'job.Price or service.Reward,"Staff"' in workshop
+    and 'job.Price or service.Reward,"Npc"' in workshop
     and '"Collaborator"' in workshop
     and '"Owner"' in workshop
     and 'Methods=table.clone(c.Methods)' in fleet_service

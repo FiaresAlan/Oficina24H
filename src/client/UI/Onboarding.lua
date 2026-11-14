@@ -48,7 +48,7 @@ function Onboarding.new(gui: ScreenGui, navRoots: (string) -> { GuiObject })
 	skip.TextColor3 = Theme.Text
 	skip.BackgroundColor3 = Color3.fromRGB(20, 40, 80)
 	skip.BorderSizePixel = 0
-	skip.Size = UDim2.fromOffset(150, 44) -- alvo de toque >= 44 px
+	skip.Size = UDim2.fromOffset(160, 58) -- alvo de toque >= 44 px também com o UIScale do celular (~0,77)
 	skip.LayoutOrder = 3
 	skip.ZIndex = 13
 	Kit.corner(skip, 12)
@@ -232,9 +232,69 @@ function Onboarding.new(gui: ScreenGui, navRoots: (string) -> { GuiObject })
 		update(Store.Snapshot)
 	end
 
+	-- Homologação V1 (G4): o cartão do guia precisa caber no espaço LIVRE da tela.
+	-- * 568x320: a linha "etapa + objetivo + Pular guia" passava de 670 px e vazava dos dois lados → empilha em coluna,
+	--   com a base logo acima da barra de navegação (não cobre os botões).
+	-- * 1920x1080 (PC/console): com objetivo longo a linha invadia o painel "Clientes aguardando" da coluna direita →
+	--   centraliza no espaço entre a margem esquerda e a coluna direita.
+	local fitTop = 150
+	local watched: { [GuiObject]: boolean } = {}
+	local function reflow()
+		local unit = skip.AbsoluteSize.Y / 58 -- escala efetiva (UIScale do HUD)
+		if unit <= 0 or gui.AbsoluteSize.X <= 0 then return end
+		local leftLimit, rightLimit = 12, gui.AbsoluteSize.X - 12
+		local column = gui:FindFirstChild("RightColumn")
+		if column and column:IsA("GuiObject") and column.Visible and column.AbsoluteSize.X > 0 then
+			rightLimit = math.min(rightLimit, column.AbsolutePosition.X - 12)
+		end
+		local available = rightLimit - leftLimit
+		local rowWidth = stepLabel.AbsoluteSize.X + objective.AbsoluteSize.X + skip.AbsoluteSize.X
+		local vertical = rowWidth + 60 * unit > available -- 60 = paddings + espaçamentos do layout
+		local direction = vertical and Enum.FillDirection.Vertical or Enum.FillDirection.Horizontal
+		if layout.FillDirection ~= direction then
+			layout.FillDirection = direction
+			layout.HorizontalAlignment = vertical and Enum.HorizontalAlignment.Center or Enum.HorizontalAlignment.Left
+		end
+		local centerX = (leftLimit + rightLimit) / 2 / unit
+		local nav = gui:FindFirstChild("BottomNav")
+		if vertical and nav and nav:IsA("GuiObject") and nav.Visible then
+			root.AnchorPoint = Vector2.new(0.5, 1)
+			root.Position = UDim2.new(0, centerX, 0, math.max(0, (nav.AbsolutePosition.Y - 8) / unit))
+		else
+			-- Em linha: começa abaixo dos cartões do topo que ocupam a mesma faixa horizontal (objetivo compacto,
+			-- resumo, barra superior), nunca acima de fitTop.
+			local half = math.max(root.AbsoluteSize.X, rowWidth) / 2
+			local x0, x1 = centerX * unit - half, centerX * unit + half
+			local top = fitTop * unit
+			for _, name in ipairs({ "TopBar", "CompactSummary", "QuickObjective" }) do
+				local card = gui:FindFirstChild(name)
+				if card and card:IsA("GuiObject") and card.Visible and card.AbsoluteSize.Y > 0
+					and card.AbsolutePosition.X < x1 and x0 < card.AbsolutePosition.X + card.AbsoluteSize.X then
+					top = math.max(top, card.AbsolutePosition.Y + card.AbsoluteSize.Y + 8)
+				end
+			end
+			root.AnchorPoint = Vector2.new(0.5, 0)
+			root.Position = UDim2.new(0, centerX, 0, top / unit)
+		end
+	end
+	for _, item in ipairs({ stepLabel, objective, skip }) do
+		item:GetPropertyChangedSignal("AbsoluteSize"):Connect(reflow)
+	end
+	gui:GetPropertyChangedSignal("AbsoluteSize"):Connect(reflow)
+
 	return {
 		Fit = function(logicalWidth: number)
-			root.Position = UDim2.new(0.5, 0, 0, logicalWidth < 900 and 200 or 150)
+			fitTop = logicalWidth < 900 and 200 or 150
+			-- cartões vizinhos podem nascer depois do guia: acompanha mudanças deles uma única vez
+			for _, name in ipairs({ "TopBar", "CompactSummary", "QuickObjective", "RightColumn", "BottomNav" }) do
+				local card = gui:FindFirstChild(name)
+				if card and card:IsA("GuiObject") and not watched[card] then
+					watched[card] = true
+					card:GetPropertyChangedSignal("Visible"):Connect(reflow)
+					card:GetPropertyChangedSignal("AbsoluteSize"):Connect(reflow)
+				end
+			end
+			task.defer(reflow)
 		end,
 	}
 end

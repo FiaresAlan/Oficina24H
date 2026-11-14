@@ -18,7 +18,10 @@ function Paid.Valid(v: any): boolean
 		and type(v.Service) == "string" and #v.Service <= 64
 		and type(v.Vehicle) == "string" and #v.Vehicle <= 60
 		and (v.OwnerUserId == nil
-			or (whole(v.OwnerUserId, 1, 1e15)))
+			-- Mesmo intervalo de SettlementClaimRules/OwnerSettlementProofRules (negativos existem nos
+			-- jogadores de teste do Studio). Antes só aceitava >= 1: a reivindicação passava, a quitação do
+			-- contratado era recusada e o pagamento dele nunca saía (achado no teste com 2 jogadores).
+			or (whole(v.OwnerUserId, -1e15, 1e15) and v.OwnerUserId ~= 0))
 end
 
 function Paid.Make(jobId: string, token: string, amount: number, at: number,

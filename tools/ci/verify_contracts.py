@@ -1148,6 +1148,99 @@ check("V2-11: segurança, rig real e rollback cobertos por regressões Edit",
     and 'quatro rodas com motores HingeConstraint' in drive_rig_test
     and 'rollback devolve todos os materiais' in drive_suspension)
 
+
+# V2-12/13: implementações completas, mas gate de homologação de física
+# permanece DESLIGADO até o proprietário validar no Roblox Studio.
+scenario_rules=text(SHARED/"V2DriveScenarioRules.lua")
+quality_rules=text(SHARED/"V2QualityDriveRules.lua")
+scenario_test=text(TOOLS/"V2DriveScenarioTest.luau")
+quality_test=text(TOOLS/"V2QualityDriveTest.luau")
+repair_game=text(CLIENT/"UI"/"RepairGame.lua")
+operation_game=text(CLIENT/"UI"/"OperationRepairGame.lua")
+client_store=text(CLIENT/"UI"/"Store.lua")
+check("V2-12/13: gate físico explícito desligado até QA Studio",
+    "R.LiveEnabled=false" in scenario_rules
+    and 'V2DriveScenarioRules.LiveEnabled' in workshop
+    and 'mode=="Diagnosis"' in workshop
+    and 'mode=="Quality"' in workshop)
+check("V2-12: seed privado e seleção finita condicionada ao Hatch e defeito",
+    all(x in scenario_rules for x in (
+        'R.DiagnosticChance=.38','R.QualityChance=.24',
+        'R.IsCandidate','Random.new(seed)',
+        'R.Plan','R.Signals','R.HasCondition',
+        'R.DiagnosticEvidence','R.CanConclude'))
+    and 'job.V2DriveScenario=V2DriveScenarioRules.Plan(' in workshop
+    and 'math.random(1,2147483646)' in workshop
+    and 'job.V2DriveEvidence=evidence' in workshop)
+check("V2-12: evento de sensação emitido só pelo servidor via telemetria",
+    'ScenarioRules.HasCondition(' in drive_service
+    and 's.InputThrottle,s.InputSteer' in drive_service
+    and 's.Progress.Passed,s.Context.TriggerCheckpoint' in drive_service
+    and 'Service.SetDriveCueHandler' in drive_service
+    and 'actionEvent:FireClient(driver,"DriveCue",payload)' in main_src
+    and 'Store.DriveCue' in client_store
+    and 'SoundIds' in drive_client
+    and 'Haptics:SetMotor' in drive_client)
+check("V2-12: diagnóstico por bancada nunca é substituído por Touched",
+    'DiagnosisEvidence.HasRelevantExam(' in workshop
+    and 'DiagnosisRules.Judge(' in workshop
+    and 'job.V2DriveEvidence' in workshop
+    and 'Findings = findings' in workshop
+    and 'HasRepairCredit' not in scenario_rules
+    and 'CreditRepairOnce' not in scenario_rules
+    and 'Touched' not in scenario_rules)
+check("V2-12: uma OS, tentativas limitadas e rota verificada pelo servidor",
+    'job.V2DiagnosticStarts+=1' in workshop
+    and 'job.V2DiagnosticStarts>=2' in workshop
+    and 'job.V2DiagnosticDone=true' in workshop
+    and 'returned==true and s.Progress.Done==true' in drive_service
+    and 'ScenarioRules.CanConclude(' in drive_service
+    and 'outcome.Reproduced~=true' in scenario_rules
+    and 'mode=="Diagnosis"' in workshop)
+check("V2-13: minigame avaliado é selado sem nova rota de crédito",
+    'local function settleEvaluatedRepair' in workshop
+    and workshop.count('DataService.SettleRepairOwnerOnce(')==1
+    and 'PendingQuality[player.UserId]=pending' in workshop
+    and 'pending.Session=session' in workshop
+    and 'pending.Result=result' in workshop
+    and 'return settleEvaluatedRepair(player,jobId,session,result' in workshop
+    and 'function WorkshopService.QualityReview(' in workshop
+    and 'settleEvaluatedRepair(player,jobId,' in workshop)
+check("V2-13: qualidade real, livre escolha, custo/retrabalho finitos",
+    all(x in quality_rules for x in (
+        'R.MinPassQuality=70','R.MaxReworks=1',
+        'function R.CanOffer','function R.OnReturn',
+        'pending.Quality<R.MinPassQuality',
+        'function R.CanFinalize','function R.Timeout',
+        'ExtraCost=0,ExtraParts=0'))
+    and 'job.V2ReworkCount=(job.V2ReworkCount or 0)+1' in workshop
+    and 'job.V2QualityReviewPending' in workshop
+    and 'not job.V2QualityReviewPending' in workshop)
+check("V2-13: pre-credit UX fecha minigame sem receber bônus prematuro",
+    'answer.Status="QualityPending"' in workshop
+    and 'eventSender(player,"RepairQualityPending"' in workshop
+    and 'Store.RepairQualityPending' in client_store
+    and 'payload.Status=="QualityPending"' in repair_game
+    and 'payload.Status=="QualityPending"' in operation_game
+    and 'Operation="Skip"' in finance_ui
+    and 'Operation="Redo"' in finance_ui
+    and 'Operation="Finalize"' in finance_ui)
+check("V2-13: não paga enquanto dirige, retorna e não duplica liquidação V1",
+    'V2DriveService.BusyJob(jobId)' in workshop
+    and 'SettlingRepairs[player.UserId]=nil' in workshop
+    and 'DataService.HasRepairCredit(player, jobId, session.Token)' in workshop
+    and 'DataService.StageWorkerClaim' in workshop
+    and 'SettlementDeliveryRules.New' in workshop
+    and 'RepairReceiptRules.Remember' in workshop
+    and 'R.LiveEnabled=false' in scenario_rules)
+check("V2-12/13: testes de seed, spoof, abortos, payout único no runner",
+    all((TOOLS/(n+".luau")).is_file() and ('"'+n+'"') in runner
+        for n in ("V2DriveScenarioTest","V2QualityDriveTest"))
+    and 'seed único gera decisão reprodutível' in scenario_test
+    and 'replay de sessão terminada' in scenario_test
+    and 'colisão ou abortos apenas restauram oferta' in quality_test
+    and 'sem cobrança ou reembolso independente' in quality_test)
+
 print(f"\nStatic checks: {passed} passed, {len(failures)} failed")
 if failures:
     raise SystemExit(1)

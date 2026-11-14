@@ -1,4 +1,5 @@
 -- Testa apenas apresentação local, sem remotes, moedas ou personagens.
+-- As OS precisam de Id: ServiceFocusRules (B4) ignora ordens sem Id string, como o snapshot real.
 local StarterPlayer = game:GetService("StarterPlayer")
 local UI = StarterPlayer.StarterPlayerScripts.Client.UI
 local CompactHUD = require(UI.CompactHUD)
@@ -29,13 +30,13 @@ local action = c.Objective:FindFirstChild("Action")
 local detail = c.Objective:FindFirstChild("Detail")
 c.SetObjective({ Jobs = {} })
 check("sem cliente mostra oficina livre", action and action.Text == "OFICINA DISPONÍVEL")
-c.SetObjective({ Jobs = { { Status = "Available", VehicleName = "Carro A" } } })
+c.SetObjective({ Jobs = { { Id = "job_a", Status = "Available", VehicleName = "Carro A" } } })
 check("fila prioriza cliente", action.Text == "CLIENTE AGUARDANDO" and string.find(detail.Text, "Carro A", 1, true) ~= nil)
-c.SetObjective({ Jobs = { { Status = "InProgress", Diagnosed = false, VehicleName = "Carro B" } } })
+c.SetObjective({ Jobs = { { Id = "job_b", Status = "InProgress", Diagnosed = false, VehicleName = "Carro B" } } })
 check("cliente aceito prioriza conversa", action.Text == "DIAGNOSTICAR")
-c.SetObjective({ Jobs = { { Status = "InProgress", Diagnosed = true, PrepRequired = true, PrepComplete = false, VehicleName = "Carro B" } } })
+c.SetObjective({ Jobs = { { Id = "job_b", Status = "InProgress", Diagnosed = true, PrepRequired = true, PrepComplete = false, VehicleName = "Carro B" } } })
 check("diagnosticado exige preparo", action.Text == "PREPARAR VEÍCULO")
-c.SetObjective({ Jobs = { { Status = "InProgress", Diagnosed = true, PrepRequired = true, PrepComplete = true, ServiceName = "Reparo do motor" } } })
+c.SetObjective({ Jobs = { { Id = "job_b", Status = "InProgress", Diagnosed = true, PrepRequired = true, PrepComplete = true, ServiceName = "Reparo do motor" } } })
 check("preparo finalizado aponta serviço", action.Text == "EXECUTAR REPARO")
 gui:Destroy()
 return table.concat(results, "\n")

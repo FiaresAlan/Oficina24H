@@ -9,6 +9,7 @@ local UserInputService=game:GetService("UserInputService")
 local Workspace=game:GetService("Workspace")
 local Rules=require(ReplicatedStorage.Shared.V2NeighborhoodRules)
 local Budget=require(ReplicatedStorage.Shared.V2VisualBudgetRules)
+local Store=require(script.Parent.UI.Store)
 local Animations=require(ReplicatedStorage.Shared.NpcAnimations)
 local player=Players.LocalPlayer
 local ambient=Instance.new("Folder")
@@ -326,7 +327,11 @@ end
 RunService.Heartbeat:Connect(function(dt: number)
     if frozen then return end
     if dt>0 and dt<2 then fps=fps*0.94+(1/dt)*0.06 end
-    local budget=Rules.Budget(UserInputService.TouchEnabled,fps,#Players:GetPlayers())
+    local userProfile=Store.Snapshot and Store.Snapshot.Profile
+    local preferences=userProfile and userProfile.Accessibility
+    local lowDetail=type(preferences)=="table" and preferences.LowDetail==true
+    local budget=Rules.Budget(UserInputService.TouchEnabled,fps,
+        #Players:GetPlayers(),lowDetail)
     tickAccumulator+=math.clamp(dt,0,0.25)
     if tickAccumulator<budget.Tick then return end
     tickAccumulator=0

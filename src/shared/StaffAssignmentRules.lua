@@ -7,6 +7,13 @@ function Rules.ShouldDispatch(waiting: number, oldestSeconds: number): boolean
 	return type(waiting) == "number" and type(oldestSeconds) == "number"
 		and (waiting >= 2 or (waiting >= 1 and oldestSeconds >= Rules.SoloWaitSeconds))
 end
+-- Homologação V1 (place real): o funcionário tomava a OS enquanto o dono conversava, examinava ou preparava o
+-- carro, e o trabalho do jogador se perdia. Uma OS em que o dono mexeu há menos de 25 s é dele.
+Rules.OwnerIdleSeconds = 25
+function Rules.OwnerIsWorking(lastTouch: any, now: number): boolean
+	return type(lastTouch) == "number" and lastTouch == lastTouch and type(now) == "number"
+		and now - lastTouch < Rules.OwnerIdleSeconds
+end
 function Rules.EligibleJob(waiting: number, jobWaitingSeconds: number): boolean
 	return waiting >= 2 or jobWaitingSeconds >= Rules.SoloWaitSeconds
 end

@@ -57,5 +57,20 @@ local new = Paid.Make("new", "c23eeeee-1111-2222-3333-eeeeeeeeeeee",
 check("C23: arquivo cheio não expulsa comprovantes", #full == Paid.MaxEntries
 	and not Paid.CanAdd(full, new) and not Paid.Add(full, new)
 	and Paid.Find(full, "paid_1", "c23ddddd-1111-2222-3333-000000000001") ~= nil)
+-- Teste com 2 jogadores no Studio: os ids de teste são negativos. Todos os módulos de prova precisam concordar
+-- com o de reivindicação, senão o dono é pago e o contratado não.
+local tk = "c23fffff-1111-2222-3333-ffffffffffff"
+check("ids de teste: dono -2 aceito", Paid.Make("neg_job", tk, 50, 1790000000, "Pneu", "Hatch", -2) ~= nil)
+check("ids reais positivos continuam aceitos", Paid.Make("pos_job", tk, 50, 1790000000, "Pneu", "Hatch", 11072958195) ~= nil)
+check("dono 0 recusado", Paid.Make("zero_job", tk, 50, 1790000000, "Pneu", "Hatch", 0) == nil)
+check("dono NaN/infinito/fracionário recusado",
+	Paid.Make("nan_job", tk, 50, 1790000000, "Pneu", "Hatch", 0 / 0) == nil
+	and Paid.Make("inf_job", tk, 50, 1790000000, "Pneu", "Hatch", math.huge) == nil
+	and Paid.Make("frac_job", tk, 50, 1790000000, "Pneu", "Hatch", 1.5) == nil)
+check("dono fora do intervalo recusado", Paid.Make("big_job", tk, 50, 1790000000, "Pneu", "Hatch", 2e15) == nil)
+local Claims = require(game.ReplicatedStorage.Shared.SettlementClaimRules)
+local claim = Claims.Make(-2, "agree_job", tk, 10, 20, 5, 90, "Pneu", "Hatch", "Tires", 1790000000)
+check("reivindicação e quitação concordam para o mesmo dono", claim ~= nil
+	and Paid.Make("agree_job", tk, 20, 1790000000, "Pneu", "Hatch", claim.OwnerUserId) ~= nil)
 table.insert(lines, errors == 0 and "TODOS OS TESTES PASSARAM" or (errors .. " TESTE(S) FALHARAM"))
 return table.concat(lines, "\n")

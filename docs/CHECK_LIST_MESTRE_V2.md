@@ -216,7 +216,7 @@ P0 = prioridade para o núcleo de lançamento. P1 = opcional condicionado a viab
 - [x] [C] +1 reputação apenas na primeira exposição histórica de Hatch/Sedã/Picape (limite 3), com marcador no mesmo perfil sem yield e sem replay após venda/reentrada.
 - [x] [C] `UsedMarket` v15 aditivo com Showroom/ShowroomSeen/Finish/Wheels; compatível com carros V2-09 Azul/Vermelho e históricos sem campos novos.
 - [x] [C] Subnavegação CAIXA/USADOS na aba existente: mercado e showroom acessíveis sem rolagem por todo o extrato no celular; nenhum botão novo na HUD.
-- [x] [A] Suites Luau escritas e registradas, contratos estáticos/build Rojo [aprovados](https://github.com/FiaresAlan/Oficina24H/actions/runs/43530472623) após implementação do núcleo. Executar CI novamente no commit final.
+- [x] [A] Suites Luau escritas e registradas, contratos estáticos/build Rojo [aprovados](https://github.com/FiaresAlan/Oficina24H/actions/runs/43531088184) para a implementação e proteção contra assets vazios. Revalidar CI no HEAD após a última revisão de testes Grafite.
 - [ ] [S] Homologar três veículos reais, malhas PBR, roteiro de 2 jogadores, tablet/celular/gamepad, relog, 15 OS e desempenho por lote no Roblox Studio.
 - [ ] [S] Confirmar que benefício de reputação pontual e catálogo cosmético não desviam o jogador das OS. Decidir manter/simplificar após beta.
 

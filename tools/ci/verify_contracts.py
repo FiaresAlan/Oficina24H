@@ -1482,7 +1482,7 @@ check("V2-16: release enforcer é independente do CI verde",
 check("V2-16: suites dos gates e auditoria de beta estão no runner",
     '"V2ReleaseGateRulesTest"' in runner
     and '"V2BetaSmokeAudit"' in runner
-    and 'not R.Evaluate(empty,sha).Approved' in release_tests
+    and 'not pending.Approved' in release_tests
     and 'not R.Evaluate(modified,sha).Approved' in release_tests
     and 'StudioPlaceAudit' in beta_smoke
     and 'DataStore' in beta_smoke)

@@ -27,6 +27,12 @@ jobs:
       - name: Check catalogue, remotes and tests
         run: python3 tools/ci/verify_contracts.py
 
+      - name: Validate fail-closed release gate (informational; never publishes)
+        run: |
+          python3 tools/ci/release_gate.py --self-test
+          python3 tools/ci/release_gate.py --mode report --sha "$GITHUB_SHA"
+          echo "A code-green PR does not mean Studio/Legal/Beta gates are approved."
+
       - name: Setup project-pinned Rokit / Rojo
         uses: paradoxum-games/setup-rokit@v3
         with:

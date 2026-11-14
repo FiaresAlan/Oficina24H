@@ -1442,6 +1442,61 @@ check("V2-15: suites registradas e regressão multi-servidor de acessibilidade",
     and 'falha de Save NÃO anuncia sucesso' in contract_test
     and 'sem áudio' not in remote_rules)
 
+
+# V2-16: build/QA readiness is deliberately NOT an approval to publish.
+release_rules=text(SHARED/"V2ReleaseGateRules.lua")
+release_tests=text(TOOLS/"V2ReleaseGateRulesTest.luau")
+beta_smoke=text(TOOLS/"V2BetaSmokeAudit.luau")
+release_cli=text(TOOLS/"ci"/"release_gate.py")
+release_manifest=json.loads(text(ROOT/"docs"/"release"/"V2_RELEASE_EVIDENCE.json"))
+release_workflow=text(ROOT/".github"/"workflows"/"code-health.yml")
+release_docs=text(ROOT/"docs"/"V2_FASE_16_HOMOLOGACAO_BETA.md")
+check("V2-16: release gate possui 16 requisitos com fonte inequívoca",
+    '#Rules.Gates' in release_rules
+    and 'result.Approved=result.Passed==result.Total' in release_rules
+    and all(('Id="'+id+'"') in release_rules for id in (
+        "ci_code","merge_main","studio_suites","assets_place","services_15",
+        "onboarding","cooperation","data_safety","inventory_fifo",
+        "drive_physics","touch_gamepad","performance","stream_audio",
+        "licenses","beta_closed","owner_go")))
+check("V2-16: gate sempre requer evidência atrelada ao SHA atual",
+    'entry.BuildSha~=headSha' in release_rules
+    and 'entry.Source~=gate.Source' in release_rules
+    and 'entry.Status~="Passed"' in release_rules
+    and 'elegível' not in text(SHARED/"V2DriveScenarioRules.lua").lower())
+check("V2-16: template inicial não possui nenhuma aprovação artificial",
+    release_manifest.get("Version")==1
+    and len(release_manifest.get("Entries",{}))==16
+    and all(x.get("Status") in ("Pending","Blocked")
+        and not x.get("Proof") and not x.get("BuildSha")
+        for x in release_manifest["Entries"].values())
+    and all(release_manifest["Entries"][id]["Status"]=="Blocked"
+        for id in ("merge_main","inventory_fifo","licenses")))
+check("V2-16: release enforcer é independente do CI verde",
+    'def evaluate(manifest:' in release_cli
+    and 'if opts.mode == "enforce" and not result["Approved"]' in release_cli
+    and 'if opts.self_test:' in release_cli
+    and '--mode report' in release_workflow
+    and '--self-test' in release_workflow
+    and 'rojo build default.project.json' in release_workflow)
+check("V2-16: suites dos gates e auditoria de beta estão no runner",
+    '"V2ReleaseGateRulesTest"' in runner
+    and '"V2BetaSmokeAudit"' in runner
+    and 'not R.Evaluate(empty,sha).Approved' in release_tests
+    and 'not R.Evaluate(modified,sha).Approved' in release_tests
+    and 'StudioPlaceAudit' in beta_smoke
+    and 'DataStore' in beta_smoke)
+check("V2-16: documentação não transforma CI em aprovação de gameplay",
+    'Go/No-Go' in release_docs
+    and 'RunAllTests' in release_docs
+    and '15' in release_docs
+    and 'main' in release_docs
+    and 'V2-08' in release_docs
+    and 'V2-12' in release_docs
+    and 'licenças' in release_docs
+    and 'beta' in release_docs.lower()
+    and 'não publica' in release_docs)
+
 print(f"\nStatic checks: {passed} passed, {len(failures)} failed")
 if failures:
     raise SystemExit(1)

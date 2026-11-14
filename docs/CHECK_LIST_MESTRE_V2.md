@@ -1,6 +1,6 @@
 # CHECK_LIST_MESTRE_V2 — OFICINA 24H
 
-**Versão:** 2.4, 13/11/2026. **Situação:** engenharia V2-00–11 na PR #27, com pendência de lotes de fornecedor V2-08 e de integração com main/QA V1 e modelos/Studio; V2-12–16 planejadas. **Nenhuma homologação Studio presumida.**  
+**Versão:** 2.5, 13/11/2026. **Situação:** engenharia V2-00–13 na PR #27; V2-12/13 implementadas com gate desligado aguardando QA físico da V2-11, além de lotes fornecedor V2-08, main/QA V1 e modelos/Studio; V2-14–16 planejadas. **Nenhuma homologação Studio presumida.**  
 **Direção aprovada pelo proprietário:** híbrida — estilização legível do mundo + reparos visualmente mecânicos + gestão de negócio.  
 **Código base de referência:** main em C31 (`2690f082` antes dos commits exclusivamente documentais da V2). **Atenção:** o Claude Code está homologando/corrigindo a V1 em paralelo; sempre ler novo HEAD e reconciliar diffs antes de programar V2. Preservar Issue #15 V1 como histórico.  
 **Documentos de referência:** DIRECAO_JOGO_V2_2026-11-13.md, PESQUISA_MERCADO_V2_2026-11-13.md, AUDITORIA_V2_BASE_CODIGO_2026-11-13.md (auditoria histórica até C17), [GUIA_UNICO_ASSETS_V2.md](GUIA_UNICO_ASSETS_V2.md) e GUIA_UNICO_ASSETS_V1.md.
@@ -50,7 +50,7 @@ P0 = prioridade para o núcleo de lançamento. P1 = opcional condicionado a viab
 - [ ] **Merge na main:** depende de comparar, revisar e conciliar as correções V1 do Claude e refazer CI.
 - [ ] **Arte real:** revisar/importar os três modelos piloto, ajustar malhas móveis, pivôs, licença, áudio e LOD reais.
 - [ ] **Studio:** executar RunAllTests, V2PilotPlaceAudit, 15 serviços, multiplayer, mobile/PC/gamepad e verificar efeitos reais.
-- [ ] **V2-12–16 e lotes V2-08:** implementar somente após dependências, sem declarar V2 completa por CI verde.
+- [ ] **V2-14–16 e lotes V2-08:** implementar somente após dependências, sem declarar V2 completa por CI verde.
 
 **Portão:** código escrito e integrado em branch não equivale a jogo homologado. Não há publicação automática.
 
@@ -239,22 +239,35 @@ P0 = prioridade para o núcleo de lançamento. P1 = opcional condicionado a viab
 
 **Gate obrigatório antes de V2-12:** homologação física e segurança Studio. CI verde sozinho não autoriza integrar diagnósticos/receitas da V2-12.
 
-## V2-12 — Test-drive para diagnóstico contextual (P1, FUTURO)
-- [ ] [C] Tabela de elegibilidade por sintoma/defeito (direção, freio, suspensão, motor, rodas).
-- [ ] [C] Disparar aleatoriamente SOMENTE entre condições elegíveis, com seed registrado no servidor.
-- [ ] [C] Percurso curto alvo de 45–90 s, checkpoints, retorno e opção de encerrar com segurança.
-- [ ] [C] Sons/vibrações/luzes e evidência diagnóstica não apenas sonora; pista útil para o reparo.
-- [ ] [C] Um test-drive por sessão de OS; resultado, XP e dinheiro sempre verificados no servidor.
-- [ ] [A] Testes de seed, gatilhos, falha, spoof, repetição, abortos e reconnect.
-- [ ] [S] Validar que é divertido e não vira obrigação em todas as OS.
+## V2-12 — Test-drive contextual para diagnóstico (P1, engenharia concluída sob gate)
 
-## V2-13 — Test-drive pós-reparo e retrabalho (P1, FUTURO)
-- [ ] [C] Em parte dos reparos, oferecer teste de qualidade após reparo.
-- [ ] [C] Estados: aprovado, teste incompleto, reparo inadequado, retrabalho; causa ligada ao estado real.
-- [ ] [C] Retrabalho proporcional, comunicação com cliente, regras de satisfação e custos coerentes.
-- [ ] [C] Não punir jogador por instabilidade de servidor/rota.
-- [ ] [A] Testes de pagamento único e estado consistente após falha.
-- [ ] [S] Playtest do ritmo de atendimento com e sem test-drive.
+**[Especificação, tabela de sintomas e roteiro Studio](V2_FASE_12_DIAGNOSTICO_DRIVE.md)** · `V2DriveScenarioRules.LiveEnabled=false` até homologar a condução V2-11 no Studio.
+
+- [x] [C] Tabela fechada para pneus, volante/direção, suspensão, freios e motor com pista contextual que não revela DefectId.
+- [x] [C] Gatilho aleatório apenas entre Hatch piloto/defeitos elegíveis e fora do onboarding (38%), com seed único registrado no servidor ao gerar a OS e caso intermitente raro (terceiro checkpoint).
+- [x] [C] Rota física V2-11 com 4 checkpoints, >=32 s mínimos, alvo de 45–90 s, telemetria e retorno seguro sem `Touched`; máximo 2 inícios para permitir retry de aborto e apenas 1 conclusão por OS.
+- [x] [C] Sinal por velocidade, curva, frenagem, aceleração e aquecimento observado no servidor; cliente vê painel âmbar/vermelho e texto, reproduz som autorizado e vibração opcional.
+- [x] [C] Evidência contextual aparece somente após teste válido, sem preço/XP/moeda, e mantém `DiagnosisRules.Judge` + exames mecânicos da V1 como fonte do diagnóstico final.
+- [x] [C] Remote `DriveCar` valida fase, dono, OS/ocupante; callback privado `OnDriveOutcome` atribui evidência sem cliente enviar checkpoint/defeito/seed.
+- [x] [A] `V2DriveScenarioTest.luau` escrito, registrado no runner; testes de gate/seed/chances/gatilhos/replay/aborto/snapshot e contratos CI/Rojo automatizados. **Execução de Luau no Studio pendente.**
+- [ ] [S] Homologar gate V2-11 primeiro. Então medir 45–90 s, prazer de condução e se não é obrigatório, sinais com/sem som, toque/gamepad, baixa latência, 2 jogadores, queda e sem dinheiro pelo teste.
+
+## V2-13 — Qualidade pós-reparo e retrabalho (P1, engenharia concluída sob gate)
+
+**[Máquina de estados, integridade financeira e roteiro Studio](V2_FASE_13_QUALIDADE_RETRABALHO.md)** · mesmo gate `LiveEnabled=false`. Sem liberar esta fase para jogadores antes do QA V2-11/V2-12.
+
+- [x] [C] Em 24% das OS Hatch/defeito elegíveis, após minijogo validado, oferecer rodagem de qualidade OPCIONAL; NPC/colaborador e primeiro onboarding continuam com pagamento V1.
+- [x] [C] Estados server-side `Offer` → `Driving` → `Approved`, `Rework` ou `Incomplete`, atribuídos por retorno verificado e qualidade original (<70 = correção recomendada; não por sorteio ou colisão).
+- [x] [C] Botões de entregar sem teste (mesma nota), verificar na rua, aprovar/entregar ou refazer uma única vez com novo minijogo no mesmo JobId, sem cobrança extra de peças no primeiro ciclo.
+- [x] [C] Pista e decisão de pós-reparo não concedem XP/moeda/nota extra. Entrega com qualidade insuficiente preserva nota original e a avaliação V1; oferece retrabalho como decisão não coercitiva.
+- [x] [C] Aborto/rede ruim não puni; retorna à oferta. Relógio de 300s tenta concluir qualidade original sem penalidade, e OS não expira enquanto está reservada.
+- [x] [C] Minijogos fecham por `RepairQualityPending` sem anúncio falso de quitação. Token, quality, resultado e OS ficam selados no servidor, sem novos remotes de pagamento.
+- [x] [C] Pagamento/XP/peças/histórico percorrem **um único** `settleEvaluatedRepair` (a mesma cadeia V1 idempotente), nunca por evento `Touched` nem controle do veículo. Staff, NPC, colaboração e expansão bloqueados durante pré-commit e yield.
+- [x] [A] `V2QualityDriveTest.luau` escrito e registrado, contratos CI/Rojo de gate, fluxo, rework, abortos, recibos e não dupla cobrança. **Não é execução de Luau/Playtest Studio.**
+- [ ] [S] Homologar aprovado/reprovado/incompleto, custo zero da repetição, recibo único, DataStore com falhas, multiplayer, boa UX mobile/gamepad e ritmo do loop sem test-drive em 100% das OS.
+- [ ] [S] Registrar limitação de sessão sem pagamento em desconexão: a OS V1 é transitória e não há recuperação interservidor do resultado ainda não liquidado. Decidir mitigação de produto antes de publicação.
+
+**Gate antes de V2-14/release:** testes da V2-11 física, da V2-12 sensorial e da V2-13 financeira no Roblox Studio precisam passar; a branch continua sem merge na main.
 
 ## V2-14 — Frotas, contratos e relações comerciais (P1)
 - [ ] [C] Expandir contratos existentes com precificação, prazo, serviço, equipe e estoque.

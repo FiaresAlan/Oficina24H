@@ -1330,6 +1330,105 @@ check("V2-14: suites puras, serviço e persistência no runner",
     and 'última OS válida libera exatamente um prêmio' in contract_test
     and 'V2-14: queda/reconexão conserva bônus' in persistence)
 
+
+# V2-15: revisão transversal P0. O CI continua sem ser Studio; valida
+# mecanismos executáveis, limites e rastreabilidade dos testes escritos.
+remote_rules=text(SHARED/"V2RemoteSecurityRules.lua")
+remote_test=text(TOOLS/"V2RemoteSecurityTest.luau")
+runtime_assets=text(TOOLS/"V2RuntimeAssetBudgetTest.luau")
+visual_budget=text(SHARED/"V2VisualBudgetRules.lua")
+neighborhood_server=text(ROOT/"src"/"server"/"V2NeighborhoodAssets.lua")
+neighborhood_client=text(CLIENT/"V2NeighborhoodAmbient.client.lua")
+access_rules=text(SHARED/"V2AccessibilityRules.lua")
+access_test=text(TOOLS/"V2AccessibilityTest.luau")
+place_audit=text(TOOLS/"V2ReleasePlaceAudit.luau")
+drive_client=text(CLIENT/"V2DriveControls.client.lua")
+check("V2-15: limite transversal de ações antes de qualquer mutação de perfil",
+    'V2RemoteSecurityRules.ConsumeAction(' in main_src
+    and 'V2RemoteSecurityRules.PayloadValid(payload)' in main_src
+    and main_src.index('V2RemoteSecurityRules.PayloadValid(payload)')
+        < main_src.index('if action == "CheckRepairResult"')
+    and 'ActionPerSecond=26' in remote_rules
+    and 'ActionBurst=44' in remote_rules)
+check("V2-15: snapshots anti-flood sem duplicar cache V1",
+    'V2RemoteSecurityRules.ConsumeSnapshot(' in main_src
+    and 'SnapshotCacheRules.Get(snapshotStates' in main_src
+    and 'return {Ready=false,Throttled=true}' in main_src
+    and 'snapshotBudgets[player.UserId]=nil' in main_src)
+check("V2-15: recusa árvores remotas profundas, circulares e valores inválidos",
+    all(k in remote_rules for k in (
+        'R.MaxNodes=120','R.MaxDepth=5','R.MaxString=512',
+        'if seen[v] then return false',
+        'if nodes>R.MaxNodes',
+        'kind~="table" then return false',
+        'if not finite(v) then',
+        'type(k)=="string"'))
+    and 'not R.PayloadValid(circular)' in remote_test
+    and 'not R.PayloadValid({Quantity=0/0})' in remote_test
+    and 'lastActionAt[player.UserId] = nil' in main_src)
+check("V2-15: asset físico de Hatch é pré-filtrado antes do Clone",
+    'VisualBudget.PreflightTemplate(template,"Drive")' in drive_service
+    and 'if template and allowed and template.Archivable then' in drive_service
+    and drive_service.index('PreflightTemplate(template,"Drive")')
+        < drive_service.index('local model=template:Clone()')
+    and 'VisualBudget.CanStartDrive(active)' in drive_service
+    and 'Rules.MaxConcurrentDriveRigs=5' in visual_budget)
+check("V2-15: pedestres/figurantes local/server têm orçamento real",
+    'VisualBudget.PreflightTemplate(template,"Ambient")' in neighborhood_server
+    and 'Budget.PreflightTemplate(source,"Ambient")' in neighborhood_client
+    and 'Rules.MaxAmbientTemplateParts=90' in visual_budget
+    and 'Rules.MaxDriveShellDescendants=350' in visual_budget
+    and 'Rules.MaxDriveSurfaceAppearances=24' in visual_budget)
+check("V2-15: prova do bônus de frota salva antes de confirmar sucesso",
+    'local ok,saved=pcall(data.Save,player)' in fleet_service
+    and 'if not ok or not saved then' in fleet_service
+    and 'if contracts[player.UserId]~=c then return false end' in fleet_service
+    and fleet_service.index('if not ok or not saved then')
+        < fleet_service.index('contracts[player.UserId]=nil')
+    and 'function Service.RetryPending(player:Player):boolean' in fleet_service
+    and 'c.Settling=true' in fleet_service
+    and 'c.Settling=false' in fleet_service)
+check("V2-15: retry Save não duplica bônus, liga ou JobId",
+    'c.LeagueCredited=true' in fleet_service
+    and 'reason~="Duplicado."' in fleet_service
+    and 'c.DoneJobs[jobId]' in fleet_service
+    and 'failed' not in fleet_service[:100]
+    and 'retry de Save confirma a prova financeira' in contract_test
+    and 'sucesso comunicado somente após persistência' in contract_test)
+check("V2-15: configurações inclusivas validadas e persistentes no mesmo perfil",
+    'V2AccessibilityRules.New()' in data_service
+    and 'V2AccessibilityRules.Sanitize(data.Accessibility)' in data_service
+    and 'function DataService.SetAccessibility(' in data_service
+    and 'function WorkshopService.SetAccessibility(' in workshop
+    and 'action == "SetAccessibility"' in main_src
+    and 'Store.Act("SetAccessibility"' in finance_ui
+    and all(k in access_rules for k in (
+        'DriveHaptics=v.DriveHaptics~=false',
+        'DriveSfx=v.DriveSfx~=false',
+        'LowDetail=v.LowDetail==true',
+        'if type(key)~="string"')))
+check("V2-15: reduzir movimento, áudio e figurantes não modifica diagnóstico",
+    'accessibility.DriveSfx~=false' in drive_client
+    and 'accessibility.DriveHaptics~=false' in drive_client
+    and 'local lowDetail=type(preferences)=="table"' in neighborhood_client
+    and 'if lowDetail==true then' in text(SHARED/"V2NeighborhoodRules.lua")
+    and 'CueReproduced=true' in drive_service
+    and 'DriveCue' in client_store)
+check("V2-15: suite Edit de auditoria informa avisos e não declara QA físico",
+    'Workspace.StreamingEnabled==true' in place_audit
+    and 'Scenario.LiveEnabled==false' in place_audit
+    and 'Licenças/uso dos áudios' in place_audit
+    and 'Não é teste de FPS real' in place_audit
+    and 'Tools' in runner)
+check("V2-15: suites registradas e regressão multi-servidor de acessibilidade",
+    all((TOOLS/(n+".luau")).is_file() and ('"'+n+'"') in runner
+        for n in ("V2RemoteSecurityTest","V2RuntimeAssetBudgetTest",
+            "V2AccessibilityTest","V2ReleasePlaceAudit"))
+    and 'V2-15: explicitamente false continua false após Save/Load'
+        in persistence
+    and 'falha de Save NÃO anuncia sucesso' in contract_test
+    and 'sem áudio' not in remote_rules)
+
 print(f"\nStatic checks: {passed} passed, {len(failures)} failed")
 if failures:
     raise SystemExit(1)

@@ -50,8 +50,8 @@ check("catalogue defines 15 unique defects", len(ids) == len(set(ids)) == 15)
 
 evidence = text(SHARED / "DiagnosisEvidence.lua")
 inspection = text(SHARED / "InspectionPointRules.lua")
-procedures = text(SHARED / "WorkshopProcedures.lua")
-operations = text(SHARED / "RepairOperations.lua")
+procedures = text(ROOT / "src" / "server" / "WorkshopProcedures.lua")
+operations = text(ROOT / "src" / "server" / "RepairOperations.lua")
 ui = text(CLIENT / "UI" / "OperationRepairGame.lua")
 for defect in ids:
     check(f"{defect}: has diagnosis mapping", re.search(rf"\b{defect}\s*=", evidence) is not None)

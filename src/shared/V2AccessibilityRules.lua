@@ -13,9 +13,8 @@ end
 function R.Sanitize(source:any):any
     local v=type(source)=="table" and source or {}
     return {
-        DriveHaptics=type(v.DriveHaptics)=="boolean"
-            and v.DriveHaptics or true,
-        DriveSfx=type(v.DriveSfx)=="boolean" and v.DriveSfx or true,
+        DriveHaptics=v.DriveHaptics~=false,
+        DriveSfx=v.DriveSfx~=false,
         LowDetail=v.LowDetail==true,
     }
 end

@@ -1241,6 +1241,88 @@ check("V2-12/13: testes de seed, spoof, abortos, payout único no runner",
     and 'colisão ou abortos apenas restauram oferta' in quality_test
     and 'sem cobrança ou reembolso independente' in quality_test)
 
+
+# V2-14: contrato de frota e relacionamento persistente. Nenhuma ação
+# do cliente pode passar preço, token de reparo, remuneração ou checkpoint.
+fleet_rules=text(SHARED/"V2FleetBusinessRules.lua")
+fleet_service=text(ROOT/"src"/"server"/"ContractService.lua")
+fleet_test=text(TOOLS/"V2FleetBusinessRulesTest.luau")
+contract_test=text(TOOLS/"V2FleetContractTest.luau")
+persistence=text(TOOLS/"PersistenceTest.luau")
+check("V2-14: especializações elegíveis, margem, equipe, estoque e prazo reais",
+    all(x in fleet_rules for x in (
+        'function Rules.Quote(', 'function Rules.TermsFromQuote(',
+        'Rules.Modes=', 'QuoteMode=mode','PartTypeCount',
+        'PriceMultiplier', 'LowStock=lowStock',
+        'OwnerContribution','CollaboratorContribution','NpcContribution',
+        'PartnerBonusPercent'))
+    and 'V2FleetBusinessRules.Quote(offer' in workshop
+    and 'getOpenJobCount(player.UserId)' in workshop
+    and 'profile.Parts' in workshop
+    and 'profile.Employees' in workshop)
+check("V2-14: propostas são opt-in, recusáveis e servidor escolhe preço",
+    'proposals[player.UserId]' in fleet_service
+    and 'function Service.Negotiate(' in fleet_service
+    and 'Service.Offer(player)' in fleet_service
+    and 'FleetRules.TermsFromQuote(' in fleet_service
+    and 'mode=="Express"' not in main_src
+    and 'action == "NegotiateFleet"' in main_src
+    and 'WorkshopService.NegotiateFleet' in main_src
+    and 'Store.Act("NegotiateFleet"' in finance_ui)
+check("V2-14: não há OS de frota impossível por equipamento/nível",
+    'local candidates={}' in workshop
+    and 'def.Specialization==fleet.Offer.Spec' in workshop
+    and 'equipment[def.RequiredEquipment]==true' in workshop
+    and 'fleet=nil -- nunca lançar uma OS impossível' in workshop)
+check("V2-14: sucesso aceito só para contrato aberto + JobId único",
+    'function Service.FleetDone(' in fleet_service
+    and 'c.DoneJobs[jobId]' in fleet_service
+    and 'c.DoneJobs[jobId]=true' in fleet_service
+    and 'c.Token~=token' in fleet_service
+    and 'Service.Active(owner.UserId)' in fleet_service
+    and 'ContractService.FleetDone(owner,job.Fleet,job.Id' in workshop)
+check("V2-14: bônus de frota próprio e idempotente no mesmo perfil",
+    'function DataService.RecordFleetOutcomeOnce(' in data_service
+    and 'V2FleetBusinessRules.Record(profile.FleetAccounts' in data_service
+    and 'DataService.AddCoins(player,bonus,' in data_service
+    and 'DataService.AddReputation(player,rep)' in data_service
+    and 'record.Bonus' in data_service
+    and 'record.Reputation' in data_service
+    and 'function Service.endContract' not in fleet_service
+    and 'RecordFleetOutcomeOnce(player,c.RewardKey' in fleet_service
+    and 'GenerateGUID(false)' in fleet_service
+    and 'PendingClaims' not in fleet_service)
+check("V2-14: parceiro persistido e resumo não expõe chave de crédito",
+    'FleetAccounts = V2FleetBusinessRules.NewAccounts()' in data_service
+    and 'data.FleetAccounts = V2FleetBusinessRules.SanitizeAccounts' in data_service
+    and 'profileView.FleetAccounts=nil' in workshop
+    and 'function DataService.FleetAccountSummary(' in data_service
+    and 'function Rules.PublicAccounts(' in fleet_rules
+    and 'MaxCreditKeys=96' in fleet_rules
+    and 'MaxHistory=20' in fleet_rules)
+check("V2-14: decisão de equipe/terceiro não duplica OS",
+    'job.EmployeeAssignedSlot and "Staff"' in workshop
+    and '"Collaborator"' in workshop
+    and '"Owner"' in workshop
+    and 'Methods=table.clone(c.Methods)' in fleet_service
+    and 'methods.Collaborator' in finance_ui
+    and 'Store.Act("AssignStaffJob"' in finance_ui
+    and 'QualityReview' in workshop
+    and 'StageWorkerClaim' in workshop)
+check("V2-14: falhas de prazo ou disconnect sem multa artificial",
+    'result=="Expired"' in fleet_rules
+    and 'completed and c.Offer.Coins or 0' in fleet_service
+    and 'completed and c.Offer.Reputation or 0' in fleet_service
+    and 'Contracts' not in main_src
+    and 'Players.PlayerRemoving:Connect' in fleet_service
+    and 'proposals[player.UserId]=nil' in fleet_service)
+check("V2-14: suites puras, serviço e persistência no runner",
+    all((TOOLS/(n+".luau")).is_file() and ('"'+n+'"') in runner
+        for n in ("V2FleetBusinessRulesTest","V2FleetContractTest"))
+    and 'replay da mesma chave' in fleet_test
+    and 'última OS válida libera exatamente um prêmio' in contract_test
+    and 'V2-14: queda/reconexão conserva bônus' in persistence)
+
 print(f"\nStatic checks: {passed} passed, {len(failures)} failed")
 if failures:
     raise SystemExit(1)

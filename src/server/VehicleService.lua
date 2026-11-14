@@ -1046,4 +1046,18 @@ function VehicleService.DespawnOwner(userId: number)
 	end
 end
 
+-- Studio Edit: inject only a disposable car to verify the reversible
+-- suspension contract, never exposed to game clients or production.
+function VehicleService._qaRegisterDriveCar(jobId: string,car: Model): boolean
+    if not game:GetService("RunService"):IsStudio() or byJob[jobId] then return false end
+    byJob[jobId]=car
+    return true
+end
+
+function VehicleService._qaClearDriveCar(jobId: string)
+    if not game:GetService("RunService"):IsStudio() then return end
+    VehicleService.ResumeFromDrive(jobId)
+    byJob[jobId]=nil
+end
+
 return VehicleService

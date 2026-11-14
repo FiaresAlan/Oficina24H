@@ -1,6 +1,6 @@
 -- Prova incremental de gestos: testes puros sem RemoteEvent, economia ou Place físico.
 local Rules = require(game.ReplicatedStorage.Shared.RepairActionRules)
-local Operations = require(game.ReplicatedStorage.Shared.RepairOperations)
+local Operations = require(game:GetService("ServerScriptService").Server.RepairOperations)
 local results = {}
 local function check(name, ok)
 	table.insert(results, (ok and "PASS " or "FAIL ") .. name)

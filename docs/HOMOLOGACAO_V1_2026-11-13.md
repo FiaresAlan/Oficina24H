@@ -14,6 +14,29 @@ persistido apagado.
 Consequência: tudo abaixo prova o **código** da V1 rodando de verdade no motor do Roblox (servidor + cliente, remotes,
 física, ProximityPrompts, HUD). **Não prova** os modelos reais, o mapa real, a cidade, o áudio nem o DataStore publicado.
 
+## 1b. Rodada 2 — place original `Oficina24H_Teste` (13/11, tarde)
+
+O place original foi aberto (placeId 98576673620657). **Backup antes de qualquer mudança:** `backup/Oficina24H_Teste_antes_homologacao_2026-11-13.rbxl` (6,9 MB, fora do git). O código do branch foi sincronizado pelo **Rojo 7.7.1**, só nas pastas de código; mapa, `ServerStorage.Assets`, Lighting e terreno **não foram tocados**. Os módulos de QA temporários foram removidos do place antes de salvar (versão 98 no histórico do Roblox, **nada publicado**).
+
+| Verificação no place original | Resultado |
+|---|---|
+| `RunAllTests` oficial | **PASSOU: 2029 OK, 0 falhas, 23 avisos** (21 carros sem sockets nativos + 2 lembretes de licença/multiplayer) |
+| `StudioPlaceAudit` com assets reais | 17 OK, 0 falhas (1ª execução: **11 falhas**, todas `Eq_*` sem `PrimaryPart`) |
+| Inventário `ServerStorage.Assets` | 21 carros, 17 NPCs (R15, 2 gêneros), 11 equipamentos, 50 peças de cenário, 20 props de oficina, 1 oficina: **completo** |
+| Saúde do conteúdo (malhas/texturas/sons) | 5.946 verificados no Edit, **1 falha**: malha `1037633864` em `Veiculo_Picape_C1500` ("não aprovada para este solicitante"). É 1 peça de 97 (1,9×0,7×1,9 studs, alto da traseira): **P3 cosmético**, caminhão visível e íntegro |
+| Texturas das máquinas em jogo (cliente) | 0 de 20 partes falhando (as mensagens do console no boot eram transitórias) |
+| 3 serviços amostrais com carros, NPCs e máquinas reais | **Pneu furado, pastilhas de freio (Macaco) e falha de ignição (Scanner): qualidade 100, 5 estrelas, replay sem pagamento duplo, sem carro órfão** |
+| Desempenho com o mapa real (3.622 peças, 86 mil instâncias) | servidor 59,9 Hz (pior 19 ms), cliente 59,9 fps (pior 24 ms) com o Studio em foco; `StreamingEnabled` **desligado** |
+
+**Defeitos novos encontrados e corrigidos no place original**
+
+| Sev. | Defeito | Correção |
+|---|---|---|
+| P1 (G1) | As 11 máquinas `Eq_*` (do pacote CC0 "Car Repair Garage and MOT Workshop") estavam **sem `PrimaryPart`**: a auditoria C31 reprovava e o jogo caía no pivô implícito | `PrimaryPart` = maior peça de cada modelo; pivô conferido com desvio 0,00000 nas 11 |
+| P1 (G2) | O **funcionário NPC tomava a OS enquanto o dono preparava o carro**: depois de 25 s todo prompt de preparo respondia "Um funcionário já assumiu esta ordem" e o trabalho do jogador se perdia (o place de QA não pegou porque o preparo do placeholder acabava a tempo) | `OwnerTouchedAt` na conversa, exame e cada etapa de preparo; `StaffAssignmentRules.OwnerIsWorking` impede o NPC por 25 s; aceitar na TV não conta, então a ajuda imediata com 2 carros continua. `StaffAssignmentTest` 18/18 |
+
+**Sobre os 5 pacotes que você baixou** (`assets/Assets v1 Baixados`): conferi cada pasta do guia contra o place e **nada faltava**, então **não importei nem enviei nenhuma malha à sua conta**. Eles continuam como fonte de recuperação: a máquinas do pacote CC0 já estão no place; o cenário `Cid_*` (CGTrader) e as peças Shuriken também. Reimportar exigiria *upload* para a sua conta, o que eu só faria com sua autorização e sem refazer a rua aprovada.
+
 ## 2. Suítes automáticas
 
 | Execução | Resultado |
@@ -106,22 +129,19 @@ quadro 19 ms), 862 peças no Workspace. **Não representa o place real** (cidade
 
 | Portão | Situação | O que falta |
 |---|---|---|
-| **G1 Assets** | **Aberto** | Abrir o place original; rodar `StudioPlaceAudit` com os 21 carros/NPCs reais; importar os 5 pacotes baixados (envolve upload de malhas para a sua conta Roblox → **precisa da sua autorização**); conferir licenças e áudio |
-| **G2 Atendimento** | **Código homologado no place de QA**; aberto no place real | Repetir `RunAllTests` e 3 serviços amostrais no place original (modelos reais podem mudar sockets, pivôs e colisão) |
+| **G1 Assets** | **Estrutura homologada no place original; licenças abertas** | Inventário completo, auditoria 17/0 e conteúdo 5.946/1 P3. Faltam: licença do `Veiculo_VIP_Corvette`, dos sprites do HUD e créditos CC BY; decidir sobre a peça do C1500 |
+| **G2 Atendimento** | **Homologado no place original (amostra)** | `RunAllTests` 2029/0 e 3 serviços reais OK; os 15 já passaram no place de QA. Opcional: repetir os 12 restantes com modelos reais |
 | **G3 Multiplayer/DataStore** | **Aberto** | Exige 2 contas/clientes e DataStore de homologação (roteiro na seção 8). A lógica de dados passou 232/232 com DataStore simulado e falhas injetadas |
-| **G4 UX/Desempenho** | **HUD homologado no simulador**; aberto em aparelho real | Celular físico, gamepad físico, FPS/memória no place real, StreamingEnabled |
+| **G4 UX/Desempenho** | **HUD no simulador + 59,9 fps no mapa real**; aberto em aparelho físico | Celular e gamepad físicos, memória do servidor (~3,8 GB no Studio), `StreamingEnabled` |
 | **G5 Publicação** | **Aberto** | Segurança revisada e corrigida (sem P0); faltam licenças (sprites do HUD, esportivo, CC BY), privacidade e a **sua decisão** de publicar |
 
-**Conclusão honesta:** a V1 **não está pronta para publicação**. O código passou em tudo que dá para executar sem o
-place real e sem uma segunda conta. Os bloqueios restantes exigem o place original, duas contas e a sua autorização.
+**Conclusão honesta:** a V1 **ainda não está pronta para publicação**. G1 (estrutura) e G2 estão homologados no place
+original; sobram G3 (2 contas reais), G4 (aparelho físico), licenças e a **sua** decisão de publicar.
 
 ## 8. O que você precisa fazer (passo a passo)
 
-1. **Abrir o place original** no Roblox Studio: *File → Open from Roblox* → `Oficina24H_Teste`. Antes de qualquer
-   mudança: *File → Save to File As…* → `Documents\Oficina24H-v2\backup\Oficina24H_Teste_antes_homologacao_2026-11-13.rbxl`
-   (a pasta de backup fica fora do git). Avise no chat: eu confiro pelo MCP, sincronizo o código do branch (o
-   `qa/sync.luau` nunca apaga nada; os dois módulos movidos da C-homolog eu apago à mão, com sua confirmação) e rodo
-   `RunAllTests` + `StudioPlaceAudit` + 3 serviços com os modelos reais.
+1. ~~Abrir o place original e fazer backup~~ — **feito na rodada 2**. Opcional: me avisar para repetir os 12 serviços
+   restantes com os modelos reais.
 2. **DataStore de homologação:** *Game Settings → Security → Enable Studio Access to API Services* (o código usa a chave
    `_STUDIO`, nunca a de produção).
 3. **Dois jogadores (G3):** *Test → Clients and Servers → 2 Players → Start*. Roteiro: jogador A convida B para uma OS

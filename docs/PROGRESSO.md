@@ -899,3 +899,13 @@ Detalhes em `docs/AUDITORIA_GERAL.md`. Resumo:
 - Desempenho indicativo no place de QA: 59,9 Hz servidor / 59,9 fps cliente com 6 chegadas simultâneas. Não vale para o place real.
 - Portões: G2/G4 aprovados no nível de código/simulador; **G1, G3, G5 abertos**. Próximos passos na seção 8 de `docs/HOMOLOGACAO_V1_2026-11-13.md`.
 - Branch `work/oficina24h-v1-homologacao-2026-11-13`; CI verde.
+
+## 13/11/2026 — Homologação V1, rodada 2: place original `Oficina24H_Teste`
+
+- Backup local antes de tudo: `backup/Oficina24H_Teste_antes_homologacao_2026-11-13.rbxl`. Código sincronizado pelo Rojo só nas pastas de código; mapa, assets, Lighting e terreno intactos. Módulos de QA temporários removidos; place salvo na nuvem (versão 98), **nada publicado**.
+- `RunAllTests` no place real: **2029 OK, 0 falhas**. `StudioPlaceAudit`: 11 falhas na 1ª execução (as 11 máquinas `Eq_*` sem `PrimaryPart`) → corrigidas → 17/0.
+- Inventário de `ServerStorage.Assets` completo (21 carros, 17 NPCs, 11 máquinas, 50 `Cenario`, 20 `Oficina`). Conteúdo: 5.946 verificados, 1 falha (P3, 1 peça de 97 do `Veiculo_Picape_C1500`).
+- Bug P1 achado só no place real: o funcionário NPC tomava a OS enquanto o dono preparava o carro. Corrigido (`OwnerTouchedAt` / `OwnerIsWorking`, `StaffAssignmentTest` 18/18).
+- 3 serviços com carros, NPCs e máquinas reais (pneu, freio, ignição): qualidade 100, sem pagamento duplo. Mapa real: 59,9 Hz servidor e 59,9 fps cliente (com o Studio em foco; sem foco o Studio limita a ~15 fps).
+- Pacotes baixados em `assets/Assets v1 Baixados`: nada faltava no place, então **nenhuma malha foi enviada** à conta Roblox.
+- G1 (estrutura) e G2 homologados no place original; G3, G4 físico, licenças e publicação seguem abertos. `main` `5b15eac`, CI verde.

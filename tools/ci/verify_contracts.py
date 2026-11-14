@@ -6,6 +6,8 @@ It catches missing mappings, sync paths and test registrations before a Rojo bui
 """
 from __future__ import annotations
 
+import csv
+import io
 import json
 import re
 from pathlib import Path
@@ -1451,6 +1453,15 @@ release_cli=text(TOOLS/"ci"/"release_gate.py")
 release_manifest=json.loads(text(ROOT/"docs"/"release"/"V2_RELEASE_EVIDENCE.json"))
 release_workflow=text(ROOT/".github"/"workflows"/"code-health.yml")
 release_docs=text(ROOT/"docs"/"V2_FASE_16_HOMOLOGACAO_BETA.md")
+qa_matrix=list(csv.DictReader(io.StringIO(text(ROOT/"docs"/"release"/"V2_TEST_MATRIX_15_SERVICOS.csv"))))
+check("V2-16: matriz física cobre exatamente os 15 defeitos existentes",
+    len(qa_matrix)==15
+    and len({r["DefectId"] for r in qa_matrix})==15
+    and {r["DefectId"] for r in qa_matrix}==set(ids))
+check("V2-16: nenhuma linha de QA de serviço afirma execução em Studio",
+    all(r["Status"]=="PENDENTE"
+        and not r["LinkEvidencia"] and not r["ShaDoBuild"]
+        for r in qa_matrix))
 check("V2-16: release gate possui 16 requisitos com fonte inequívoca",
     '#Rules.Gates' in release_rules
     and 'result.Approved=result.Passed==result.Total' in release_rules

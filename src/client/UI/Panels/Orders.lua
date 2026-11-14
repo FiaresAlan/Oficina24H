@@ -615,7 +615,8 @@ function Orders.new(parent: Instance)
         local contract=snapshot.Contract or {}
         local quote=contract.Quote or {}
         local accounts=contract.Relationships or {}
-        local status=contract.Active and "CONTRATO EM ANDAMENTO"
+        local status=contract.PendingSettlement and "CONTRATO ATENDIDO · SALVAMENTO PENDENTE"
+            or contract.Active and "CONTRATO EM ANDAMENTO"
             or contract.Proposal and "NOVA PROPOSTA · DECIDA ANTES DE EXPIRAR"
             or "PARCERIAS COMERCIAIS · AGUARDANDO OPORTUNIDADE"
         local lines={}
@@ -630,6 +631,9 @@ function Orders.new(parent: Instance)
                 "%s · %d/%d OS concluídas · restam %d min",
                 contract.Text or "Frota",contract.Done or 0,
                 contract.Target or 0,math.ceil((contract.EndsIn or 0)/60)))
+            if contract.PendingSettlement then
+                table.insert(lines,"A meta foi atingida; o bônus só será confirmado após o DataStore salvar o comprovante.")
+            end
             table.insert(lines,string.format(
                 "Bônus contratual reservado: %d moedas · reputação +%d · %s",
                 contract.Coins or 0,contract.Reputation or 0,
@@ -767,7 +771,7 @@ function Orders.new(parent: Instance)
         local contract=snapshot.Contract or {}
         table.insert(parts,table.concat({
             tostring(contract.Active),tostring(contract.Proposal),
-            tostring(contract.Name),tostring(contract.Mode),
+            tostring(contract.PendingSettlement),tostring(contract.Name),tostring(contract.Mode),
             tostring(contract.Done),tostring(contract.Target),
             tostring(math.floor((contract.EndsIn or contract.ExpiresIn or
                 contract.NextIn or 0)/10)),

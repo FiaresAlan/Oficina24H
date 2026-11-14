@@ -1128,7 +1128,8 @@ check("V2-11: limites anti-teleporte, duração, colisão e rota observada",
     and 'Rules.AssessMotion(' in drive_service
     and 'Rules.Advance(' in drive_service
     and 'workspace:Raycast(' in drive_service
-    and 'now-s.StartAt>Rules.MaximumSeconds' in drive_service
+    and 'Rules.SessionViolation(' in drive_service
+    and 'now-started>R.MaximumSeconds' in drive_rules
     and 'clear(jobId,problem,true)' in drive_service)
 check("V2-11: retorno seguro nos eventos de retorno, desconexão e despawn",
     'function Service.CancelJob(' in drive_service
@@ -1138,7 +1139,8 @@ check("V2-11: retorno seguro nos eventos de retorno, desconexão e despawn",
     and 'VehicleService.SetDriveCancelHandler' in main_src
     and 'action == "DriveCar"' in main_src
     and 'Mode="Return"' in finance_ui
-    and 'V2DriveService.Status(job.Id)' in workshop)
+    and 'V2DriveService.Status(job.Id)' in workshop
+    and 'V2DriveService.BusyJob(jobId)' in workshop)
 check("V2-11: segurança, rig real e rollback cobertos por regressões Edit",
     all((TOOLS/(n+".luau")).is_file() and ('"'+n+'"') in runner
         for n in ("V2DriveRulesTest","V2DriveRigTest","V2DriveSuspensionTest"))

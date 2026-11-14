@@ -27,6 +27,7 @@ local V2StaffRules = require(ReplicatedStorage.Shared.V2StaffRules)
 local V2FinancialRules = require(ReplicatedStorage.Shared.V2FinancialRules)
 local V2UsedMarketRules = require(ReplicatedStorage.Shared.V2UsedMarketRules)
 local V2FleetBusinessRules = require(ReplicatedStorage.Shared.V2FleetBusinessRules)
+local V2AccessibilityRules = require(ReplicatedStorage.Shared.V2AccessibilityRules)
 local ContractRules = require(ReplicatedStorage.Shared.ContractRules)
 
 local DataService = {}
@@ -106,6 +107,7 @@ local function makeDefaultData(): any
         FinanceLedger = V2FinancialRules.New(Config.StartingCoins,os.time()), -- agregados desde a abertura
         UsedMarket = V2UsedMarketRules.New(), -- revenda isolada das vagas e do crédito de OS
         FleetAccounts = V2FleetBusinessRules.NewAccounts(), -- V2-14: parceiros, provas de bônus e 20 contratos recentes
+        Accessibility = V2AccessibilityRules.New(), -- V2-15: somente opções cosméticas seguras
 		TotalEarned = 0,
 		PriceMultiplier = 1, -- preço da oficina em relação à tabela (0.7 a 1.5)
 		RatingCount = 0, -- avaliações recebidas dos clientes (1 a 5 estrelas)
@@ -341,6 +343,7 @@ local function reconcile(data: any): any
     -- conservadora marca o histórico como PARCIAL, sem inventar a vida toda.
     data.UsedMarket = V2UsedMarketRules.Sanitize(data.UsedMarket)
     data.FleetAccounts = V2FleetBusinessRules.SanitizeAccounts(data.FleetAccounts)
+    data.Accessibility = V2AccessibilityRules.Sanitize(data.Accessibility)
     data.Transactions=V2FinancialRules.CleanTransactions(data.Transactions)
     if hadFinanceLedger then
         data.FinanceLedger=V2FinancialRules.Sanitize(data.FinanceLedger,data.Coins,os.time())
@@ -918,6 +921,18 @@ function DataService.RecordFleetOutcomeOnce(player: Player,key: any,
     end
     Dirty[player.UserId]=true
     return true,"Registrado no perfil."
+end
+
+-- V2-15: configuração cosmética separada da economia; sem yield,
+-- alteração de saldo, custo de rede ou desbloqueio de recursos.
+function DataService.SetAccessibility(player: Player,key:any,value:any): (boolean,string)
+    local profile=Profiles[player.UserId]
+    if not profile then return false,"Perfil indisponível." end
+    local updated,reason=V2AccessibilityRules.Set(profile.Accessibility,key,value)
+    if not updated then return false,reason end
+    profile.Accessibility=updated
+    Dirty[player.UserId]=true
+    return true,reason
 end
 
 function DataService.FleetAccountSummary(player: Player): any

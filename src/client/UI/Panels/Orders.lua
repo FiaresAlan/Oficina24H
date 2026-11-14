@@ -768,6 +768,7 @@ function Orders.new(parent: Instance)
 			tostring(snapshot.Profile.WorkshopLevel) }, ":"))
 		table.insert(parts, HttpService:JSONEncode(snapshot.RecentSettlements or {}))
         table.insert(parts, HttpService:JSONEncode(snapshot.UsedMarket or {}))
+        table.insert(parts,HttpService:JSONEncode(snapshot.Profile.Accessibility or {}))
         local contract=snapshot.Contract or {}
         table.insert(parts,table.concat({
             tostring(contract.Active),tostring(contract.Proposal),
@@ -1215,6 +1216,31 @@ function Orders.new(parent: Instance)
             end -- fim da seção Mercado
         elseif id == "team" then
             fleetBoard(scroll,snapshot)
+            -- V2-15: acesso fácil no mesmo painel, sem aumentar botões
+            -- da HUD e sem sobreposição escura da tela de gameplay.
+            local access=snapshot.Profile.Accessibility or {}
+            local accessCard=financialCard(scroll,"V2Accessibility",-19,
+                "ACESSIBILIDADE E DESEMPENHO",{
+                "Essas preferências alteram apenas som, vibração e detalhes visuais.",
+                "Alertas de defeito sempre mantêm texto legível. Nenhum ajuste afeta recompensa ou dificuldade.",
+            })
+            local settings={
+                {Key="DriveHaptics",Name="VIBRAÇÃO DO CONTROLE",Default=true},
+                {Key="DriveSfx",Name="SOM DOS ALERTAS",Default=true},
+                {Key="LowDetail",Name="MENOS FIGURANTES 3D",Default=false},
+            }
+            for i,setting in ipairs(settings) do
+                local enabled=access[setting.Key]
+                if type(enabled)~="boolean" then enabled=setting.Default end
+                local button=PanelKit.button(accessCard,
+                    setting.Name..": "..(enabled and "ATIVADO" or "DESATIVADO"),
+                    "dark",Vector2.new(285,46),function()
+                        Store.Act("SetAccessibility",{
+                            Key=setting.Key,Value=not enabled,
+                        })
+                    end)
+                button.LayoutOrder=5+i
+            end
             -- V2-05: supervisionar até dois mecânicos sem UI sobreposta ou
             -- campos financeiros/clientes privados.
             local staff=snapshot.Staff or {Workers={},Employees=0}

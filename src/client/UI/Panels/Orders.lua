@@ -609,6 +609,127 @@ function Orders.new(parent: Instance)
         return panel
     end
 
+    -- V2-14: proposta opcional e negociável. A UI apenas escolhe uma das
+    -- variantes cotadas e validadas no servidor, nunca envia preço/prazo.
+    local function fleetBoard(scroll: ScrollingFrame,snapshot: any)
+        local contract=snapshot.Contract or {}
+        local quote=contract.Quote or {}
+        local accounts=contract.Relationships or {}
+        local status=contract.Active and "CONTRATO EM ANDAMENTO"
+            or contract.Proposal and "NOVA PROPOSTA · DECIDA ANTES DE EXPIRAR"
+            or "PARCERIAS COMERCIAIS · AGUARDANDO OPORTUNIDADE"
+        local lines={}
+        if contract.Proposal then
+            table.insert(lines,contract.Text or tostring(contract.Name or ""))
+            table.insert(lines,string.format(
+                "Prazo para resposta: %d s · %d carros · área %s",
+                contract.ExpiresIn or 0,contract.Target or 0,
+                contract.Spec or "?"))
+        elseif contract.Active then
+            table.insert(lines,string.format(
+                "%s · %d/%d OS concluídas · restam %d min",
+                contract.Text or "Frota",contract.Done or 0,
+                contract.Target or 0,math.ceil((contract.EndsIn or 0)/60)))
+            table.insert(lines,string.format(
+                "Bônus contratual reservado: %d moedas · reputação +%d · %s",
+                contract.Coins or 0,contract.Reputation or 0,
+                contract.Mode=="Express" and "ENTREGA PRIORITÁRIA" or "PRAZO NORMAL"))
+            local methods=contract.Methods or {}
+            table.insert(lines,string.format(
+                "Concluídos: proprietário %d · equipe %d · colaborador %d · NPC avulso %d",
+                methods.Owner or 0,methods.Staff or 0,
+                methods.Collaborator or 0,methods.Npc or 0))
+            table.insert(lines,string.format(
+                "Receita bruta de OS por tabela (referência): %d · não é receita líquida real",
+                contract.GrossReference or 0))
+        else
+            table.insert(lines,string.format(
+                "Próxima oportunidade em ~%d min. As propostas são opcionais e não aplicam multa por recusa/expiração.",
+                math.ceil((contract.NextIn or 0)/60)))
+        end
+        table.insert(lines,string.format(
+            "Relacionamento histórico: %d contrato(s) cumprido(s), %d expirado(s)",
+            accounts.Completed or 0,accounts.Expired or 0))
+        local board=financialCard(scroll,"V2FleetBusiness", -20,status,lines)
+        local function button(label:string,style:string,mode:string,order:number,action:string)
+            local btn=PanelKit.button(board,label,style,
+                Vector2.new(290,46),function()
+                    Store.Act("NegotiateFleet",{Action=action,Mode=mode})
+                end)
+            btn.LayoutOrder=order
+        end
+        if contract.Proposal then
+            if quote.EligibleDefects then
+                HudParts.text(board,string.format(
+                    "Viabilidade: %d tipo(s) de serviço atendível(is) · %d box(es) · %d mecânico(s) · ocupação %d%%",
+                    quote.EligibleDefects or 0,quote.Capacity or 1,
+                    quote.Staff or 0,quote.LoadPercent or 0),18,{
+                    Font=Theme.FontSemi,TextColor3=Theme.Accent,LayoutOrder=10,
+                    TextWrapped=true,AutomaticSize=Enum.AutomaticSize.Y,
+                    Size=UDim2.new(1,0,0,0)})
+                local shortages={}
+                for _,short in ipairs(quote.LowStock or {}) do
+                    table.insert(shortages,string.format(
+                        "%s %d/%d",short.PartId or "Peça",
+                        short.Have or 0,short.ReferenceNeed or 0))
+                end
+                HudParts.text(board,#shortages>0 and
+                    ("Estoque de referência a conferir: "..table.concat(shortages,", "))
+                    or "Estoque de referência: sem falta nos tipos já disponíveis.",
+                    17,{Font=Theme.FontSemi,LayoutOrder=11,
+                        TextColor3=#shortages>0 and rgb(255,170,85) or Theme.Muted,
+                        TextWrapped=true,AutomaticSize=Enum.AutomaticSize.Y,
+                        Size=UDim2.new(1,0,0,0)})
+            end
+            for i,option in ipairs(quote.Variants or {}) do
+                local prefix=option.Mode=="Express" and
+                    "ACEITAR · PRAZO PRIORITÁRIO" or "ACEITAR · PRAZO NORMAL"
+                HudParts.text(board,string.format(
+                    "%s · %d carros/%d min · prêmio %d · margem prevista (%d OS): própria %+d | colaborador %+d | NPC %+d",
+                    option.Name or option.Mode,
+                    option.VehicleCount or 0,math.ceil((option.Seconds or 0)/60),
+                    option.Bonus or 0,option.VehicleCount or 0,
+                    option.OwnerContribution or 0,
+                    option.CollaboratorContribution or 0,
+                    option.NpcContribution or 0),18,{
+                    Font=Theme.FontSemi,LayoutOrder=12+i*3,
+                    TextWrapped=true,AutomaticSize=Enum.AutomaticSize.Y,
+                    Size=UDim2.new(1,0,0,0)})
+                button(prefix,"blue",option.Mode,13+i*3,"Accept")
+            end
+            button("RECUSAR PROPOSTA · SEM MULTA","dark","",23,"Decline")
+            HudParts.text(board,
+                "Estimativa: os custos e receitas de cada OS variam com defeito, peças, avaliação, salário e comissão. A escolha não garante lucro.",
+                16,{Font=Theme.FontSemi,TextColor3=Theme.Muted,LayoutOrder=24,
+                TextWrapped=true,AutomaticSize=Enum.AutomaticSize.Y,
+                Size=UDim2.new(1,0,0,0)})
+        elseif contract.Active then
+            local margin=contract.Financials or {}
+            HudParts.text(board,string.format(
+                "Projeção da proposta: receita de OS + bônus %d · custo de peças %d · contribuição própria %+d · colaborador %+d · NPC %+d",
+                margin.GrossReference or 0,margin.PartsReference or 0,
+                margin.OwnerContribution or 0,
+                margin.CollaboratorContribution or 0,
+                margin.NpcContribution or 0),
+                18,{Font=Theme.FontSemi,TextColor3=Theme.Muted,LayoutOrder=12,
+                    TextWrapped=true,AutomaticSize=Enum.AutomaticSize.Y,
+                    Size=UDim2.new(1,0,0,0)})
+            HudParts.text(board,
+                "Para delegar uma OS da frota: atribua um mecânico abaixo, convide um colaborador na aba Em andamento ou contrate um NPC avulso após diagnosticar. O bônus só é pago uma vez ao cumprir a meta.",
+                17,{Font=Theme.FontSemi,TextColor3=Theme.Accent,LayoutOrder=13,
+                    TextWrapped=true,AutomaticSize=Enum.AutomaticSize.Y,
+                    Size=UDim2.new(1,0,0,0)})
+        end
+        for index,partner in ipairs(accounts.Partners or {}) do
+            HudParts.text(board,string.format(
+                "Parceiro: %s · %d sucesso(s), %d expiração(ões)",
+                partner.Name or partner.Id,partner.Wins or 0,partner.Expired or 0),
+                16,{Font=Theme.FontSemi,TextColor3=Theme.Muted,
+                    LayoutOrder=30+index,AutomaticSize=Enum.AutomaticSize.Y,
+                    Size=UDim2.new(1,0,0,0)})
+        end
+    end
+
 	local function signature(snapshot: any): string
 		local parts = { tabs.Current(), tostring(inviteJobId), tostring(snapshot.HasWorkshop) }
 		for _, job in ipairs(snapshot.Jobs) do
@@ -643,6 +764,16 @@ function Orders.new(parent: Instance)
 			tostring(snapshot.Profile.WorkshopLevel) }, ":"))
 		table.insert(parts, HttpService:JSONEncode(snapshot.RecentSettlements or {}))
         table.insert(parts, HttpService:JSONEncode(snapshot.UsedMarket or {}))
+        local contract=snapshot.Contract or {}
+        table.insert(parts,table.concat({
+            tostring(contract.Active),tostring(contract.Proposal),
+            tostring(contract.Name),tostring(contract.Mode),
+            tostring(contract.Done),tostring(contract.Target),
+            tostring(math.floor((contract.EndsIn or contract.ExpiresIn or
+                contract.NextIn or 0)/10)),
+            tostring(contract.Relationships and contract.Relationships.Completed),
+            tostring(contract.Result and contract.Result.Text),
+        },":"))
         local staff=snapshot.Staff or {}
         table.insert(parts, tostring(staff.TotalPaid))
         for _,worker in ipairs(staff.Workers or {}) do
@@ -1077,6 +1208,7 @@ function Orders.new(parent: Instance)
             end
             end -- fim da seção Mercado
         elseif id == "team" then
+            fleetBoard(scroll,snapshot)
             -- V2-05: supervisionar até dois mecânicos sem UI sobreposta ou
             -- campos financeiros/clientes privados.
             local staff=snapshot.Staff or {Workers={},Employees=0}
@@ -1166,7 +1298,8 @@ function Orders.new(parent: Instance)
                     elseif not job.CollaboratorUserId and not job.EmployeeAssignedSlot
                         and worker.Mode~="Paused" then
                         count+=1
-                        local btn=PanelKit.button(card,"Atribuir · "..job.VehicleName,
+                        local btn=PanelKit.button(card,
+                            (job.Fleet and "FROTA · " or "").."Atribuir · "..job.VehicleName,
                             "blue",Vector2.new(compact and 300 or 370,34),function()
                                 Store.Act("AssignStaffJob",{Index=worker.Slot,JobId=job.Id})
                             end)

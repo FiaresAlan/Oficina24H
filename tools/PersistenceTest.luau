@@ -1578,6 +1578,76 @@ do
         and not C.TradeUsedCar(player,"SellExhibit",uid))
 end
 
+-- V2-14: contrato de frota e BONUS usam UM perfil/uma chave;
+-- replay após Save/Load, outra instância de DataService e perfil v15.
+do
+    local store=newStore()
+    local player=fakePlayer(4201)
+    local A=server(store,"v2-fleet-A")
+    A.Load(player)
+    local p=A.Get(player)
+    local beforeCash=p.Coins
+    local beforeRep=p.Reputation
+    local key="FLEET-"..string.rep("a",32)
+    local terms={
+        At=os.time(),Mode="Express",Done=3,Target=3,Gross=480,
+        Bonus=360,Reputation=5,
+    }
+    local first=A.RecordFleetOutcomeOnce(player,key,"taxi","Completed",terms)
+    local afterCash=p.Coins
+    local afterRep=p.Reputation
+    check("V2-14: premio e reputação aplicados uma vez, no mesmo perfil",
+        first and afterCash==beforeCash+360
+        and afterRep==beforeRep+5 and p.FleetAccounts.Partners.taxi.Wins==1)
+    local twice=A.RecordFleetOutcomeOnce(player,key,"taxi","Completed",terms)
+    check("V2-14: replay local não repete bônus, rep nem parceria",
+        not twice and p.Coins==afterCash and p.Reputation==afterRep
+        and #p.FleetAccounts.Keys==1 and #p.FleetAccounts.History==1)
+    local invalid=A.RecordFleetOutcomeOnce(player,
+        "FLEET-"..string.rep("c",32),"taxi","Completed",{
+        At=os.time(),Mode="Standard",Done=2,Target=2,Gross=200,
+        Bonus=math.huge,Reputation=1,
+    })
+    local unknown=A.RecordFleetOutcomeOnce(player,
+        "FLEET-"..string.rep("d",32),"UNKNOWN","Completed",terms)
+    check("V2-14: valor infinito/empresa falsa não alteram saldo",
+        not invalid and not unknown and #p.FleetAccounts.Keys==1
+        and p.Coins==afterCash)
+    local pub=A.FleetAccountSummary(player)
+    check("V2-14: snapshot de parceiros não vaza chave privada",
+        pub and pub.Completed==1 and pub.Keys==nil
+        and pub.Partners[1].Wins==1)
+    check("V2-14: salvamento valida bonus ledger e caixa juntos",A.Save(player))
+    A.Remove(player)
+    local B=server(store,"v2-fleet-B")
+    B.Load(player)
+    local q=B.Get(player)
+    local replay=B.RecordFleetOutcomeOnce(player,key,"taxi","Completed",terms)
+    check("V2-14: queda/reconexão conserva bônus, chave e relacionamento",
+        q and q.SchemaVersion==15 and q.Coins==afterCash
+        and q.Reputation==afterRep and q.FleetAccounts.Partners.taxi.Wins==1
+        and not replay)
+    local expired=B.RecordFleetOutcomeOnce(player,
+        "FLEET-"..string.rep("b",32),"taxi","Expired",{
+        At=os.time(),Mode="Standard",Done=1,Target=3,Gross=120,
+        Bonus=0,Reputation=0,
+    })
+    check("V2-14: perda de prazo não cobra moedas ou reputação",
+        expired and q.Coins==afterCash and q.Reputation==afterRep
+        and q.FleetAccounts.Partners.taxi.Expired==1
+        and #q.FleetAccounts.History==2)
+    check("V2-14: conclusão e expiração sobreviverão ao logout",B.Save(player))
+    B.Remove(player)
+    local C=server(store,"v2-fleet-C")
+    C.Load(player)
+    local persisted=C.Get(player)
+    check("V2-14: reinício mantém relacionamento positivo e histórico limitado",
+        persisted and persisted.Coins==afterCash and persisted.Reputation==afterRep
+        and persisted.FleetAccounts.Partners.taxi.Wins==1
+        and persisted.FleetAccounts.Partners.taxi.Expired==1
+        and #persisted.FleetAccounts.History==2)
+end
+
 for _, c in ipairs(clones) do c:Destroy() end
 table.insert(results, failures == 0 and "TODOS OS TESTES PASSARAM" or (failures .. " TESTE(S) FALHARAM"))
 return table.concat(results, "\n")

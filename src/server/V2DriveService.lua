@@ -9,6 +9,7 @@ local ServerStorage=game:GetService("ServerStorage")
 local ReplicatedStorage=game:GetService("ReplicatedStorage")
 
 local Rules=require(ReplicatedStorage.Shared.V2DriveRules)
+local ScenarioRules=require(ReplicatedStorage.Shared.V2DriveScenarioRules)
 local Safety=require(ReplicatedStorage.Shared.AssetSafetyRules)
 local Catalog=require(ReplicatedStorage.Shared.Catalog)
 local VehicleService=require(script.Parent.VehicleService)
@@ -20,6 +21,15 @@ local Service={}
 local sessions: {[string]: any}={}
 local byDriver: {[number]: string}={}
 local heartbeat: RBXScriptConnection?=nil
+local completeHandler: ((Player,string,any)->())?=nil
+local cueHandler: ((Player,any)->())?=nil
+
+function Service.SetDriveOutcomeHandler(handler: (Player,string,any)->())
+    completeHandler=handler
+end
+function Service.SetDriveCueHandler(handler: (Player,any)->())
+    cueHandler=handler
+end
 
 local function part(parent: Instance,name: string,size: Vector3,cf: CFrame,
     color: Color3,collide: boolean,transparent: number?): Part
@@ -266,7 +276,7 @@ local function hideMarkers(session:any)
     session.Markers=nil
 end
 
-local function clear(jobId: string,reason: string,notify: boolean)
+local function clear(jobId: string,reason: string,notify: boolean,returned: boolean?)
     local s=sessions[jobId]
     if not s then return end
     sessions[jobId]=nil
@@ -285,6 +295,20 @@ local function clear(jobId: string,reason: string,notify: boolean)
     if s.Rig.Parent then s.Rig:Destroy() end
     -- Restaurar o carro de OS sem alterar Job.Status, peças, danos ou pagamento.
     VehicleService.ResumeFromDrive(jobId)
+    if s.Context and completeHandler then
+        -- Nunca confiar em validação de checkpoint/tempo enviada por cliente.
+        local outcome={Kind=s.Context.Kind,
+            Complete=returned==true and s.Progress.Done==true
+                and ScenarioRules.CanConclude(s.Progress.Passed,os.clock()-s.StartAt),
+            Passed=s.Progress.Passed,
+            Elapsed=os.clock()-s.StartAt,
+            Reproduced=s.CueReproduced==true,
+            Reason=reason,
+        }
+        -- Evita travar Heartbeat/cleanup se a aplicação tiver bug.
+        local ok,err=pcall(completeHandler,s.Player,jobId,outcome)
+        if not ok then warn("[V2DriveService] callback de conclusão falhou:",err) end
+    end
     if character and character.Parent and s.OriginalRoot and s.OriginalRoot.Parent
         and character.PrimaryPart then
         character:PivotTo(s.OriginalRoot.CFrame*CFrame.new(-8,4,0))
@@ -325,7 +349,7 @@ function Service.BusyJob(jobId: string): boolean
     return sessions[jobId]~=nil
 end
 
-function Service.Start(player: Player,jobId: string): (boolean,string)
+function Service.Start(player: Player,jobId: string,context: any?): (boolean,string)
     if sessions[jobId] or byDriver[player.UserId] then
         return false,"Já há uma sessão de direção ativa."
     end
@@ -368,6 +392,7 @@ function Service.Start(player: Player,jobId: string): (boolean,string)
         Origin=main.Position,Checkpoints=route,Progress=Rules.CheckpointState(),
         SeatLostAt=nil,SeatAcquired=false,Accum=0,DriverHumanoid=humanoid,
         InputAt=-math.huge,InputThrottle=0,InputSteer=0,LastInputRequest=-math.huge,
+        Context=type(context)=="table" and context or nil,CueReproduced=false,
     }
     sessions[jobId]=session
     byDriver[player.UserId]=jobId
@@ -424,8 +449,8 @@ function Service.End(player: Player,jobId: string): (boolean,string)
         return false,"Sessão inexistente ou pertencente a outro motorista."
     end
     local passed=session.Progress.Passed
-    clear(jobId,"",false)
-    return true,string.format("Carro devolvido ao box. Checkpoints verificados pelo servidor: %d/4. Sem pagamento nesta fase.",passed)
+    clear(jobId,"",false,true)
+    return true,string.format("Carro devolvido ao box. Checkpoints verificados pelo servidor: %d/4; cenário validado apenas se rota e duração mínimas foram cumpridas.",passed)
 end
 
 local function sample(s: any,now: number): string?
@@ -439,6 +464,23 @@ local function sample(s: any,now: number): string?
     s.LastAt=now
     s.Previous=position
     local got,message=Rules.Advance(s.Progress,s.Checkpoints,now,position)
+    -- Sinal de defeito só aparece quando a telemetria REAL corresponde
+    -- à condição do sintoma e ao checkpoint sorteado no plano privado.
+    if s.Context and s.Context.Kind=="Diagnosis" and not s.CueReproduced
+        and ScenarioRules.HasCondition(s.Context.Signal,velocity.Magnitude,
+            s.InputThrottle,s.InputSteer,now-s.StartAt,
+            s.Progress.Passed,s.Context.TriggerCheckpoint or 2) then
+        s.CueReproduced=true
+        local symptom=s.Context.Signal
+        if symptom then
+            s.Rig:SetAttribute("DriveCue",symptom.Name)
+            s.Rig:SetAttribute("DriveCueColor",symptom.Color)
+            if cueHandler then cueHandler(s.Player,{
+                Name=symptom.Name,Text=symptom.Cue,
+                Color=symptom.Color,Sound=symptom.Sound,
+            }) end
+        end
+    end
     if got then
         s.Rig:SetAttribute("Checkpoints",s.Progress.Passed)
         if s.Progress.Done then

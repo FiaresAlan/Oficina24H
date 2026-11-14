@@ -1301,7 +1301,7 @@ check("V2-14: parceiro persistido e resumo não expõe chave de crédito",
     and 'MaxCreditKeys=96' in fleet_rules
     and 'MaxHistory=20' in fleet_rules)
 check("V2-14: decisão de equipe/terceiro não duplica OS",
-    'job.EmployeeAssignedSlot and "Staff"' in workshop
+    '(job.EmployeeAssignedSlot or job.V2EmployeeSlot) and "Staff"' in workshop
     and '"Collaborator"' in workshop
     and '"Owner"' in workshop
     and 'Methods=table.clone(c.Methods)' in fleet_service

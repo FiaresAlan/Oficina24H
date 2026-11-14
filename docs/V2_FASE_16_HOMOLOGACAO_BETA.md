@@ -26,7 +26,7 @@
    ```
    O `RunAllTests` já inclui `V2ReleaseGateRulesTest`, `V2BetaSmokeAudit`, testes de remotos, economia, assets, perfis e as suítes antigas de reparos. **Salvar a saída integral e o SHA**. `WARN` exige revisão; qualquer `FAIL` ou erro de require bloqueia o gate `studio_suites`.
 3. Rodar **Test → Start Server (2 jogadores)**. Inspecionar ao vivo as saídas da janela Server/Client, falta de models, suspensão/retorno do Hatch, `RemoteEvent` falsificado, equipamento, carteira, OS concorrente, colaboração e logout no meio do reparo.
-4. Executar **cada um dos 15 defeitos** do catálogo, em modelos e níveis distintos, com diagnóstico/inspeção, abertura e fechamento de componentes, reparo físico, consumo de peças, recibo, atualização de qualidade, estrelas e dinheiro **exatamente uma vez**. Repetir a solicitação da última entrega e validar idempotência.
+4. Executar **cada um dos 15 defeitos** do catálogo, em modelos e níveis distintos, com diagnóstico/inspeção, abertura e fechamento de componentes, reparo físico, consumo de peças, recibo, atualização de qualidade, estrelas e dinheiro **exatamente uma vez**. Repetir a solicitação da última entrega e validar idempotência. Preencher [a matriz CSV de 15 serviços](release/V2_TEST_MATRIX_15_SERVICOS.csv) com status observado (`APROVADO`, `FALHOU` ou `BLOQUEADO`), evidência real, dispositivo, modelo, jogadores e SHA.
 5. Rodar **novo perfil sem progresso**: os primeiros 30 segundos de atendimento guiado, primeiras 2–3 OS, melhoria de oficina nível 0→1, desbloqueio de 2ª vaga, contratação/atribuição de funcionário, estoque e receita. Não usar QA cheat neste teste.
 6. Executar **fluxos de equipe/economia**: dois jogadores, convite e repasse, NPC avulso, funcionário, frotas Standard/Express, recusa/expiração, revenda, showroom, estoque, reposição, salários, saldo negativo proibido e importação de perfil anterior. Após Save falho/reconnect/replay, verificar o mesmo saldo/prova.
 7. Testar **remotos adversos** em servidor de homologação, nunca produção: spam distribuído por ações, payload 121 entradas/NaN/Instance, tokens de reparo e carro de outro usuário, reenvio de `FinishRepair`, `CheckRepairResult` e `DriveInput`; nenhuma concessão monetária fora da liquidação.
@@ -92,6 +92,7 @@ O resultado final desta rodada continua sendo **NO-GO** por falta de execução 
 - `src/shared/V2ReleaseGateRules.lua`, `tools/V2ReleaseGateRulesTest.luau`: 16 critérios fail-closed; sem ativar gameplay.
 - `tools/V2BetaSmokeAudit.luau`: medição estrutural observável do place, sem Side Effects de gameplay.
 - `docs/release/V2_RELEASE_EVIDENCE.json`: manifesto inicial com 3 bloqueios conhecidos e 13 gates sem evidência, todos fechados.
+- `docs/release/V2_TEST_MATRIX_15_SERVICOS.csv`: 15 linhas sincronizadas automaticamente com os IDs de `Catalog.Defects`, sem nenhum serviço marcado como já executado; o CI detecta lacunas e exige URL+SHA em linhas `APROVADO`.
 - `tools/ci/release_gate.py` + `.github/workflows/code-health.yml`: autoverificação adversarial da regra e relatório de decisão, sem CI simular Studio.
 - `tools/RunAllTests.luau`, `tools/ci/verify_contracts.py`: suítes e proteção dos contratos.
 - `docs/CHECK_LIST_MESTRE_V2.md`, issue #26 e PR #27: status sem falsos checks de Studio.

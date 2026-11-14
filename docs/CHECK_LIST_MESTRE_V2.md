@@ -1,6 +1,6 @@
 # CHECK_LIST_MESTRE_V2 — OFICINA 24H
 
-**Versão:** 2.5, 13/11/2026. **Situação:** engenharia V2-00–13 na PR #27; V2-12/13 implementadas com gate desligado aguardando QA físico da V2-11, além de lotes fornecedor V2-08, main/QA V1 e modelos/Studio; V2-14–16 planejadas. **Nenhuma homologação Studio presumida.**  
+**Versão:** 2.6, 13/11/2026. **Situação:** engenharia V2-00–14 na PR #27; V2-12/13 com gate desligado aguardando QA físico da V2-11, contratos V2-14 com QA Studio pendente, além de lotes fornecedor V2-08, main/QA V1 e modelos/Studio; V2-15/16 planejadas. **Nenhuma homologação Studio presumida.**  
 **Direção aprovada pelo proprietário:** híbrida — estilização legível do mundo + reparos visualmente mecânicos + gestão de negócio.  
 **Código base de referência:** main em C31 (`2690f082` antes dos commits exclusivamente documentais da V2). **Atenção:** o Claude Code está homologando/corrigindo a V1 em paralelo; sempre ler novo HEAD e reconciliar diffs antes de programar V2. Preservar Issue #15 V1 como histórico.  
 **Documentos de referência:** DIRECAO_JOGO_V2_2026-11-13.md, PESQUISA_MERCADO_V2_2026-11-13.md, AUDITORIA_V2_BASE_CODIGO_2026-11-13.md (auditoria histórica até C17), [GUIA_UNICO_ASSETS_V2.md](GUIA_UNICO_ASSETS_V2.md) e GUIA_UNICO_ASSETS_V1.md.
@@ -50,7 +50,7 @@ P0 = prioridade para o núcleo de lançamento. P1 = opcional condicionado a viab
 - [ ] **Merge na main:** depende de comparar, revisar e conciliar as correções V1 do Claude e refazer CI.
 - [ ] **Arte real:** revisar/importar os três modelos piloto, ajustar malhas móveis, pivôs, licença, áudio e LOD reais.
 - [ ] **Studio:** executar RunAllTests, V2PilotPlaceAudit, 15 serviços, multiplayer, mobile/PC/gamepad e verificar efeitos reais.
-- [ ] **V2-14–16 e lotes V2-08:** implementar somente após dependências, sem declarar V2 completa por CI verde.
+- [ ] **V2-15–16 e lotes V2-08:** implementar somente após dependências, sem declarar V2 completa por CI verde.
 
 **Portão:** código escrito e integrado em branch não equivale a jogo homologado. Não há publicação automática.
 
@@ -269,12 +269,22 @@ P0 = prioridade para o núcleo de lançamento. P1 = opcional condicionado a viab
 
 **Gate antes de V2-14/release:** testes da V2-11 física, da V2-12 sensorial e da V2-13 financeira no Roblox Studio precisam passar; a branch continua sem merge na main.
 
-## V2-14 — Frotas, contratos e relações comerciais (P1)
-- [ ] [C] Expandir contratos existentes com precificação, prazo, serviço, equipe e estoque.
-- [ ] [C] Reputação/retorno de clientes e decisões econômicas de terceirizar.
-- [ ] [C] Compatibilizar pagamento colaborativo, idempotência e saída de outros jogadores.
-- [ ] [A] Testes de vários contratos simultâneos, prazo, fraude e liquidação.
-- [ ] [S] Homologar diversão/social e clareza de lucro.
+## V2-14 — Frotas, contratos e relações comerciais (P1, engenharia concluída)
+
+**[Guia completo da V2-14, contratos, riscos, persistência e roteiro de QA](V2_FASE_14_FROTAS_CONTRATOS.md)** · Engenharia na PR #27; **testes Luau e Studio ainda não executados**.
+
+- [x] [C] Propostas das cinco empresas abertas somente após onboarding, não mais contratos forçados: recusar/expirar sem multa, prazo da decisão 130 s, 1 proposta/contrato por oficina, cooldown e aceitação única do modo Normal/Prioritário.
+- [x] [C] `V2FleetBusinessRules.Quote`: prazos e bônus calculados no servidor, prêmio da urgência ~20% maior e prazo ~22% menor; estimativas de serviço/peças/estoque/capacidade/boxes/ocupação/equipe com base nos defeitos e materiais de verdade, sem números garantidos de lucro.
+- [x] [C] Geração de carros da frota limitada a defeitos que a oficina *de fato* consegue executar com seu equipamento e nível, mantendo o atendimento V1 de outras OS sem contrato.
+- [x] [C] Alternativas econômicas apresentadas na aba Equipe: margem de referência com proprietário, colaborador (parcela estimada) ou NPC avulso; atribuição real de funcionário e convite de colaboração continuam nos fluxos validados de V1/V2-05.
+- [x] [C] Relacionamento persistente por empresa: cada contrato cumprido gera 2% de bonificação no próximo convite do parceiro (teto +10%), somente sobre prêmio do contrato; conclusão/expiração e histórico dos 20 eventos recentes sanitizados e chaves financeiras não replicadas.
+- [x] [C] `FleetDone` somente após pagamento de OS por jogador/colaborador/NPC/staff; valida token vigente, JobId único, executor e meta, rejeita replay e token de outra frota.
+- [x] [C] Prova de bônus no **mesmo perfil** (`DataService.RecordFleetOutcomeOnce`) antes de crédito de moedas/reputação; mudanças sem yield e idempotência após Save/Load, sem substituir a liquidação colaborativa existente.
+- [x] [C] Timeout do contrato registra vencimento sem debitar saldo/rep; desconexão não cria direito a prêmio não conquistado. **Limite documentado:** contrato parcial continua por sessão (como V1), não recuperável entre servidores.
+- [x] [A] Duas suites escritas (`V2FleetBusinessRulesTest`, `V2FleetContractTest`) e regressões extras em `PersistenceTest` com DataStore simulado A/B/C, token falso, contrato duplicado, timeout, sanitização, team modes e idempotência; suites registradas no runner.
+- [x] [A] CI Rojo e contratos estáticos para cotação, gating, privacidade, JobId único, mesma conta e replay de bônus; **CI não executa os testes Luau**.
+- [ ] [S] Homologar em Studio 2 jogadores, cinco empresas, normal/prioritário, fonte de margem, estoque, comissão colaborativa, equipe, saída de jogadores, Save falho e contrato vencendo entre OS.
+- [ ] [S] Decidir produto: contrato parcial expira/reinicia ao desconectar (herdado da V1) ou deve ser retomado no beta; avaliar clareza da cotação e se o prazo é razoável.
 
 ## V2-15 — Polimento transversal e segurança (P0)
 - [ ] [C] Revisar código de todas as fases aprovadas, dívida técnica, regressões, licenças e remotes.

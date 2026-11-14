@@ -502,4 +502,9 @@ function Service.StartHeartbeat()
     end)
 end
 
+function Service._buildRigForTesting(car: Model,owner: any,jobId: string)
+    if not RunService:IsStudio() then return nil end
+    return buildRig(car,owner,jobId)
+end
+
 return Service

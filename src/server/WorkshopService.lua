@@ -213,6 +213,21 @@ end
 
 -- O cliente avalia o serviço (1 a 5 estrelas, ver CustomerRules.RateService): registra na oficina do dono e ajusta a reputação.
 -- `executor`: quem fez o trabalho (para a sobra de nível); `byNpc`: mecânico NPC.
+-- A OS é confirmada primeiro; bônus adicional de frota tem seu Save
+-- próprio e NÃO pode atrasar a resposta do reparo ao jogador.
+local function completeFleetPostSave(owner: Player, fleetToken: any?, jobId: string,
+    gross: number, method: string)
+    if not fleetToken then return end
+    task.spawn(function()
+        if owner.Parent~=Players then return end
+        local ok,err=pcall(ContractService.FleetDone,owner,
+            fleetToken,jobId,gross,method)
+        if not ok then
+            warn("[WorkshopService] Falha no bônus de frota pós-persistência:",jobId,err)
+        end
+    end)
+end
+
 local function rateService(owner: Player, job: any, service: any, defect: any, executor: Player?, byNpc: boolean, quality: number?): number
     local profile = DataService.Get(owner)
     local margin = 0
@@ -1398,11 +1413,8 @@ local function confirmDelivery(entry: any)
     -- estiverem confirmados no DataStore; um Save do bônus não pode
     -- interromper a montagem de recibos, avaliação ou repartição.
     if entry.FleetToken and entry.Owner.Parent == Players then
-        local ok,err=pcall(ContractService.FleetDone,entry.Owner,
-            entry.FleetToken,entry.JobId,entry.FleetGross,entry.FleetMethod)
-        if not ok then
-            warn("[WorkshopService] Falha na concessão posterior da frota:",err)
-        end
+        completeFleetPostSave(entry.Owner,entry.FleetToken,entry.JobId,
+            entry.FleetGross,entry.FleetMethod)
     end
     if entry.Delegated and entry.Worker.Parent == Players then
         -- Prova do proprietário só é dispensável após a claim sumir da conta
@@ -2196,7 +2208,7 @@ local function confirmNpcSave(owner: Player, jobId: string, token: string, messa
             if DataService.Save(owner) then
                 NpcPendingSaves[key] = nil
                 if fleetToken and owner.Parent == Players then
-                    ContractService.FleetDone(owner,fleetToken,jobId,
+                    completeFleetPostSave(owner,fleetToken,jobId,
                         fleetGross or 0,fleetMethod or "Npc")
                 end
                 if eventSender and owner.Parent == Players then
@@ -2272,7 +2284,7 @@ function WorkshopService.HireNpc(player: Player, jobId: string)
         .. " moedas. Você não recebeu XP. Avaliação: " .. CustomerRules.StarsText(stars) .. " (" .. tostring(stars) .. ")"
     if DataService.Save(player) then
         if job.Fleet then
-            ContractService.FleetDone(player,job.Fleet,job.Id,
+            completeFleetPostSave(player,job.Fleet,job.Id,
                 job.Price or service.Reward,"Npc")
         end
         return true, message

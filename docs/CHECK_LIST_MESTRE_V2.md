@@ -1,6 +1,6 @@
 # CHECK_LIST_MESTRE_V2 — OFICINA 24H
 
-**Versão:** 2.8, 13/11/2026. **Situação:** engenharia V2-00–16 na PR #27, mas V2-16 é pacote de auditoria Go/No-Go, **NÃO RELEASE**. V2-12/13 permanecem desligadas até QA físico; V2-08 fornecedores FIFO, PR divergente da main, licenças, Studio e beta bloqueiam publicação. **Nenhuma homologação Studio presumida.**  
+**Versão:** 2.9, 13/11/2026. **Situação:** engenharia V2-00–16 + auditoria de pré-entrega incorporada à PR #27, **NÃO RELEASE**. Soluções de reparo agora só no servidor; bônus de frota pós-Save; compatibilidade com correções de Studio da V1 portada estaticamente. V2-12/13 desligadas; V2-08 FIFO, conflitos com main, licenças, Studio e beta continuam bloqueando publicação. **Nenhuma homologação Studio da V2 presumida.**  
 **Direção aprovada pelo proprietário:** híbrida — estilização legível do mundo + reparos visualmente mecânicos + gestão de negócio.  
 **Código base de referência:** main em C31 (`2690f082` antes dos commits exclusivamente documentais da V2). **Atenção:** o Claude Code está homologando/corrigindo a V1 em paralelo; sempre ler novo HEAD e reconciliar diffs antes de programar V2. Preservar Issue #15 V1 como histórico.  
 **Documentos de referência:** DIRECAO_JOGO_V2_2026-11-13.md, PESQUISA_MERCADO_V2_2026-11-13.md, AUDITORIA_V2_BASE_CODIGO_2026-11-13.md (auditoria histórica até C17), [GUIA_UNICO_ASSETS_V2.md](GUIA_UNICO_ASSETS_V2.md) e GUIA_UNICO_ASSETS_V1.md.
@@ -328,6 +328,19 @@ P0 = prioridade para o núcleo de lançamento. P1 = opcional condicionado a viab
 - [ ] [S] Executar beta fechado, medir diversão/abandono/lucratividade, corrigir P0/P1 e recolher documentação do build.
 - [ ] [S] Registrar 16/16 evidências de fonte correta, SHA da build e aprovação explícita do proprietário; **NENHUMA autorização implícita de publicação**.
 
+## Auditoria final antes da entrega ao Claude — código revisado, NO-GO
+
+**Relatório de transferência:** [V2 — Auditoria pré-entrega e guia para Claude](V2_AUDITORIA_HANDOFF_CLAUDE_2026-11-13.md). **Main V1 lida:** `a3a1279fc409f1997255f6fb5d97c2788b121388` (atualizar na hora de integrar). **PR #27:** `mergeable=false` (dirty), **draft**; a `main` não foi alterada por este assistente.
+
+- [x] [C] **P0 segurança:** remover `RepairOperations` e `WorkshopProcedures` de `ReplicatedStorage.Shared`; mover gabaritos da V1 homologada para `src/server`, corrigir `WorkshopService`, oito paths de testes e auditorias e falhar no CI se voltarem a ser replicados.
+- [x] [C] **P0 pagamento/reentrada:** tirar `FleetDone` de `rateService`; apenas após recibos e Save confirmado de reparo manual, colaborativo, NPC ou funcionário agendar registro idempotente de progresso de frota sem bloquear a resposta do reparo.
+- [x] [C] **Correções V1 preservadas:** ID negativo de usuário Studio em quitação, posse da OS enquanto dono trabalha, fail-closed TV/prateleira, tolerância float32 da loja, fallback de API Studio, cash/snapshot anti-spam, respostas ACK saneadas, QA para os 15 defeitos, UX touch/onboarding, billboard de upgrades e cache de amigos.
+- [x] [C] **Suítes V1 ajustadas:** `CompactHudTest` usa JobId real; `PersistenceTest` usa `Suspension` em claims/XP, não especialização inexistente `Freios`; `RequestBudgetRulesTest` registrado no runner de 81 suítes.
+- [x] [A] Scanner `tools/ci/audit_repo_integrity.py` acoplado ao CI, cobrindo 222 fontes Lua/Luau, 81 suítes, 395 verificações de integridade e bloqueio à replicação de gabaritos; verificação estática e Rojo executadas sem erros no workflow; **não é compilação/teste Luau em Studio**.
+- [ ] [S] **QA Claude V2:** executar as 81 suítes no Studio, cobrir falha/retry de contrato após Save, expiração/desconexão, física, 15 OS, collab, novos NPCs e dispositivos; não herdar automaticamente o PASS da V1.
+- [ ] [S] **Integração V1:** resolver conflitos em branch temporária, revisando por módulo (não `--ours`/ `--theirs` em massa). Preservar correções da V1, gabaritos server-only e DataStore. Só então mesclar após homologação.
+- [ ] [S] **Produto:** implementar e testar lotes FIFO/fornecedores V2-08 e licenças/atribuições, teste beta e autorização final 16/16; PR permanece draft.
+
 ## Checklist obrigatório de cada rodada futura
 - [ ] Fixar SHA base, dependências e critério de aceite.
 - [ ] Auditar código legado e não duplicar mecânicas existentes.
@@ -396,4 +409,4 @@ P0 = prioridade para o núcleo de lançamento. P1 = opcional condicionado a viab
 4. Materiais Poly Haven, efeitos Kenney e ícones Lucide são opcionais e entram só quando melhorarem legibilidade/qualidade; conferir licença.
 5. Nenhum arquivo externo GLB será solicitado pelo código em runtime Roblox: importar ao Studio/Creator Hub e usar as referências autorizadas.
 
-**Não autorizado nesta etapa:** código V2, download automático, importação no place, publicação ou marcação de fases concluídas. Aguardando OK explícito.
+**Estado vigente:** implementação em branch V2 explicitamente autorizada e submetida à PR #27; proibido substituir a `main` do Claude sem conciliação. Importação ao place, homologação Studio, licenças, beta e publicação aguardam execução/aprovação real do proprietário. Consulte a auditoria pré-entrega acima e o gate V2-16.

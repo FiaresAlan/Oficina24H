@@ -223,7 +223,7 @@ local function rateService(owner: Player, job: any, service: any, defect: any, e
     ProgressService.AddLeague(owner, ProgressRules.LeaguePoints(stars, quality, job.Vip == true)) -- liga semanal
     if job.Fleet then
         local executorMode=byNpc and
-            (job.EmployeeAssignedSlot and "Staff" or "Npc")
+            ((job.EmployeeAssignedSlot or job.V2EmployeeSlot) and "Staff" or "Npc")
             or (executor and executor.UserId~=owner.UserId and "Collaborator"
                 or "Owner")
         -- Chamada APÓS liquidação da OS; o prêmio da frota possui

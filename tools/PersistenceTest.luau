@@ -405,7 +405,7 @@ do
 	local workerInitial = A.Get(worker).Coins
 	check("C12: reivindicação pode ser preparada",
 		A.StageWorkerClaim(worker, 1102, "job_77", token, 120, 280, 44, 92,
-			"Freios", "Hatch", "Freios"))
+			"Freios", "Hatch", "Suspension"))
 	check("C12: salva a reivindicação antes de creditar", A.Save(worker))
 	check("C12: claim foi persistida sem saldo", #store.data["u_1101"].PendingClaims == 1
 		and store.data["u_1101"].Coins == workerInitial)
@@ -435,11 +435,11 @@ do
 	check("C13: parcela ausente recuperada", recovered == 1
 		or B.HasRepairCredit(worker, "job_77", token))
 	check("C13: saldo exato recuperado uma vez", B.Get(worker).Coins == workerInitial + 280)
-	check("C13: XP pago após crash", B.Get(worker).SkillXP.Freios == 44)
+	check("C13: XP pago após crash", B.Get(worker).SkillXP.Suspension == 44)
 	check("C13: recibo mínimo disponível", B.GetRepairReceipt(worker, "job_77", token).Price == 280)
 	B.ReconcileWorkerClaims(worker)
 	check("C13: repetição nunca gera segundo crédito/XP",
-		B.Get(worker).Coins == workerInitial + 280 and B.Get(worker).SkillXP.Freios == 44)
+		B.Get(worker).Coins == workerInitial + 280 and B.Get(worker).SkillXP.Suspension == 44)
 	check("C13: comprovante permanece após segunda reconexão", B.Save(worker))
 	B.Remove(worker)
 	local C = server(store, "claimC")
@@ -457,7 +457,7 @@ do
 	A.Load(worker) A.Load(owner)
 	check("C13: reivindicação isolada salva",
 		A.StageWorkerClaim(worker, 1202, "job_88", token, 80, 220, 32, 88,
-			"Freios", "Hatch", "Freios") and A.Save(worker))
+			"Freios", "Hatch", "Suspension") and A.Save(worker))
 	A.Remove(worker)
 	store.data["u_1201"].PendingClaims[1].At -= 900
 	local B = server(store, "claimNoOwnerB")
@@ -474,7 +474,7 @@ do
 	local token2 = "11111111-2222-3333-4444-555555555555"
 	check("C13: nova reivindicação preparada",
 		B.StageWorkerClaim(worker, 1202, "job_89", token2, 80, 220, 32, 88,
-			"Freios", "Hatch", "Freios") and B.Save(worker))
+			"Freios", "Hatch", "Suspension") and B.Save(worker))
 	B.Get(worker).PendingClaims[2].At -= 900
 	check("C25: dono paga próxima OS com prova identificando mecânico",
 		A.CreditRepairOnce(owner, "job_89", token2, 80, "Owner",
@@ -500,7 +500,7 @@ do
 	local startWorker = A.Get(worker).Coins
 	check("C21: permite registrar claim e persistir antes da OS",
 		A.StageWorkerClaim(worker, owner.UserId, "job_2101", token,
-			120, 230, 44, 92, "Freios", "Hatch", "Freios") and A.Save(worker))
+			120, 230, 44, 92, "Freios", "Hatch", "Suspension") and A.Save(worker))
 	check("C21: dono registra sua parcela e prova do contratado",
 		A.CreditRepairOnce(owner, "job_2101", token, 120, "Owner",
 			"Freios", "Hatch", worker.UserId, 230) and A.Save(owner))
@@ -706,7 +706,7 @@ do
 	A.Load(owner) A.Load(worker)
 	check("C22: claim do contratado é persistida",
 		A.StageWorkerClaim(worker, owner.UserId, "job_2200", token,
-			90, 210, 30, 92, "Freios", "Hatch", "Freios") and A.Save(worker))
+			90, 210, 30, 92, "Freios", "Hatch", "Suspension") and A.Save(worker))
 	check("C22: dono registra prova vinculada ao contratado",
 		A.CreditRepairOnce(owner, "job_2200", token, 90, "Owner",
 			"Freios", "Hatch", worker.UserId, 210))
@@ -933,7 +933,7 @@ do
 	end
 	check("C23: contrato com claim pode ser persistido antes de crédito",
 		A.StageWorkerClaim(worker, owner.UserId, "job_unpaid", token,
-			70, 190, 35, 90, "Freios", "Hatch", "Freios"))
+			70, 190, 35, 90, "Freios", "Hatch", "Suspension"))
 	A.Get(worker).PendingClaims[1].At = os.time() - 1200
 	local balance = A.Get(worker).Coins
 	check("C23: somente a parcela do proprietário consta como paga",

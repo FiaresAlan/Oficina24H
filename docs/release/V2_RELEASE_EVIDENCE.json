@@ -1,0 +1,134 @@
+{
+  "Version": 1,
+  "Description": "MODELO DE REGISTRO, NÃO EVIDÊNCIA. Nenhum gate está aprovado; preencher apenas após executar o teste em build específico.",
+  "Entries": {
+    "ci_code": {
+      "Status": "Pending",
+      "Source": "",
+      "Proof": "",
+      "Notes": "",
+      "VerifiedAt": "",
+      "BuildSha": ""
+    },
+    "merge_main": {
+      "Status": "Blocked",
+      "Source": "",
+      "Proof": "",
+      "Notes": "",
+      "VerifiedAt": "",
+      "BuildSha": ""
+    },
+    "studio_suites": {
+      "Status": "Pending",
+      "Source": "",
+      "Proof": "",
+      "Notes": "",
+      "VerifiedAt": "",
+      "BuildSha": ""
+    },
+    "assets_place": {
+      "Status": "Pending",
+      "Source": "",
+      "Proof": "",
+      "Notes": "",
+      "VerifiedAt": "",
+      "BuildSha": ""
+    },
+    "services_15": {
+      "Status": "Pending",
+      "Source": "",
+      "Proof": "",
+      "Notes": "",
+      "VerifiedAt": "",
+      "BuildSha": ""
+    },
+    "onboarding": {
+      "Status": "Pending",
+      "Source": "",
+      "Proof": "",
+      "Notes": "",
+      "VerifiedAt": "",
+      "BuildSha": ""
+    },
+    "cooperation": {
+      "Status": "Pending",
+      "Source": "",
+      "Proof": "",
+      "Notes": "",
+      "VerifiedAt": "",
+      "BuildSha": ""
+    },
+    "data_safety": {
+      "Status": "Pending",
+      "Source": "",
+      "Proof": "",
+      "Notes": "",
+      "VerifiedAt": "",
+      "BuildSha": ""
+    },
+    "inventory_fifo": {
+      "Status": "Blocked",
+      "Source": "",
+      "Proof": "",
+      "Notes": "",
+      "VerifiedAt": "",
+      "BuildSha": ""
+    },
+    "drive_physics": {
+      "Status": "Pending",
+      "Source": "",
+      "Proof": "",
+      "Notes": "",
+      "VerifiedAt": "",
+      "BuildSha": ""
+    },
+    "touch_gamepad": {
+      "Status": "Pending",
+      "Source": "",
+      "Proof": "",
+      "Notes": "",
+      "VerifiedAt": "",
+      "BuildSha": ""
+    },
+    "performance": {
+      "Status": "Pending",
+      "Source": "",
+      "Proof": "",
+      "Notes": "",
+      "VerifiedAt": "",
+      "BuildSha": ""
+    },
+    "stream_audio": {
+      "Status": "Pending",
+      "Source": "",
+      "Proof": "",
+      "Notes": "",
+      "VerifiedAt": "",
+      "BuildSha": ""
+    },
+    "licenses": {
+      "Status": "Blocked",
+      "Source": "",
+      "Proof": "",
+      "Notes": "",
+      "VerifiedAt": "",
+      "BuildSha": ""
+    },
+    "beta_closed": {
+      "Status": "Pending",
+      "Source": "",
+      "Proof": "",
+      "Notes": "",
+      "VerifiedAt": "",
+      "BuildSha": ""
+    },
+    "owner_go": {
+      "Status": "Pending",
+      "Source": "",
+      "Proof": "",
+      "Notes": "",
+      "VerifiedAt": "",
+      "BuildSha": ""
+    }
+  }
+}

@@ -942,13 +942,14 @@ function Orders.new(parent: Instance)
                     {Text=string.format("Variação de caixa: %+d · %d movimentações",
                         finance.CashDelta or 0,finance.TransactionsCount or 0),
                         Color=(finance.CashDelta or 0)>=0 and Theme.Accent or rgb(255,128,100)},
-                    string.format("Entradas de OS: %d · despesas operacionais pagas: %d",
-                        finance.ServiceReceipts or 0,finance.OperatingOut or 0),
+                    string.format("Entradas de OS: %d · prêmio de frotas: %d · despesas operacionais pagas: %d",
+                        finance.ServiceReceipts or 0,finance.FleetReceipts or 0,
+                        finance.OperatingOut or 0),
                     {Text=string.format("Fluxo operacional de caixa: %+d",
                         finance.OperatingCash or 0),
                         Color=(finance.OperatingCash or 0)>=0 and Theme.Accent or rgb(255,128,100)},
                     "Não é lucro contábil: compras de peças entram quando pagas. Estoque consumido não é descontado novamente.",
-                    "Bônus, equipamentos e ampliação são mostrados separadamente.",
+                    "Bônus de frotas entram no fluxo operacional; demais bônus e investimentos ficam separados.",
                 })
                 financialCard(scroll,"FinanceReserve",2,"RESERVA, ESTOQUE E RISCO",{
                     {Text=finance.Warning~="" and finance.Warning or "Sem alerta financeiro no período.",
@@ -963,10 +964,11 @@ function Orders.new(parent: Instance)
                     Service="Serviços recebidos",Inventory="Compra de peças",
                     Payroll="Salários",Marketing="Publicidade",
                     Equipment="Equipamentos e melhorias",Building="Expansões",
-                    Hiring="Contratações",Rewards="Bônus e premiações",Market="Compra e revenda de usados",Other="Outros",
+                    Hiring="Contratações",Rewards="Bônus e premiações",Market="Compra e revenda de usados",
+                    Fleet="Prêmios de contratos",Other="Outros",
                 }
                 local categoryOrder={"Service","Inventory","Payroll","Marketing",
-                    "Equipment","Building","Hiring","Rewards","Market","Other"}
+                    "Equipment","Building","Hiring","Rewards","Market","Fleet","Other"}
                 local lines={}
                 for _,name in ipairs(categoryOrder) do
                     local x=finance.Groups and finance.Groups[name]

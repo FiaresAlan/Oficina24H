@@ -33,6 +33,8 @@ local V2UpgradePurchaseRules = require(ReplicatedStorage.Shared.V2UpgradePurchas
 local V2FinancialRules = require(ReplicatedStorage.Shared.V2FinancialRules)
 local V2UsedMarketRules = require(ReplicatedStorage.Shared.V2UsedMarketRules)
 local V2DriveRules = require(ReplicatedStorage.Shared.V2DriveRules)
+local V2DriveScenarioRules = require(ReplicatedStorage.Shared.V2DriveScenarioRules)
+local V2QualityDriveRules = require(ReplicatedStorage.Shared.V2QualityDriveRules)
 
 local WorkshopService = {}
 
@@ -90,6 +92,9 @@ local Repairs: { [number]: { JobId: string, Plan: any, StartedAt: number, Progre
 -- Só guardamos um resultado DEPOIS de aplicar consumo, dinheiro, XP e avaliação.
 local RepairReceipts: { [number]: { any } } = {}
 local SettlingRepairs: { [number]: any } = {} -- barreira de confirmação e retentativas por executor
+-- V2-13: resultado do minijogo selado no servidor, sem débito até
+-- aprovação/skip. Nunca serializado, sem token de pagamento no snapshot.
+local PendingQuality: { [number]: any } = {}
 local NpcPendingSaves: { [string]: boolean } = {} -- conclusão NPC: regrava sem reaplicar crédito
 -- Funcionários por dono: NPCs, ordens em que estão trabalhando e próximo pagamento de salário.
 local Staff: { [number]: { Npcs: { Model }, Busy: { [string]: boolean }, NextPay: number } } = {}
@@ -406,6 +411,14 @@ local function createJob(ownerUserId: number, specialization: string?)
         CreatedAt = os.time(),
     }
     local job = Jobs[id]
+    -- Sorteado UMA vez: seed/defeito ficam no servidor, não no payload.
+    -- Sem veículo Hatch/sem experiência de onboarding: NÃO há test-drive.
+    job.V2DriveScenario=V2DriveScenarioRules.Plan(job.VehicleName,defectId,rookie,
+        math.random(1,2147483646))
+    job.V2DiagnosticStarts=0
+    job.V2DiagnosticDone=false
+    job.V2DriveEvidence=nil
+    job.V2ReworkCount=0
     local eta = math.ceil(CustomerArrivalService.Arrive(job))
     job.ArrivesAt = os.time() + eta
     job.CreatedAt = job.ArrivesAt
@@ -523,6 +536,16 @@ function WorkshopService.GetSnapshot(player: Player)
                 local _,drivePilot=VehicleService.ComponentStates(job.Id)
                 if V2DriveRules.PilotEligible(job.VehicleName,drivePilot) then
                     entry.Drive=V2DriveService.Status(job.Id)
+                    if V2DriveScenarioRules.LiveEnabled then
+                        entry.DriveScenario=V2DriveScenarioRules.Public(
+                            job.V2DriveScenario,job.Diagnosed,
+                            job.V2DiagnosticDone or job.V2DiagnosticStarts>=2,
+                            job.V2DriveEvidence~=nil)
+                        local pending=PendingQuality[player.UserId]
+                        if pending and pending.JobId==job.Id then
+                            entry.QualityReview=V2QualityDriveRules.Public(pending)
+                        end
+                    end
                 end
                 -- Requisitos e pagamento só são revelados após o diagnóstico (o defeito real fica no servidor).
                 if job.Diagnosed then
@@ -854,20 +877,46 @@ end
 
 -- V2-11: teste de dirigibilidade sem recompensas; o veículo físico
 -- transitório não modifica Job.Status nem a OS financeira.
+-- V2-11 livre; V2-12 diagnóstica e V2-13 de qualidade ficam
+-- DESATIVADAS até aprovação explícita de física Roblox Studio.
 function WorkshopService.DriveCar(player: Player,jobId: any,mode: any): (boolean,string)
     if type(jobId)~="string" or #jobId<1 or #jobId>80
-        or (mode~="Start" and mode~="Return") then
+        or (mode~="Start" and mode~="Return"
+            and mode~="Diagnosis" and mode~="Quality") then
         return false,"Solicitação de direção inválida."
     end
-    if mode=="Return" then
-        return V2DriveService.End(player,jobId)
-    end
+    if mode=="Return" then return V2DriveService.End(player,jobId) end
     local job=Jobs[jobId]
     if not job then return false,"Ordem não encontrada." end
     local car=VehicleService.DriveInfo(jobId)
     local _,pilot=VehicleService.ComponentStates(jobId)
     local character=player.Character
     local humanoid=character and character:FindFirstChildOfClass("Humanoid")
+    local pending=PendingQuality[player.UserId]
+    local scenarioContext=nil
+    if mode=="Diagnosis" then
+        if not V2DriveScenarioRules.LiveEnabled then
+            return false,"Test-drive diagnóstico aguarda aprovação no Studio."
+        end
+        local allowed,reason=V2DriveScenarioRules.CanRequest(
+            job.V2DriveScenario,mode,job.Diagnosed,job.DiagnoseOptions~=nil,
+            job.V2DiagnosticDone or job.V2DiagnosticStarts>=2,false)
+        if not allowed then return false,reason end
+        scenarioContext={Kind="Diagnosis",
+            Signal=V2DriveScenarioRules.Signals[job.DefectId],
+            TriggerCheckpoint=job.V2DriveScenario.TriggerCheckpoint}
+    elseif mode=="Quality" then
+        if not V2DriveScenarioRules.LiveEnabled then
+            return false,"Inspeção de qualidade aguarda aprovação no Studio."
+        end
+        if not pending or pending.JobId~=jobId
+            or pending.State~="Offer" then
+            return false,"Não há veículo pronto para a inspeção pós-reparo."
+        end
+        scenarioContext={Kind="Quality"}
+    elseif pending then
+        return false,"Conclua ou dispense a revisão do reparo antes de rodar livremente."
+    end
     local ctx={
         Owner=job.OwnerUserId==player.UserId,
         Active=job.Status=="InProgress",
@@ -887,7 +936,45 @@ function WorkshopService.DriveCar(player: Player,jobId: any,mode: any): (boolean
     }
     local allowed,why=V2DriveRules.CanLaunch(ctx)
     if not allowed then return false,why end
-    return V2DriveService.Start(player,jobId)
+    local launched,message=V2DriveService.Start(player,jobId,scenarioContext)
+    if launched and mode=="Diagnosis" then
+        job.V2DiagnosticStarts+=1
+    elseif launched and mode=="Quality" and pending then
+        pending.State="Driving"
+    end
+    return launched,message
+end
+
+-- Invocado APENAS pelo V2DriveService ao concluir/abortar uma sessão
+-- verificada pelo servidor. Não há remoto que possa chamar este método.
+function WorkshopService.OnDriveOutcome(player: Player,jobId: string,outcome: any)
+    if not V2DriveScenarioRules.LiveEnabled or type(outcome)~="table" then return end
+    local job=Jobs[jobId]
+    if not job or job.OwnerUserId~=player.UserId or job.Status~="InProgress" then return end
+    local notice=""
+    if outcome.Kind=="Diagnosis" then
+        if job.Diagnosed or not job.V2DriveScenario or not job.V2DriveScenario.Diagnostic
+            or job.V2DiagnosticDone then return end
+        if outcome.Complete then
+            job.V2DiagnosticDone=true
+            local evidence=V2DriveScenarioRules.DiagnosticEvidence(
+                job.V2DriveScenario,job.DefectId,outcome)
+            job.V2DriveEvidence=evidence
+            notice=evidence and ("Teste concluído. Laudo: "..evidence.Text)
+                or "Rodagem concluída; sintoma não reproduzido. Continue o diagnóstico de bancada."
+        else
+            notice="Rodagem interrompida sem punição. O diagnóstico de bancada permanece disponível."
+        end
+    elseif outcome.Kind=="Quality" then
+        local pending=PendingQuality[player.UserId]
+        if not pending or pending.JobId~=jobId or pending.State~="Driving" then return end
+        local state,explanation=V2QualityDriveRules.OnReturn(pending,outcome,os.clock())
+        notice=explanation
+        if state=="Rejected" then return end
+    end
+    if eventSender and player.Parent==Players and notice~="" then
+        eventSender(player,"Notice",{Message=notice,Success=true})
+    end
 end
 
 -- Exames e hipóteses formam a MESMA ordem: o servidor guarda o defeito verdadeiro.
@@ -905,11 +992,18 @@ local function sendDiagnosisOptions(player: Player, job: any)
     for _, id in ipairs(job.DiagnoseOptions) do
         table.insert(options, { Id = id, Name = Catalog.Defects[id].DisplayName, Wrong = job.DiagnoseWrong[id] == true })
     end
+    local findings=DiagnosisEvidence.Findings(job.DefectId, job.DiagnoseExams)
+    if job.V2DriveEvidence then
+        table.insert(findings,{
+            Id="DriveObservation",Name=job.V2DriveEvidence.Name,
+            Text=job.V2DriveEvidence.Text,
+        })
+    end
     eventSender(player, "DiagnoseStart", {
         JobId = job.Id, Vehicle = job.VehicleName, Customer = job.CustomerName, Complaint = job.Complaint,
         Options = options, Attempts = job.DiagnoseAttempts,
         Exams = DiagnosisEvidence.Exams,
-        Findings = DiagnosisEvidence.Findings(job.DefectId, job.DiagnoseExams),
+        Findings = findings,
     })
 end
 

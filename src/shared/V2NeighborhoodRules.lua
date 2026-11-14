@@ -67,13 +67,17 @@ function Rules.Position(route: any,clock: any,offset: any): (Vector3?,Vector3?)
     return p, (route.To-route.From).Unit
 end
 
-function Rules.Budget(touch: boolean,fps: number,players: number): any
+function Rules.Budget(touch: boolean,fps: number,players: number,lowDetail: boolean?): any
     local slow=type(fps)~="number" or fps~=fps or fps<36
     local busy=type(players)=="number" and players>=7
     local ped=touch and 3 or Rules.MaxPedestrians
     local car=touch and 1 or Rules.MaxVehicles
     if slow then ped=math.max(1,math.floor(ped/2));car=1 end
     if busy then ped=math.max(1,math.floor(ped/2));car=math.max(1,math.floor(car/2)) end
+    if lowDetail==true then
+        ped=math.min(ped,2)
+        car=math.min(car,1)
+    end
     return {
         Pedestrian=ped,Vehicle=car,Total=ped+car,
         Range=touch and 145 or 210,

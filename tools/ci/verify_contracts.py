@@ -1420,6 +1420,19 @@ check("V2-15: suite Edit de auditoria informa avisos e não declara QA físico",
     and 'Licenças/uso dos áudios' in place_audit
     and 'Não é teste de FPS real' in place_audit
     and 'Tools' in runner)
+credits_rules=text(SHARED/"V2Credits.lua")
+credits_panel=text(CLIENT/"UI"/"Panels"/"Profile.lua")
+credits_test=text(TOOLS/"V2CreditsTest.luau")
+check("V2-15: tela de créditos e fontes apresenta avisos de direitos não resolvidos",
+    'local V2Credits = require(ReplicatedStorage.Shared.V2Credits)' in credits_panel
+    and '{ Id = "credits", Label = "Créditos"' in credits_panel
+    and 'V2Credits.Entries' in credits_panel
+    and 'V2Credits.Pending' in credits_panel
+    and 'Sprites do HUD/painéis' in credits_rules
+    and 'autorização escrita' in credits_rules
+    and 'substitui a checagem de licença' in credits_panel
+    and (TOOLS/"V2CreditsTest.luau").is_file()
+    and '"V2CreditsTest"' in runner)
 check("V2-15: suites registradas e regressão multi-servidor de acessibilidade",
     all((TOOLS/(n+".luau")).is_file() and ('"'+n+'"') in runner
         for n in ("V2RemoteSecurityTest","V2RuntimeAssetBudgetTest",

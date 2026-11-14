@@ -565,10 +565,22 @@ function RepairGame.new(gui: ScreenGui): { Start: (any) -> (), IsActive: () -> b
 	end)
 	Store.RepairStart.Event:Connect(start)
 	Store.RepairDone.Event:Connect(showResult)
+    Store.RepairQualityPending.Event:Connect(function(payload: any)
+        if type(payload)=="table" and active and waitingResult
+            and payload.JobId==jobId and payload.Token==sessionToken then
+            close(false) -- o servidor já invalidou o token do minijogo
+            Store.Message:Fire(
+                "Reparo mecânico validado. Abra Ordens > Em andamento e escolha a conferência ou entrega sem test-drive.",
+                true,"QualityReview")
+        end
+    end)
 	Store.RepairOutcome.Event:Connect(function(payload: any)
 		if type(payload) ~= "table" or not active or not waitingResult
 			or payload.JobId ~= jobId or payload.Token ~= sessionToken then return end
-		if payload.Status == "Completed" and type(payload.Result) == "table" then
+        if payload.Status=="QualityPending" then
+            close(false)
+            Store.Message:Fire("Laudo mecânico aguardando sua escolha em Ordens.",true,"QualityReview")
+        elseif payload.Status == "Completed" and type(payload.Result) == "table" then
 			showResult(payload.Result)
 		elseif payload.Status == "Processing" then
 			feedback.Text = "Pagamento em processamento. Aguarde confirmação do servidor."

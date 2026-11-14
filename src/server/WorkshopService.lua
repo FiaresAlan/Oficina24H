@@ -53,6 +53,7 @@ local V2UsedMarketDisplay = require(script.Parent.V2UsedMarketDisplay)
 local ProgressService = require(script.Parent.ProgressService)
 local ContractService = require(script.Parent.ContractService)
 local ContractRules = require(ReplicatedStorage.Shared.ContractRules)
+local V2FleetBusinessRules = require(ReplicatedStorage.Shared.V2FleetBusinessRules)
 local ProgressRules = require(ReplicatedStorage.Shared.ProgressRules)
 
 -- Loja de Autopeças do bairro: comprar só estando nela (prédio Workspace.PublicAreas.LojaAutopecas).
@@ -221,7 +222,14 @@ local function rateService(owner: Player, job: any, service: any, defect: any, e
     local stars = CustomerRules.RateService(context, math.random)
     ProgressService.AddLeague(owner, ProgressRules.LeaguePoints(stars, quality, job.Vip == true)) -- liga semanal
     if job.Fleet then
-        ContractService.FleetDone(owner, job.Fleet)
+        local executorMode=byNpc and
+            (job.EmployeeAssignedSlot and "Staff" or "Npc")
+            or (executor and executor.UserId~=owner.UserId and "Collaborator"
+                or "Owner")
+        -- Chamada APÓS liquidação da OS; o prêmio da frota possui
+        -- ledger próprio e não se mistura ao repasse colaborativo.
+        ContractService.FleetDone(owner,job.Fleet,job.Id,
+            job.Price or service.Reward,executorMode)
     end
     if stars == 5 and profile and job.CustomerName and job.CustomerGender and not job.Fleet then
         local found = nil
@@ -296,8 +304,33 @@ ContractService.SetOfferBuilder(function(player: Player)
             table.insert(specs, specialization)
         end
     end
-    return ContractRules.Offer(profile.WorkshopLevel or 0, specs, math.random)
+    local offer=ContractRules.Offer(profile.WorkshopLevel or 0,specs,math.random)
+    if not offer then return nil end
+    local levels=WorkshopLevels.Levels[profile.WorkshopLevel or 0]
+    local skills={}
+    for _,spec in ipairs(Catalog.Specializations) do
+        skills[spec]=DataService.GetSkillLevel(player,spec)
+    end
+    local quote=V2FleetBusinessRules.Quote(offer,{
+        Skills=skills,Equipment=profile.Equipment,Stock=profile.Parts,
+        Employees=profile.Employees or 0,
+        OpenJobs=getOpenJobCount(player.UserId),
+        Bays=levels and #levels.Bays or 1,
+        SalaryReserve=(profile.Employees or 0)>0 and Config.EmployeeSalary or 0,
+        PriceMultiplier=profile.PriceMultiplier or 1,
+    },profile.FleetAccounts)
+    if not quote then return nil end
+    offer.Quote=quote
+    return offer
 end)
+
+-- Contratos passam por escolha livre; não credita nem cobra ao ver a proposta.
+function WorkshopService.NegotiateFleet(player: Player,action: any,mode: any): (boolean,string)
+    if not getWorkshop(player) then
+        return false,"Registre uma oficina para aceitar contratos."
+    end
+    return ContractService.Negotiate(player,action,mode)
+end
 
 -- `specialization` (opcional): o cliente procurou um especialista nessa área (escolha de mercado, ver DispatchCustomers).
 local function createJob(ownerUserId: number, specialization: string?)
@@ -330,7 +363,22 @@ local function createJob(ownerUserId: number, specialization: string?)
         end
         fleet = ContractService.WantsFleet(ownerUserId, inFlight, math.random())
         if fleet then
-            defectId = JobRules.PickDefectId(skillLevels, equipment, math.random, fleet.Offer.Spec)
+            -- Nunca criar OS de frota que a oficina não consegue reparar:
+            -- a seleção V1 de JobRules admite desafios aspiracionais.
+            local candidates={}
+            for id,def in pairs(Catalog.Defects) do
+                if def.Specialization==fleet.Offer.Spec
+                    and (skillLevels[def.Specialization] or 0)>=def.RequiredLevel
+                    and equipment[def.RequiredEquipment]==true then
+                    table.insert(candidates,id)
+                end
+            end
+            table.sort(candidates)
+            if #candidates>0 then
+                defectId=candidates[math.random(1,#candidates)]
+            else
+                fleet=nil -- nunca lançar uma OS impossível para cumprir o prazo
+            end
         end
     end
     local defect = Catalog.Defects[defectId]
@@ -644,6 +692,7 @@ function WorkshopService.GetSnapshot(player: Player)
         profileView.StaffPayroll = nil -- resumo sanitizado aparece apenas no campo Staff
         profileView.FinanceLedger = nil -- V2-08: somente resumo financeiro saneado no snapshot
         profileView.UsedMarket = nil -- V2-09: estado de transação privado; usar Public
+        profileView.FleetAccounts=nil -- V2-14: chaves de bônus não replicadas, usar Relationships
     end
     return {
         Ranking = CustomerRules.Rank(ranking),

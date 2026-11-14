@@ -541,6 +541,11 @@ function WorkshopService.GetSnapshot(player: Player)
                             job.V2DriveScenario,job.Diagnosed,
                             job.V2DiagnosticDone or job.V2DiagnosticStarts>=2,
                             job.V2DriveEvidence~=nil)
+                        if entry.DriveScenario then
+                            entry.DriveScenario.ConsultationReady=job.DiagnoseOptions~=nil
+                            entry.DriveScenario.AttemptsRemaining=math.max(
+                                0,2-(job.V2DiagnosticStarts or 0))
+                        end
                         local pending=PendingQuality[player.UserId]
                         if pending and pending.JobId==job.Id then
                             entry.QualityReview=V2QualityDriveRules.Public(pending)

@@ -58,32 +58,50 @@ function Service.WantsFleet(userId:number,inFlight:number,roll:number):Contract?
     return nil
 end
 
+-- V2-15: persistir antes de anunciar recompensa como CONCLUÍDA.
+-- Se Save falhar, a chave/coins já estão selados em memória; no próximo
+-- tick RecordFleetOutcomeOnce responde Duplicate e tentamos Save outra vez.
+-- Nunca reaplicamos o prêmio ou os pontos da liga numa repetição.
 local function endContract(player:Player,c:Contract,completed:boolean):boolean
-    if contracts[player.UserId]~=c or not data then return false end
+    if contracts[player.UserId]~=c or not data or c.Settling then return false end
+    c.Settling=true
     local record={
         Mode=c.Offer.QuoteMode or "Standard",
         At=os.time(),Done=c.Done,Target=c.Offer.Target,
         Gross=c.GrossReference,Bonus=completed and c.Offer.Coins or 0,
         Reputation=completed and c.Offer.Reputation or 0,
     }
-    -- Não há await entre registro da chave, saldo e reputação.
     local added,reason=data.RecordFleetOutcomeOnce(player,c.RewardKey,
         c.Offer.Company,completed and "Completed" or "Expired",record)
     if not added and reason~="Duplicado." then
-        warn("[ContractService] Payout pendente; preservando contrato:",reason)
+        c.Settling=false
+        warn("[ContractService] Concessão pendente; perfil preservado para retry:",reason)
         return false
     end
+    -- Mesmo se a conta estiver com Save intermitente, os pontos da liga
+    -- só são acumulados uma vez (o perfil será salvo com o bônus).
+    if completed and added and not c.LeagueCredited then
+        ProgressService.AddLeague(player,ProgressRules.LeagueContractPoints)
+        c.LeagueCredited=true
+    end
+    local ok,saved=pcall(data.Save,player)
+    if not ok or not saved then
+        c.Settling=false
+        warn("[ContractService] Bonus aguardando Save valido. Tentara novamente:",saved)
+        if notify and player.Parent==Players and not c.SaveWarned then
+            notify(player,"Contrato atendido; bônus ainda aguardando confirmação do salvamento. Não saia antes da confirmação.",false)
+            c.SaveWarned=true
+        end
+        return false
+    end
+    if contracts[player.UserId]~=c then return false end
     contracts[player.UserId]=nil
     nextAt[player.UserId]=os.time()+Config.ContractEverySeconds
     if completed then
-        if added then
-            ProgressService.AddLeague(player,ProgressRules.LeagueContractPoints)
-        end
         local message=string.format(
             "Contrato %s concluído: %d/%d carros. Bônus +%d moedas, +%d reputação.",
             c.Offer.Name,c.Done,c.Offer.Target,
-            added and c.Offer.Coins or 0,
-            added and c.Offer.Reputation or 0)
+            c.Offer.Coins,c.Offer.Reputation)
         lastResult[player.UserId]={Text=message,Success=true,At=os.time()}
         if notify then notify(player,message,true) end
         if broadcast then
@@ -100,13 +118,6 @@ local function endContract(player:Player,c:Contract,completed:boolean):boolean
         lastResult[player.UserId]={Text=message,Success=false,At=os.time()}
         if notify then notify(player,message,false) end
     end
-    -- Salvamento usa a trava existente e não deve interromper o serviço.
-    task.defer(function()
-        if player.Parent==Players then
-            local ok=data.Save(player)
-            if not ok then warn("[ContractService] Bônus registrado em memória; DataStore ainda pendente.") end
-        end
-    end)
     return true
 end
 
@@ -115,7 +126,8 @@ end
 function Service.FleetDone(owner:Player,token:any,jobId:any,referenceGross:any,
     method:any):boolean
     local c=contracts[owner.UserId]
-    if not c or c.Token~=token or not Service.Active(owner.UserId)
+    if not c or c.Token~=token or c.Settling
+        or not Service.Active(owner.UserId)
         or type(jobId)~="string" or #jobId<1 or #jobId>80
         or c.DoneJobs[jobId] then return false end
     c.DoneJobs[jobId]=true
@@ -209,11 +221,16 @@ function Service.Snapshot(userId:number):any
     local accounts=accountPlayer and data and data.FleetAccountSummary(accountPlayer)
         or {Partners={},History={},Completed=0,Expired=0}
     local c=Service.Active(userId)
+    local settling=contracts[userId]
+    if not c and settling and settling.Done>=settling.Offer.Target then
+        c=settling -- mostra pendência real em vez de cartão vazio
+    end
     local r=lastResult[userId]
     if r and now-r.At>30 then r=nil end
     if c then
         return {
             Active=true,Proposal=false,
+            PendingSettlement=c.Done>=c.Offer.Target,
             Name=c.Offer.Name,Text=ContractRules.Text(c.Offer),
             Company=c.Offer.Company,Spec=c.Offer.Spec,Unit=c.Offer.Unit,
             Done=c.Done,Target=c.Offer.Target,

@@ -770,6 +770,11 @@ function updatePriceBoard(player: Player)
 end
 
 -- Preço da oficina (0.7x a 1.5x da tabela). Vale para clientes que chegarem DEPOIS: ordens abertas mantêm o preço combinado.
+-- Preferências locais de acessibilidade não são mecânicas de progresso.
+function WorkshopService.SetAccessibility(player: Player,key:any,value:any): (boolean,string)
+    return DataService.SetAccessibility(player,key,value)
+end
+
 function WorkshopService.SetPrice(player: Player, multiplier: number)
     if not getWorkshop(player) then
         return false, "Registre sua oficina primeiro."

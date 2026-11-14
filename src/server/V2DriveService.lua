@@ -474,22 +474,17 @@ function Service.StartHeartbeat()
         local now=os.clock()
         for jobId,s in pairs(sessions) do
             local invalid: string?=nil
-            if s.Player.Parent~=Players or not s.DriverHumanoid.Parent
-                or s.DriverHumanoid.Health<=0 then
-                invalid="Motorista indisponível."
-            elseif now-s.StartAt>Rules.MaximumSeconds then
-                invalid="Limite do test-drive atingido."
-            else
-                local occupant=s.Seat.Occupant
-                if occupant and occupant~=s.DriverHumanoid then
-                    occupant.Sit=false
-                elseif occupant~=s.DriverHumanoid then
-                    if (not s.SeatAcquired and now-s.StartAt>Rules.SeatGraceSeconds)
-                        or (s.SeatLostAt and now-s.SeatLostAt>Rules.OutOfSeatGraceSeconds) then
-                        invalid="Motorista saiu do assento ou não conseguiu sentar."
-                    end
-                end
+            local occupant=s.Seat.Occupant
+            if occupant and occupant~=s.DriverHumanoid then
+                occupant.Sit=false
+                occupant:ChangeState(Enum.HumanoidStateType.GettingUp)
             end
+            invalid=Rules.SessionViolation(
+                now,s.StartAt,
+                s.Player.Parent==Players and s.DriverHumanoid.Parent~=nil
+                    and s.DriverHumanoid.Health>0,
+                occupant==s.DriverHumanoid,
+                s.SeatAcquired,s.SeatLostAt)
             if invalid then
                 clear(jobId,invalid,true)
             else

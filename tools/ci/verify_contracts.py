@@ -1316,6 +1316,13 @@ check("V2-14: falhas de prazo ou disconnect sem multa artificial",
     and 'Sem multa' in fleet_service
     and 'Players.PlayerRemoving:Connect' in fleet_service
     and 'proposals[player.UserId]=nil' in fleet_service)
+check("V2-14: bonificação de frota tem receita operacional separada",
+    'Fleet="Fleet"' in finance
+    and 'return "Fleet" end' in finance
+    and 'operationIn=groups.Service.In+groups.Fleet.In' in finance
+    and 'FleetReceipts=groups.Fleet.In' in finance
+    and 'Fleet="Prêmios de contratos"' in finance_ui
+    and 'fleetReport.FleetReceipts==120' in text(TOOLS/"V2FinancialRulesTest.luau"))
 check("V2-14: suites puras, serviço e persistência no runner",
     all((TOOLS/(n+".luau")).is_file() and ('"'+n+'"') in runner
         for n in ("V2FleetBusinessRulesTest","V2FleetContractTest"))

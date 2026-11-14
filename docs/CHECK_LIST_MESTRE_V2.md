@@ -1,6 +1,6 @@
 # CHECK_LIST_MESTRE_V2 — OFICINA 24H
 
-**Versão:** 2.6, 13/11/2026. **Situação:** engenharia V2-00–14 na PR #27; V2-12/13 com gate desligado aguardando QA físico da V2-11, contratos V2-14 com QA Studio pendente, além de lotes fornecedor V2-08, main/QA V1 e modelos/Studio; V2-15/16 planejadas. **Nenhuma homologação Studio presumida.**  
+**Versão:** 2.7, 13/11/2026. **Situação:** engenharia V2-00–15 na PR #27; V2-12/13 com gate desligado até QA físico V2-11; V2-14/15 com QA Studio aberto; pendências V2-08 lotes de fornecedores, migração main/QA V1, assets/licenças e V2-16 beta/release. **Nenhuma homologação Studio presumida.**  
 **Direção aprovada pelo proprietário:** híbrida — estilização legível do mundo + reparos visualmente mecânicos + gestão de negócio.  
 **Código base de referência:** main em C31 (`2690f082` antes dos commits exclusivamente documentais da V2). **Atenção:** o Claude Code está homologando/corrigindo a V1 em paralelo; sempre ler novo HEAD e reconciliar diffs antes de programar V2. Preservar Issue #15 V1 como histórico.  
 **Documentos de referência:** DIRECAO_JOGO_V2_2026-11-13.md, PESQUISA_MERCADO_V2_2026-11-13.md, AUDITORIA_V2_BASE_CODIGO_2026-11-13.md (auditoria histórica até C17), [GUIA_UNICO_ASSETS_V2.md](GUIA_UNICO_ASSETS_V2.md) e GUIA_UNICO_ASSETS_V1.md.
@@ -50,7 +50,7 @@ P0 = prioridade para o núcleo de lançamento. P1 = opcional condicionado a viab
 - [ ] **Merge na main:** depende de comparar, revisar e conciliar as correções V1 do Claude e refazer CI.
 - [ ] **Arte real:** revisar/importar os três modelos piloto, ajustar malhas móveis, pivôs, licença, áudio e LOD reais.
 - [ ] **Studio:** executar RunAllTests, V2PilotPlaceAudit, 15 serviços, multiplayer, mobile/PC/gamepad e verificar efeitos reais.
-- [ ] **V2-15–16 e lotes V2-08:** implementar somente após dependências, sem declarar V2 completa por CI verde.
+- [ ] **V2-16 e lotes V2-08:** implementar somente após dependências, sem declarar V2 completa por CI verde.
 
 **Portão:** código escrito e integrado em branch não equivale a jogo homologado. Não há publicação automática.
 
@@ -286,13 +286,26 @@ P0 = prioridade para o núcleo de lançamento. P1 = opcional condicionado a viab
 - [ ] [S] Homologar em Studio 2 jogadores, cinco empresas, normal/prioritário, fonte de margem, estoque, comissão colaborativa, equipe, saída de jogadores, Save falho e contrato vencendo entre OS.
 - [ ] [S] Decidir produto: contrato parcial expira/reinicia ao desconectar (herdado da V1) ou deve ser retomado no beta; avaliar clareza da cotação e se o prazo é razoável.
 
-## V2-15 — Polimento transversal e segurança (P0)
-- [ ] [C] Revisar código de todas as fases aprovadas, dívida técnica, regressões, licenças e remotes.
-- [ ] [C] Consolidar custo de modelos, LOD, StreamingEnabled, áudio, NPC e física.
-- [ ] [C] Verificar acessibilidade, traduções, prompts, touch/gamepad e feedback do negócio.
-- [ ] [C] Verificar economia, dados, migrações e limites sem prometer atomicidade entre contas.
-- [ ] [A] CI Rojo, testes/contratos, changelog e inventário de cenários adversos.
-- [ ] [S] Avaliar FPS/memória/latência com usuários e dispositivos reais.
+## V2-15 — Polimento transversal, segurança e auditoria (P0, código integrado, QA aberto)
+
+**Documentação:** [V2-15 — análise de riscos, correções e QA adversarial](V2_FASE_15_HARDENING_RELEASE.md) · [Changelog técnico V2](CHANGELOG_V2_2026-11-13.md). A PR #27 permanece **draft** e sem merge.
+
+- [x] [C] Auditar o fluxo crítico dos remotos (Main), snapshot/cache, física V2-11, cenários V2-12/13, contrato V2-14, salário/economia DataService, assets de terceiros e componentes UI, preservando as salvaguardas C1–C31 e a `main`.
+- [x] [C] `V2RemoteSecurityRules` e Main: limite **transversal** por jogador de 44 ações em rajada/26 por segundo, snapshots 12/8, validação recursiva finita de tamanho, profundidade, índices, Instances, ciclos e números NaN/infinito antes de qualquer handler.
+- [x] [C] `V2VisualBudgetRules.PreflightTemplate`: rejeitar asset excessivo **antes do Clone** no Hatch físico (95 peças/350 instâncias/24 PBR), figurantes locais/servidor (90 peças/280 instâncias), fallback procedural e teto de 5 rigs de física por servidor.
+- [x] [C] Verificação de StreamingEnabled só por auditoria Studio, sem script que altere property em runtime. Áudio licenciado catalogado em `SoundIds`, scripts externos sanitizados e NPC ambiente somente cosmético com limites adaptativos.
+- [x] [C] `ContractService.endContract` revalida conclusão e aguarda Save antes de anunciar sucesso; retry com mesma chave e sem duplicar saldo, reputação, liga ou JobId. Snapshot exibe `PendingSettlement` enquanto pendente.
+- [x] [C] `V2AccessibilityRules` e DataService: três opções de haptics/SFX/LowDetail persistentes no perfil, com botão de configuração na aba Equipe, pistas textuais preservadas no Hatch e bairro menos pesado para mobile; nenhum efeito na economia/diagnóstico.
+- [x] [C] Auditoria de licenças com novo `V2Credits` e tela **Perfil → Créditos**, fontes/atribuições rastreáveis e avisos sobre HUD/ícones, modelos sem licença, marcas, CC BY e Shuriken; **documentar pendências NÃO significa licenças resolvidas**.
+- [x] [C] Verificar localização atual: `Locale.lua` só contém `pt-BR`; jogo não anuncia suporte integral `en-US`. Textos novos da V2 continuam prioritariamente em português e a tradução para lançamento internacional está pendente de decisão.
+- [x] [C] Proteger migrações aditivas v15 de `Accessibility`/`FleetAccounts` e rotina de Save do bônus, explicitando que mudanças intra-perfil sem yield não são transação entre contas nem substituem recibos V1.
+- [x] [A] Testes adicionais escritos e registrados: `V2RemoteSecurityTest`, `V2RuntimeAssetBudgetTest`, `V2AccessibilityTest`, `V2CreditsTest`, `V2ReleasePlaceAudit`; cenários de Save falho em `V2FleetContractTest` e Save/Load em `PersistenceTest`. A execução real de Luau está aberta para o Studio.
+- [x] [A] Changelog, auditoria e matriz adversarial P0/P1 com gate V2-16 criados, contratos estáticos expandidos em `tools/ci/verify_contracts.py`; pipeline do GitHub verifica também build Rojo. **Não confundir CI estático com teste Play Solo.**
+- [ ] [S] Testes reais de FPS/memória GPU/latência, StreamingEnabled, torque/câmera/touch/gamepad, cenas com 2 jogadores, 15 serviços e perfis em aparelhos fracos.
+- [ ] [S] Confirmar os direitos comerciais e a licença **de cada asset usado**; os sprites HUD e pacote de ícones seguem pendentes de autorização, além de modelo esportivo e marcas. Créditos em UI não resolvem esse gate.
+- [ ] [S] Homologar a latência de `FinishRepair` e de `ContractService.RetryPending` quando DataStore ceder execução ou falhar, sem prejudicar OS, NPC ou colaboração de terceiros.
+- [ ] [S] Se lançamento internacional for objetivo, criar tradução integral `en-US` com paridade e conferir acessibilidade real de texto/controles; `pt-BR` é o único idioma implementado hoje.
+- [ ] [S] Revisar com a `main` atual do Claude/QA V1, conferir regressões dos 15 serviços, obter confirmação do proprietário e anexar evidências de playtest ao gate V2-16.
 
 ## V2-16 — Studio, beta e publicação (GATE DO PROPRIETÁRIO)
 - [ ] [S] Rodar RunAllTests e StudioPlaceAudit no place com assets reais.

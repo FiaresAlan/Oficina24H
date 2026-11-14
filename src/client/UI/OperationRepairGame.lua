@@ -483,10 +483,22 @@ function OperationRepairGame.new(gui: ScreenGui)
 	closeButton.BackgroundColor3 = Color3.fromRGB(50, 55, 70)
 	Store.RepairStart.Event:Connect(start)
 	Store.RepairDone.Event:Connect(showResult)
+    Store.RepairQualityPending.Event:Connect(function(payload: any)
+        if type(payload)=="table" and active and waiting
+            and payload.JobId==jobId and payload.Token==sessionToken then
+            close(false) -- não cancelar a OS; pagamento ainda não creditado
+            Store.Message:Fire(
+                "Reparo validado: escolha test-drive de qualidade ou entrega sem rodagem em Ordens.",
+                true,"QualityReview")
+        end
+    end)
 	Store.RepairOutcome.Event:Connect(function(payload: any)
 		if type(payload) ~= "table" or not active or not waiting
 			or payload.JobId ~= jobId or payload.Token ~= sessionToken then return end
-		if payload.Status == "Completed" and type(payload.Result) == "table" then
+        if payload.Status=="QualityPending" then
+            close(false)
+            Store.Message:Fire("Reparo aguardando revisão opcional em Ordens.",true,"QualityReview")
+        elseif payload.Status == "Completed" and type(payload.Result) == "table" then
 			showResult(payload.Result)
 		elseif payload.Status == "Processing" then
 			if statusRef then statusRef.Text = "O servidor está finalizando a OS. Não reenvie o pagamento." end

@@ -2,7 +2,7 @@
 -- Plano -> ações validadas no servidor -> estado reconstruído -> avaliação.
 -- Regras puras; NÃO simula UI, veículo físico, economia nem DataStore.
 local Catalog = require(game.ReplicatedStorage.Shared.Catalog)
-local Operations = require(game.ReplicatedStorage.Shared.RepairOperations)
+local Operations = require(game:GetService("ServerScriptService").Server.RepairOperations)
 local Actions = require(game.ReplicatedStorage.Shared.RepairActionRules)
 local results, failures, count = {}, 0, 0
 local mods = { Margin = 0, EquipmentEfficiency = 0,

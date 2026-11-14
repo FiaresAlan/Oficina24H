@@ -29,8 +29,10 @@ function R.OnReturn(pending:any,driveResult:any,at:any): (string,string)
         or type(driveResult)~="table" or driveResult.Kind~="Quality" then
         return "Rejected","Nenhuma inspeção de qualidade em curso."
     end
-    local verified=driveResult.Complete==true and driveResult.Passed>=4
-        and type(driveResult.Elapsed)=="number" and driveResult.Elapsed>=32
+    local verified=driveResult.Complete==true
+        and type(driveResult.Passed)=="number" and driveResult.Passed>=4
+        and type(driveResult.Elapsed)=="number" and driveResult.Elapsed==driveResult.Elapsed
+        and driveResult.Elapsed>=32
     if not verified then
         -- Sem punição se abortou, desconectou, bateu ou rede oscilou.
         pending.State="Offer"

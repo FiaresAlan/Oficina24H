@@ -33,6 +33,25 @@ test("recompensas da V1 separadas de receita de serviços",
     and R.Category("Conquista: Primeira OS",10)=="Rewards"
     and R.Category("Liga semanal: Bronze",10)=="Rewards"
     and R.Category("Código RESGATE",10)=="Rewards")
+local fleet=R.New(100,1)
+local credited,group=R.Apply(fleet,120,"Contrato de frota: Táxi Veloz")
+local fleetReport=R.Snapshot(fleet,{
+    Coins=220,Employees=0,Parts={},Bag={},Transactions={},
+},100,0)
+test("V2-14: bônus da frota tem categoria própria de receita",
+    credited and group=="Fleet" and fleetReport.Groups.Fleet.In==120)
+test("V2-14: bônus de contrato entra no caixa operacional sem duplicar OS",
+    fleetReport.FleetReceipts==120 and fleetReport.ServiceReceipts==0
+    and fleetReport.OperatingCash==120
+    and fleetReport.NonOperatingIn==0)
+test("V2-14: livro antigo migra com bucket Fleet vazio",
+    (function()
+        local old=R.New(120,1)
+        old.Groups.Fleet=nil
+        local migrated=R.Sanitize(old,120,2)
+        return migrated.Groups.Fleet and migrated.Groups.Fleet.In==0
+            and migrated.CashIn==0 and migrated.CashOut==0
+    end)())
 test("não finge lucro",report.AccountingProfitAvailable==false)
 test("não conta replay de entrada inválida",R.Apply(b,0,"Liquidação de OS: X")==false
     and R.Apply(b,0/0,"Liquidação de OS: X")==false

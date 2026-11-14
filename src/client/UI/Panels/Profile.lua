@@ -5,6 +5,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Catalog = require(ReplicatedStorage.Shared.Catalog)
 local CustomerRules = require(ReplicatedStorage.Shared.CustomerRules)
+local V2Credits = require(ReplicatedStorage.Shared.V2Credits)
 local Theme = require(script.Parent.Parent.Theme)
 local Kit = require(script.Parent.Parent.Kit)
 local Store = require(script.Parent.Parent.Store)
@@ -89,6 +90,7 @@ function Profile.new(parent: Instance)
 		{ Id = "overview", Label = t("tab_overview"), Icon = "pn_t_home" },
 		{ Id = "reviews", Label = t("tab_reviews"), Icon = "pn_t_star" },
 		{ Id = "history", Label = t("tab_history"), Icon = "pn_t_clock" },
+        { Id = "credits", Label = "Créditos", Icon = "pn_t_home" },
 	}, function()
 		render()
 	end)
@@ -311,6 +313,59 @@ function Profile.new(parent: Instance)
 		end
 	end
 
+    -- V2-15: créditos em local acessível, sem link para catálogo privado.
+    -- Não declarar que itens pendentes possuem permissão comercial.
+    local function credits(scroll: ScrollingFrame)
+        local card=PanelKit.card(scroll,"Credits")
+        card.LayoutOrder=1
+        card.Size=UDim2.new(1,-10,0,0)
+        card.AutomaticSize=Enum.AutomaticSize.Y
+        local padding=Instance.new("UIPadding")
+        padding.PaddingTop=UDim.new(0,14)
+        padding.PaddingBottom=UDim.new(0,14)
+        padding.PaddingLeft=UDim.new(0,16)
+        padding.PaddingRight=UDim.new(0,16)
+        padding.Parent=card
+        local layout=Instance.new("UIListLayout")
+        layout.Padding=UDim.new(0,9)
+        layout.SortOrder=Enum.SortOrder.LayoutOrder
+        layout.Parent=card
+        HudParts.text(card,"CRÉDITOS E FONTES DOS ASSETS",26,{
+            Font=Theme.FontTitle,LayoutOrder=1,TextColor3=Theme.Accent,
+            AutomaticSize=Enum.AutomaticSize.Y,
+            Size=UDim2.new(1,0,0,0),TextWrapped=true,
+        })
+        HudParts.text(card,
+            "Atribuições conforme inventário do projeto. A disponibilidade de um asset público não substitui a checagem de licença.",
+            18,{Font=Theme.FontSemi,TextColor3=Theme.Muted,
+                LayoutOrder=2,TextWrapped=true,
+                AutomaticSize=Enum.AutomaticSize.Y,
+                Size=UDim2.new(1,0,0,0)})
+        for i,item in ipairs(V2Credits.Entries) do
+            HudParts.text(card,string.format(
+                "%s · %s\nAutor: %s\nFonte: %s",
+                item.Group,item.Name,item.Author,item.Source),17,{
+                Font=Theme.FontSemi,TextColor3=Theme.Text,
+                LayoutOrder=10+i,TextWrapped=true,
+                AutomaticSize=Enum.AutomaticSize.Y,
+                Size=UDim2.new(1,0,0,0),
+            })
+        end
+        HudParts.text(card,
+            "PENDÊNCIAS LEGAIS A RESOLVER ANTES DE PUBLICAR",21,{
+            Font=Theme.FontTitle,TextColor3=rgb(255,178,91),
+            LayoutOrder=100,TextWrapped=true,
+            AutomaticSize=Enum.AutomaticSize.Y,
+            Size=UDim2.new(1,0,0,0)})
+        for i,item in ipairs(V2Credits.Pending) do
+            HudParts.text(card,"• "..item,17,{
+                Font=Theme.FontSemi,TextColor3=rgb(255,190,112),
+                LayoutOrder=101+i,TextWrapped=true,
+                AutomaticSize=Enum.AutomaticSize.Y,
+                Size=UDim2.new(1,0,0,0)})
+        end
+    end
+
 	local scrolls: { [string]: ScrollingFrame } = {}
 	render = function()
 		local snapshot = Store.Snapshot
@@ -333,6 +388,8 @@ function Profile.new(parent: Instance)
 			reviews(scroll, snapshot)
 		elseif id == "history" then
 			history(scroll, snapshot)
+        elseif id == "credits" then
+            credits(scroll)
 		end
 		task.defer(function()
 			scroll.CanvasPosition = position

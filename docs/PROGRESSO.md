@@ -909,3 +909,12 @@ Detalhes em `docs/AUDITORIA_GERAL.md`. Resumo:
 - 3 serviços com carros, NPCs e máquinas reais (pneu, freio, ignição): qualidade 100, sem pagamento duplo. Mapa real: 59,9 Hz servidor e 59,9 fps cliente (com o Studio em foco; sem foco o Studio limita a ~15 fps).
 - Pacotes baixados em `assets/Assets v1 Baixados`: nada faltava no place, então **nenhuma malha foi enviada** à conta Roblox.
 - G1 (estrutura) e G2 homologados no place original; G3, G4 físico, licenças e publicação seguem abertos. `main` `5b15eac`, CI verde.
+
+## 13/11/2026 — Homologação V1, rodada 3: G3 com 2 jogadores reais (servidor + 2 clientes no Studio)
+
+- Player1 (−1) contratado e Player2 (−2) dono, DataStore de teste, mapa e assets reais. Divisão 30%: dono +76, contratado +32, soma 108 (90 + gorjeta 18), 1 peça do dono, +30 XP só do contratado.
+- Ataques recusados com saldo idêntico (NaN/infinito/string, convite a si/duplicado/inexistente, token inventado ou ausente, reabrir OS, diagnosticar OS alheia).
+- P1 de consistência: `WorkerSettlementProofRules` exigia `OwnerUserId >= 1` e recusava o crédito do contratado com ids negativos de teste (a claim aceitava). Alinhado; teste 14 → 20. `main` `915e4e6`, CI verde.
+- Recuperação C13 em sessão real: a OS travada foi paga no login seguinte (282 → 314, XP 30 → 60, claim 1 → 0), sem duplicar o dono.
+- E1 (contratado sai) e E2 (dono sai): sem pagamento indevido, ordem volta ao dono / cancelada, sem ordem fantasma. Reconexão idêntica 3 vezes. Servidor sem erros.
+- Não coberto: 2 servidores com a mesma conta, latência real e DataStore de produção.

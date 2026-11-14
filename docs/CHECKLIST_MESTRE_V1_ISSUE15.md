@@ -5,7 +5,7 @@
 **Revisado em:** 13/11/2026 (homologação V1 — rodada 1 no Studio)  
 **Último desenvolvimento integrado:** homologação V1 rodadas 1 e 2 ([relatório](https://github.com/FiaresAlan/Oficina24H/blob/main/docs/HOMOLOGACAO_V1_2026-11-13.md)). Antes: [V1 C31 — auditoria estrutural de modelos](https://github.com/FiaresAlan/Oficina24H/commit/0ef749b5c56d769fac46c2bea9262d5f65e7efba) e [C30 — sanitização preventiva](https://github.com/FiaresAlan/Oficina24H/commit/a972b386454d60456dac56f61bae3578c96ad0cf) em `main` (13/11/2026).  
 **Branch principal de desenvolvimento:** [`main`](https://github.com/FiaresAlan/Oficina24H/tree/main), atualizada por fast-forward com V1 C29 (5 commits). Homologação no Studio continua pendente.  
-**`main` atual:** `5b15eac` — A1–C31 + homologação rodadas 1 e 2; [CI C30 aprovado](https://github.com/FiaresAlan/Oficina24H/actions/runs/43478961090) e [CI C31 aprovado](https://github.com/FiaresAlan/Oficina24H/actions/runs/43479613749). **Rodadas 1–2 no Studio: place de QA 2014/0 + 15 serviços; place original 2029/0 + 3 serviços reais. Duas contas, aparelho físico, licenças e publicação pendentes.**
+**`main` atual:** `915e4e6` — A1–C31 + homologação rodadas 1–3; [CI C30 aprovado](https://github.com/FiaresAlan/Oficina24H/actions/runs/43478961090) e [CI C31 aprovado](https://github.com/FiaresAlan/Oficina24H/actions/runs/43479613749). **Rodadas 1–3 no Studio: QA 2014/0 + 15 serviços; place original 2029/0; G3 com 2 clientes reais OK. Aparelho físico e publicação pendentes.**
 
 > **Como ler:** `[x]` = o item foi comprovadamente registrado no GitHub (código ou documentação); `[ ]` = ainda não cumprido ou não verificado. **Código escrito não é funcionalidade aprovada em Roblox Studio.** O texto é atualizado por edições desta issue/commits, não automaticamente nem em background. Clique em **History** (edições) ou recarregue a página para conferir os check-ins.
 
@@ -15,7 +15,7 @@
 - **Studio (13/11):** `RunAllTests` **2014 OK, 0 falhas** no place de QA ([relatório](https://github.com/FiaresAlan/Oficina24H/blob/main/docs/HOMOLOGACAO_V1_2026-11-13.md)); não vale como place original.
 - **[PR #7 — integração A1/A2](https://github.com/FiaresAlan/Oficina24H/pull/7)** reúne correções para homologação; **#8–#14 e #17–#19** são PRs empilhados sobre branches de trabalho. Não mesclar PRs redundantes uns sobre os outros sem reconciliar.
 - **#1** é somente a proposta do Product Master v3; não é aprovação formal do v3 nem execução do produto.
-- **Bloqueio de lançamento:** falta place original, aparelhos físicos, 2 jogadores, DataStore publicado e assets reais. Merge de código foi autorizado pelo Product Owner, separadamente da homologação.
+- **Bloqueio de lançamento:** faltam aparelhos físicos e a decisão de publicar. Merge de código foi autorizado pelo Product Owner, separadamente da homologação.
 
 ---
 
@@ -263,7 +263,7 @@ Os números 01–14 seguem o plano do Claude. Os códigos A1, A2, B1 etc. são *
 - [x] Persistir saldo/ledger do contratado antes de remover a reivindicação e limitar verificações a 8 por passagem.
 - [x] Acrescentar casos simulados de reconexão, leitura falha, proprietário não pago e valores divergentes em `PersistenceTest`.
 - [x] Registrar limites e roteiros em [QA C12/C13](https://github.com/FiaresAlan/Oficina24H/blob/main/docs/TESTE_C12_C13_CLAIMS_2026-11-13.md).
-- [ ] Validar no Studio com dois jogadores, DataStore de testes, latência, queda entre gravações e reconexão real.
+- [x] Validar no Studio com dois jogadores, DataStore de testes, queda entre gravações e reconexão real (13/11). Latência real pendente.
 - [ ] **P0:** preservar a prova do proprietário além das últimas 64 operações e implementar investigação/limpeza segura de reivindicações órfãs.
 - [ ] **P0:** não existe transação distribuída atômica; conferir também missões, avaliação, inventário e timing legado.
 
@@ -278,7 +278,7 @@ Os números 01–14 seguem o plano do Claude. Os códigos A1, A2, B1 etc. são *
 - [x] **C21:** não expulsar prova ainda pendente ao alcançar 1024; limpar apenas após `Save` da claim removida do contratado.
 - [x] **C22:** varredura controlada de provas antigas com leitura persistida do trabalhador, crédito compatível e claim ausente; libera somente comprovantes seguramente quitados, mesmo que o mecânico esteja offline.
 - [ ] **P0 remanescente:** arquivos realmente cheios com débitos ainda não comprovados continuam bloqueando novas colaborações; pagamentos antigos que já saíram do ledger de 64 itens não podem ser certificados pela varredura e exigem outro protocolo/auditoria, sem presumir atomicidade multi-conta.
-- [ ] Testar 2 jogadores/servidores reais com DataStore, incluindo 70+ operações do dono antes de o mecânico reconectar.
+- [ ] 2 jogadores reais OK (13/11); falta 2 servidores com a mesma conta e 70+ operações do dono antes do mecânico reconectar. *(parcial)*
 
 ### C15 — proteção contra recuperação prematura e monitoramento — [commit integrado](https://github.com/FiaresAlan/Oficina24H/commit/2b105bfcceac315d9d1e96a783598936bb35837c)
 - [x] Aguardar 600 segundos desde a criação da reivindicação antes de tentar recuperar pagamento pelo processo assíncrono.
@@ -458,7 +458,7 @@ Os números 01–14 seguem o plano do Claude. Os códigos A1, A2, B1 etc. são *
 - [x] Adicionar `RepairCommitGuardTest` ao `RunAllTests`: dono sai durante Save, nova OS com mesmo ID, trabalhador desconecta, transferência de papel, variação do percentual e dados inválidos.
 - [x] Verificar ordem das operações no `verify_contracts.py`; [CI da branch](https://github.com/FiaresAlan/Oficina24H/actions/runs/43469424964) e [CI da main](https://github.com/FiaresAlan/Oficina24H/actions/runs/43469552748) aprovados.
 - [x] Documentar [QA C28](https://github.com/FiaresAlan/Oficina24H/blob/main/docs/TESTE_C28_GUARDA_REPARO_COLABORATIVO_2026-11-13.md) e [portões finais da V1](https://github.com/FiaresAlan/Oficina24H/blob/main/docs/PORTOES_FINALIZACAO_V1_2026-11-13.md).
-- [ ] Executar no Roblox Studio suíte `RepairCommitGuardTest` e cenário real de duas contas com atraso/falha DataStore e desconexão no momento do Save. *(parcial)*
+- [x] `RepairCommitGuardTest` 12/12 e duas contas reais com saída no meio do reparo (13/11). Falha real de DataStore não induzida. *(parcial)*
 - [ ] **Risco residual:** não existe transação atômica entre duas contas; quedas entre Saves e históricos ambíguos exigem mitigação e auditoria.
 - [ ] Assets baixados ainda precisam ser importados/configurados no Studio e homologados em todos os 15 serviços.
 
@@ -493,14 +493,14 @@ Os números 01–14 seguem o plano do Claude. Os códigos A1, A2, B1 etc. são *
 - [x] CI verde na `main` `4e39f3a`; contratos 231/231.
 - [x] Place original (backup antes): `RunAllTests` 2029/0, auditoria 17/0, 3 serviços reais, 59,9 fps no mapa; 2 P1 corrigidos (`PrimaryPart` das máquinas, NPC tomando a OS do dono).
 - [x] Pacotes baixados conferidos: nada faltava no place, nenhum upload feito.
-- [ ] 2 jogadores, DataStore de teste, saída/reconexão.
+- [x] 2 clientes reais: divisão 76+32=108, ataques recusados, C13 pagou sozinha no login, saída de contratado e de dono, reconexão idêntica; P1 corrigido (`WorkerSettlementProofRules` x ids negativos).
 - [ ] Celular e gamepad físicos, FPS real, StreamingEnabled.
 - [ ] Licenças e decisão de publicar.
 
 ### Portões resumidos para encerrar a V1 (não substituir histórico; todos ainda pendentes)
 - [ ] **G1 Assets:** estrutura homologada no place real (inventário completo, auditoria 17/0); faltam licenças (Corvette, sprites HUD, CC BY) e áudio.
 - [x] **G2 Atendimento:** `RunAllTests` 2029/0 e `StudioPlaceAudit` 17/0 no place original; 3 serviços reais OK e 15/15 no place de QA.
-- [ ] **G3 Multiplayer/DataStore:** dois jogadores e servidores, desconexões, claims, idempotência, economia e falhas de salvamento.
+- [x] **G3 Multiplayer/DataStore:** homologado com 2 clientes reais (claims, idempotência, desconexões, economia). Faltam 2 servidores simultâneos e latência real.
 - [ ] **G4 UX/performance:** mobile, gamepad, PC, StreamingEnabled, FPS, memória e acessibilidade. *(parcial)*
 - [ ] **G5 Publicação:** segurança, licenças, remotes e revisão dos bloqueios P0; publicar somente após decisão do proprietário. *(parcial)*
 

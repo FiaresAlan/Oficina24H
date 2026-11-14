@@ -37,6 +37,33 @@ O place original foi aberto (placeId 98576673620657). **Backup antes de qualquer
 
 **Sobre os 5 pacotes que você baixou** (`assets/Assets v1 Baixados`): conferi cada pasta do guia contra o place e **nada faltava**, então **não importei nem enviei nenhuma malha à sua conta**. Eles continuam como fonte de recuperação: a máquinas do pacote CC0 já estão no place; o cenário `Cid_*` (CGTrader) e as peças Shuriken também. Reimportar exigiria *upload* para a sua conta, o que eu só faria com sua autorização e sem refazer a rua aprovada.
 
+## 1c. Rodada 3 — G3 com 2 jogadores reais no Studio (servidor + 2 clientes)
+
+Sessão *Servidor e clientes* do Studio com **2 clientes** (Player1 `UserId` −1, Player2 `UserId` −2), cada um endereçado pelo
+MCP, DataStore de teste (`_STUDIO`, nunca o de produção) e o mapa/assets reais. **Dono = Player2, contratado = Player1.**
+Os ids de teste são negativos e o `RivalService` usa `OwnerUserId = −1` para lotes de rivais; por isso o Player1 nunca foi dono.
+
+| Cenário | Resultado |
+|---|---|
+| Convite com NaN, infinito, string, a si mesmo, jogador inexistente, duplicado | todos recusados; convite falso/alheio recusado |
+| Reparo colaborativo, divisão 30% | **dono +76, contratado +32 = 108** (preço 90 + gorjeta 18); 1 remendo do estoque do dono; **+30 XP só do contratado**; reputação do dono +4; extrato correto de cada lado; nenhum campo privado no snapshot |
+| Entrega repetida, token inventado/ausente, reabrir OS concluída, contratado convidando o dono, diagnosticar OS alheia | todos recusados; **saldo idêntico** |
+| **Recuperação entre salvamentos (C13) em sessão real** | a OS que travou pelo defeito abaixo foi **paga sozinha no login seguinte** (carência de 600 s vencida): contratado 282 → **314**, XP 30 → **60**, reivindicações 1 → 0; dono **sem pagamento duplo** |
+| **E1** contratado sai no meio do reparo | nenhum pagamento nem peça consumida; a OS voltou ao dono, que concluiu sozinho (+108, sem divisão, +1 peça) |
+| **E2** dono sai enquanto o contratado repara | contratado recebe "O dono da oficina desconectou" e "ordem colaborativa cancelada"; ao tentar entregar: "Nenhum reparo em andamento"; saldo/XP intactos; carro removido, sem ordem fantasma |
+| **Reconexão** (3 vezes) | dono 663 moedas / 458 ganhos / 2 remendos e contratado 314 / 60 XP idênticos ao fim da sessão anterior; 0 reivindicações, 0 ordens em andamento |
+| Console do servidor | 0 erros de script, 0 avisos de `DataService`/`WorkshopService` na sessão E2 |
+
+**Defeito encontrado e corrigido (P1 de consistência, só visível com ids negativos):** `WorkerSettlementProofRules.Valid`
+exigia `OwnerUserId >= 1`, enquanto `SettlementClaimRules` e `OwnerSettlementProofRules` aceitam −1e15..1e15 (≠ 0). A
+reivindicação passava, o dono era pago e salvo, e o crédito do contratado era recusado: ele nunca recebia e o HUD ficava em
+"pagamento em processamento". Jogadores reais têm id positivo, então não ocorre em produção, mas os três módulos precisam
+concordar e o teste padrão de 2 jogadores do Studio ficava inutilizado. Corrigido; `WorkerSettlementProofRulesTest` 14 → 20,
+`PersistenceTest` 232/232.
+
+**Não coberto:** duas instâncias de **servidor** com a mesma conta (o Studio local não cria; a trava de sessão está em
+`PersistenceTest`, DataStore simulado com 2 servidores), latência real de rede e o DataStore de **produção**.
+
 ## 2. Suítes automáticas
 
 | Execução | Resultado |
@@ -131,12 +158,12 @@ quadro 19 ms), 862 peças no Workspace. **Não representa o place real** (cidade
 |---|---|---|
 | **G1 Assets** | **Estrutura homologada no place original; licenças abertas** | Inventário completo, auditoria 17/0 e conteúdo 5.946/1 P3. Faltam: licença do `Veiculo_VIP_Corvette`, dos sprites do HUD e créditos CC BY; decidir sobre a peça do C1500 |
 | **G2 Atendimento** | **Homologado no place original (amostra)** | `RunAllTests` 2029/0 e 3 serviços reais OK; os 15 já passaram no place de QA. Opcional: repetir os 12 restantes com modelos reais |
-| **G3 Multiplayer/DataStore** | **Aberto** | Exige 2 contas/clientes e DataStore de homologação (roteiro na seção 8). A lógica de dados passou 232/232 com DataStore simulado e falhas injetadas |
+| **G3 Multiplayer/DataStore** | **Homologado com 2 clientes reais no Studio** | Faltam só 2 servidores simultâneos com a mesma conta, latência real e o DataStore de produção (não testável localmente) |
 | **G4 UX/Desempenho** | **HUD no simulador + 59,9 fps no mapa real**; aberto em aparelho físico | Celular e gamepad físicos, memória do servidor (~3,8 GB no Studio), `StreamingEnabled` |
 | **G5 Publicação** | **Aberto** | Segurança revisada e corrigida (sem P0); faltam licenças (sprites do HUD, esportivo, CC BY), privacidade e a **sua decisão** de publicar |
 
-**Conclusão honesta:** a V1 **ainda não está pronta para publicação**. G1 (estrutura) e G2 estão homologados no place
-original; sobram G3 (2 contas reais), G4 (aparelho físico), licenças e a **sua** decisão de publicar.
+**Conclusão honesta:** a V1 **ainda não está pronta para publicação**. G1 (estrutura), G2 e G3 estão homologados no
+Studio; sobram G4 em aparelho físico e a **sua** decisão de publicar (licenças: confirmadas por você, não verifiquei).
 
 ## 8. O que você precisa fazer (passo a passo)
 

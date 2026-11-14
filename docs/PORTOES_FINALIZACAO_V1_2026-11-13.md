@@ -34,4 +34,6 @@ Executado num **place de QA só com código** (paridade 144/144 com o repositór
 
 **Rodada 2 (place original, 13/11):** `RunAllTests` 2029/0, auditoria 17/0 com os assets reais, 3 serviços reais OK e 59,9 fps no mapa real. Dois P1 corrigidos (`PrimaryPart` das 11 máquinas e funcionário NPC tomando a OS do dono). **G1 (estrutura) e G2 homologados no place original**; G3 (2 contas), G4 (aparelho físico), licenças e publicação seguem abertos. Ver o [relatório](HOMOLOGACAO_V1_2026-11-13.md).
 
+**Rodada 3 (G3, 2 clientes reais no Studio):** divisão 76 + 32 = 108, ataques recusados, recuperação C13 paga o contratado sozinha no login, saída de contratado e de dono sem pagamento indevido, reconexão idêntica. Um P1 de consistência corrigido (`WorkerSettlementProofRules` recusava ids negativos). **G3 homologado**; faltam G4 em aparelho físico e a decisão de publicar.
+
 **Estado anterior (C31):** G1–G5 ainda não homologados. Os assets estão baixados no computador, mas **não importados**; as novas suítes de Luau foram preparadas, **não executadas** no Studio. O checklist pode ter mais de 100 caixas abertas sem que sejam 100 fases sequenciais.

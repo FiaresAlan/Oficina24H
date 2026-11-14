@@ -21,6 +21,9 @@ local hud: ScreenGui?=nil
 local prevCameraSubject: Instance?=nil
 local prevCameraType: Enum.CameraType?=nil
 local prevFov: number?=nil
+local touchState={Forward=false,Backward=false,Left=false,Right=false}
+local touchPresses: {[InputObject]: string}={}
+local touchEndConnection: RBXScriptConnection?=nil
 
 local function hudForDrive(): (ScreenGui,TextLabel)
     local gui=Instance.new("ScreenGui")
@@ -59,6 +62,10 @@ end
 local function stop()
     if inputConnection then inputConnection:Disconnect() end
     inputConnection=nil
+    if touchEndConnection then touchEndConnection:Disconnect() end
+    touchEndConnection=nil
+    table.clear(touchPresses)
+    for key in pairs(touchState) do touchState[key]=false end
     if currentSeat and currentJob then
         driveInput:FireServer(currentJob,0,0)
     end
@@ -107,6 +114,14 @@ local function readInput(seat: VehicleSeat): (number,number)
             end
         end
     end
+    if UIS.TouchEnabled then
+        if touchState.Forward or touchState.Backward then
+            throttle=(touchState.Forward and 1 or 0)-(touchState.Backward and 1 or 0)
+        end
+        if touchState.Left or touchState.Right then
+            steer=(touchState.Right and 1 or 0)-(touchState.Left and 1 or 0)
+        end
+    end
     return math.clamp(throttle,-1,1),math.clamp(steer,-1,1)
 end
 
@@ -131,6 +146,51 @@ local function start(seat: VehicleSeat)
     end
     local newGui,label=hudForDrive()
     hud=newGui
+    -- Botões de toque próprios, sem bloquear centro da tela nem esperar
+    -- que o controlador padrão do VehicleSeat tenha UI do jogo instalada.
+    if UIS.TouchEnabled then
+        local function touchButton(name: string,title: string,x: number,y: number)
+            local button=Instance.new("TextButton")
+            button.Name="DriveTouch_"..name
+            button.AnchorPoint=Vector2.new(.5,.5)
+            button.Position=UDim2.fromScale(x,y)
+            button.Size=UDim2.fromOffset(58,58)
+            button.BackgroundColor3=Color3.fromRGB(23,42,62)
+            button.BackgroundTransparency=.19
+            button.TextColor3=Color3.fromRGB(245,250,255)
+            button.Font=Enum.Font.GothamBold
+            button.TextSize=28
+            button.Text=title
+            button.Parent=newGui
+            local round=Instance.new("UICorner")
+            round.CornerRadius=UDim.new(0,14)
+            round.Parent=button
+            button.InputBegan:Connect(function(input)
+                if input.UserInputType==Enum.UserInputType.Touch
+                    or input.UserInputType==Enum.UserInputType.MouseButton1 then
+                    touchPresses[input]=name
+                    touchState[name]=true
+                end
+            end)
+            button.InputEnded:Connect(function(input)
+                if touchPresses[input]==name then
+                    touchPresses[input]=nil
+                    touchState[name]=false
+                end
+            end)
+        end
+        touchButton("Left","◀",.69,.82)
+        touchButton("Right","▶",.79,.82)
+        touchButton("Forward","▲",.89,.71)
+        touchButton("Backward","▼",.89,.84)
+        touchEndConnection=UIS.InputEnded:Connect(function(input)
+            local key=touchPresses[input]
+            if key then
+                touchPresses[input]=nil
+                touchState[key]=false
+            end
+        end)
+    end
     CAS:BindAction("V2DriveReturn",function(_,state)
         if state==Enum.UserInputState.Begin and currentJob then
             Store.Act("DriveCar",{JobId=currentJob,Mode="Return"})

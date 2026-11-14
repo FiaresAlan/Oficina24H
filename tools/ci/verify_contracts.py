@@ -1071,6 +1071,81 @@ check("V2-10: suites econômicas, visuais e persistência no runner",
     and 'V2-10: showroom não ressurge após venda e reconexão' in show_persistence)
 
 
+
+# V2-11: o carro em OS permanece no box enquanto o clone físico dirige.
+# Velocidade/posição são observadas APENAS no servidor; nenhum Touched paga.
+drive_rules=text(SHARED/"V2DriveRules.lua")
+drive_service=text(ROOT/"src"/"server"/"V2DriveService.lua")
+drive_client=text(CLIENT/"V2DriveControls.client.lua")
+drive_suspension=text(TOOLS/"V2DriveSuspensionTest.luau")
+drive_rig_test=text(TOOLS/"V2DriveRigTest.luau")
+drive_rule_test=text(TOOLS/"V2DriveRulesTest.luau")
+drive_scene=text(ROOT/"src"/"server"/"VehicleService.lua")
+check("V2-11: apenas Hatch piloto/OS com motorista e componentes fechados",
+    all(x in drive_rules for x in (
+        'R.PilotVehicle = "Hatch amarelo"', 'function R.PilotEligible',
+        'function R.CanLaunch','ctx.OtherSession','ctx.JobSession',
+        'ctx.ComponentsClosed','ctx.SupportRaised',
+        'function R.PermittedOccupant'))
+    and 'function WorkshopService.DriveCar' in workshop
+    and 'Owner=job.OwnerUserId==player.UserId' in workshop
+    and 'EmployeeBusy=employeeReserved(job)' in workshop)
+check("V2-11: carro original e box preservados, com rollback idempotente",
+    all(x in drive_scene for x in (
+        'function VehicleService.SuspendForDrive',
+        'function VehicleService.ResumeFromDrive',
+        'drivePaused[jobId]', 'entry.Transparency',
+        'entry.CanCollide','entry.CanTouch','entry.CanQuery',
+        'car:SetAttribute("Estacionado",false)',
+        'car:SetAttribute("Estacionado",true)',
+        'if cancelDriveHandler then cancelDriveHandler(jobId) end'))
+    and 'VehicleService.ResumeFromDrive(jobId)' in drive_service)
+check("V2-11: física do servidor com VehicleSeat e constraints mecânicas",
+    all(x in drive_service for x in (
+        'Instance.new("VehicleSeat")','Instance.new("HingeConstraint")',
+        'Enum.ActuatorType.Motor','Enum.ActuatorType.Servo',
+        'node:SetNetworkOwner(nil)', 'seat.MaxSpeed',
+        'Rules.MotorMaxTorque','Rules.SteerTorque'))
+    and 'Safety.StripScripts(model)' in drive_service
+    and 'template.Archivable' in drive_service)
+check("V2-11: input analógico não transmite movimento, dinheiro ou token",
+    'driveInputEvent.Name="DriveInput"' in main_src
+    and 'V2DriveService.Input(player,jobId,throttle,steer)' in main_src
+    and 'function Service.Input(' in drive_service
+    and 's.OwnerId~=player.UserId' in drive_service
+    and 's.Seat.Occupant~=s.DriverHumanoid' in drive_service
+    and 'now-s.LastInputRequest<0.07' in drive_service
+    and 'now-s.InputAt<0.35' in drive_service
+    and 'driveInput:FireServer(jobId,throttle,steer)' in drive_client
+    and 'CreditRepairOnce' not in drive_service
+    and 'DataService' not in drive_service
+    and '.Touched:Connect' not in drive_service)
+check("V2-11: limites anti-teleporte, duração, colisão e rota observada",
+    all(x in drive_rules for x in (
+        'R.MaximumSeconds = 150','R.MaxSpeed = 54','R.MaxRadius = 260',
+        'function R.AssessMotion','function R.Advance',
+        'R.CheckpointMinInterval','velocity.Magnitude > R.MaxSpeed'))
+    and 'Rules.AssessMotion(' in drive_service
+    and 'Rules.Advance(' in drive_service
+    and 'workspace:Raycast(' in drive_service
+    and 'now-s.StartAt>Rules.MaximumSeconds' in drive_service
+    and 'clear(jobId,problem,true)' in drive_service)
+check("V2-11: retorno seguro nos eventos de retorno, desconexão e despawn",
+    'function Service.CancelJob(' in drive_service
+    and 'function Service.CancelPlayer(' in drive_service
+    and 'function Service.End(' in drive_service
+    and 'V2DriveService.CancelPlayer(player.UserId)' in main_src
+    and 'VehicleService.SetDriveCancelHandler' in main_src
+    and 'action == "DriveCar"' in main_src
+    and 'Mode="Return"' in finance_ui
+    and 'V2DriveService.Status(job.Id)' in workshop)
+check("V2-11: segurança, rig real e rollback cobertos por regressões Edit",
+    all((TOOLS/(n+".luau")).is_file() and ('"'+n+'"') in runner
+        for n in ("V2DriveRulesTest","V2DriveRigTest","V2DriveSuspensionTest"))
+    and 'replay da rota completa' in drive_rule_test
+    and 'quatro rodas com motores HingeConstraint' in drive_rig_test
+    and 'rollback devolve todos os materiais' in drive_suspension)
+
 print(f"\nStatic checks: {passed} passed, {len(failures)} failed")
 if failures:
     raise SystemExit(1)

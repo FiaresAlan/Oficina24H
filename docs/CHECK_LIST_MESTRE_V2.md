@@ -1,6 +1,6 @@
 # CHECK_LIST_MESTRE_V2 — OFICINA 24H
 
-**Versão:** 2.7, 13/11/2026. **Situação:** engenharia V2-00–15 na PR #27; V2-12/13 com gate desligado até QA físico V2-11; V2-14/15 com QA Studio aberto; pendências V2-08 lotes de fornecedores, migração main/QA V1, assets/licenças e V2-16 beta/release. **Nenhuma homologação Studio presumida.**  
+**Versão:** 2.8, 13/11/2026. **Situação:** engenharia V2-00–16 na PR #27, mas V2-16 é pacote de auditoria Go/No-Go, **NÃO RELEASE**. V2-12/13 permanecem desligadas até QA físico; V2-08 fornecedores FIFO, PR divergente da main, licenças, Studio e beta bloqueiam publicação. **Nenhuma homologação Studio presumida.**  
 **Direção aprovada pelo proprietário:** híbrida — estilização legível do mundo + reparos visualmente mecânicos + gestão de negócio.  
 **Código base de referência:** main em C31 (`2690f082` antes dos commits exclusivamente documentais da V2). **Atenção:** o Claude Code está homologando/corrigindo a V1 em paralelo; sempre ler novo HEAD e reconciliar diffs antes de programar V2. Preservar Issue #15 V1 como histórico.  
 **Documentos de referência:** DIRECAO_JOGO_V2_2026-11-13.md, PESQUISA_MERCADO_V2_2026-11-13.md, AUDITORIA_V2_BASE_CODIGO_2026-11-13.md (auditoria histórica até C17), [GUIA_UNICO_ASSETS_V2.md](GUIA_UNICO_ASSETS_V2.md) e GUIA_UNICO_ASSETS_V1.md.
@@ -50,7 +50,7 @@ P0 = prioridade para o núcleo de lançamento. P1 = opcional condicionado a viab
 - [ ] **Merge na main:** depende de comparar, revisar e conciliar as correções V1 do Claude e refazer CI.
 - [ ] **Arte real:** revisar/importar os três modelos piloto, ajustar malhas móveis, pivôs, licença, áudio e LOD reais.
 - [ ] **Studio:** executar RunAllTests, V2PilotPlaceAudit, 15 serviços, multiplayer, mobile/PC/gamepad e verificar efeitos reais.
-- [ ] **V2-16 e lotes V2-08:** implementar somente após dependências, sem declarar V2 completa por CI verde.
+- [ ] **Homologação real V2-16 e lotes V2-08:** implementar somente após dependências, sem declarar V2 completa por CI verde.
 
 **Portão:** código escrito e integrado em branch não equivale a jogo homologado. Não há publicação automática.
 
@@ -307,14 +307,26 @@ P0 = prioridade para o núcleo de lançamento. P1 = opcional condicionado a viab
 - [ ] [S] Se lançamento internacional for objetivo, criar tradução integral `en-US` com paridade e conferir acessibilidade real de texto/controles; `pt-BR` é o único idioma implementado hoje.
 - [ ] [S] Revisar com a `main` atual do Claude/QA V1, conferir regressões dos 15 serviços, obter confirmação do proprietário e anexar evidências de playtest ao gate V2-16.
 
-## V2-16 — Studio, beta e publicação (GATE DO PROPRIETÁRIO)
-- [ ] [S] Rodar RunAllTests e StudioPlaceAudit no place com assets reais.
-- [ ] [S] Executar todos os 15 serviços em diferentes modelos e dispositivos.
-- [ ] [S] Testar loop do novato → 1ª OS → upgrade → contratação e faturamento.
-- [ ] [S] Testar 2+ jogadores, remotes, desconexão, DataStore Studio e servidor publicado de testes.
-- [ ] [S] Validar UI touch/gamepad, FPS, performance/streaming, áudios, animações e licenças.
-- [ ] [S] Beta fechado e métricas reais de diversão, abandono, lucratividade e retenção.
-- [ ] [S] Corrigir bugs P0/P1 e obter autorização final de lançamento.
+## V2-16 — Homologação Studio e beta (engenharia de QA concluída; RELEASE BLOQUEADA)
+
+**Documentação:** [V2-16 — comandos Studio, 16 gates e plano Go/No-Go](V2_FASE_16_HOMOLOGACAO_BETA.md) · [Manifest de evidências, todos sem aprovação](release/V2_RELEASE_EVIDENCE.json) · [Matriz de 15 OS pendentes](release/V2_TEST_MATRIX_15_SERVICOS.csv). A PR #27 permanece **draft** e sem merge na `main`.
+
+- [x] [C] Matriz `V2ReleaseGateRules` com 16 portões de lançamento e fontes distintas CI/GitHub/Studio/Legal/Beta/Owner. Nenhuma aprovação sem URL de prova, nota, data ISO e SHA completo idêntico ao build.
+- [x] [C] `tools/ci/release_gate.py` com `--mode report` e `--mode enforce`; autoverificação de fontes, licenças, owner, SHA divergente e pendências. O enforcement é manual, não faz deploy; o CI apenas informa NO-GO sem confundir código verde com playtest.
+- [x] [C] `V2BetaSmokeAudit.luau` do place em Studio/Edit/Play e `V2ReleaseGateRulesTest.luau` adicionados ao `RunAllTests.luau`; não mexem em saldos nem ativam diagnóstico/test-drive opcional.
+- [x] [C] Matriz CSV com os 15 defeitos do catálogo, status `PENDENTE` e campos para modelo, dispositivo, jogador, diagnóstico, reparo, peça, recibo único, reputação e prova do build. Validação CI de paridade exata com Catalog.
+- [x] [C] Auditoria da divergência GitHub: PR #27 aparece **não mesclável** com a `main` atual neste checkpoint; reconciliação V1 é tarefa antes do merge, sem sobrescrever trabalho do Claude.
+- [x] [A] Pipeline Rojo/contratos e teste do bloqueio de release incorporados ao Code Health; os controles de `--mode enforce` deverão retornar código 1 enquanto os gates estiverem abertos. **Não foi executado Studio nesta rodada.**
+- [ ] [S] Rodar `RunAllTests`, `StudioPlaceAudit`, `V2ReleasePlaceAudit` e `V2BetaSmokeAudit` no place com assets reais, arquivar saídas e SHA.
+- [ ] [S] Executar todos os 15 serviços, registrar as 15 linhas da matriz CSV com resultados e provas reais em diferentes modelos e dispositivos.
+- [ ] [S] Testar loop do novato → 1ª OS → upgrade nível 1 → contratação e faturamento, sem comandos QA.
+- [ ] [S] Testar 2+ jogadores, remotos falsificados, desconexão, DataStore Studio e servidor privado publicado de testes.
+- [ ] [S] Homologar V2-11 física, torque, câmera, checkpoints, retorno ao box e acessibilidade touch/gamepad; manter V2-12/13 `LiveEnabled=false` até gate próprio.
+- [ ] [S] Implementar e homologar lotes FIFO dos fornecedores da V2-08 e suas migrações; **P0 aberto, não marcar V2-08 como pronta**.
+- [ ] [S] Confirmar licenças/autorização de todos os sprites, ícones, modelos externos e marcas; checar StreamingEnabled, FPS/memória reais, áudio e animações.
+- [ ] [S] Corrigir divergência PR #27 com o `main` atual, revisar conflitos V1 sem force-push na `main`, congelar SHA da build final.
+- [ ] [S] Executar beta fechado, medir diversão/abandono/lucratividade, corrigir P0/P1 e recolher documentação do build.
+- [ ] [S] Registrar 16/16 evidências de fonte correta, SHA da build e aprovação explícita do proprietário; **NENHUMA autorização implícita de publicação**.
 
 ## Checklist obrigatório de cada rodada futura
 - [ ] Fixar SHA base, dependências e critério de aceite.

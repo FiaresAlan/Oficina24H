@@ -29,6 +29,17 @@ local actionEvent = Instance.new("RemoteEvent")
 actionEvent.Name = "Action"
 actionEvent.Parent = remotesFolder
 
+-- V2-11: canal de controle contínuo SEPARADO das transações de jogo.
+-- Cliente envia apenas intenção analógica; dono/assento/velocidade/rota
+-- são verificados pelo servidor, sem crédito ou teleporte.
+local driveInputEvent=Instance.new("RemoteEvent")
+driveInputEvent.Name="DriveInput"
+driveInputEvent.Parent=remotesFolder
+driveInputEvent.OnServerEvent:Connect(function(player: Player,jobId: any,
+    throttle: any,steer: any)
+    V2DriveService.Input(player,jobId,throttle,steer)
+end)
+
 local snapshotFunction = Instance.new("RemoteFunction")
 snapshotFunction.Name = "GetSnapshot"
 snapshotFunction.Parent = remotesFolder

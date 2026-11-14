@@ -358,6 +358,7 @@ function Service.Start(player: Player,jobId: string): (boolean,string)
         StartAt=os.clock(),LastAt=os.clock(),Previous=main.Position,
         Origin=main.Position,Checkpoints=route,Progress=Rules.CheckpointState(),
         SeatLostAt=nil,SeatAcquired=false,Accum=0,DriverHumanoid=humanoid,
+        InputAt=-math.huge,InputThrottle=0,InputSteer=0,LastInputRequest=-math.huge,
     }
     sessions[jobId]=session
     byDriver[player.UserId]=jobId
@@ -387,6 +388,25 @@ function Service.Start(player: Player,jobId: string): (boolean,string)
     end
     activeSeat:Sit(humanoid)
     return true,"Test-drive iniciado. WASD/setas, controle ou toque: dirija; Backspace/B para voltar ao box. Sem recompensa na V2-11."
+end
+
+-- Somente intenção de aceleração/direção chega do cliente: não há
+-- posição, velocidade, recompensa ou autoridade de checkpoint no remoto.
+function Service.Input(player: Player,jobId: any,throttle: any,steer: any)
+    if type(jobId)~="string" or #jobId>80 then return end
+    local s=sessions[jobId]
+    if not s or s.OwnerId~=player.UserId or s.Seat.Occupant~=s.DriverHumanoid then return end
+    local now=os.clock()
+    if now-s.LastInputRequest<0.07 then return end -- limite 14 Hz
+    s.LastInputRequest=now
+    if type(throttle)~="number" or type(steer)~="number"
+        or throttle~=throttle or steer~=steer
+        or throttle==math.huge or steer==math.huge
+        or throttle==-math.huge or steer==-math.huge
+        or math.abs(throttle)>1.001 or math.abs(steer)>1.001 then return end
+    s.InputThrottle=throttle
+    s.InputSteer=steer
+    s.InputAt=now
 end
 
 function Service.End(player: Player,jobId: string): (boolean,string)
@@ -466,8 +486,8 @@ function Service.StartHeartbeat()
             else
                 local occupant=s.Seat.Occupant
                 local speed,angle=0,0
-                if occupant==s.DriverHumanoid then
-                    speed,angle=Rules.Controls(s.Seat.ThrottleFloat,s.Seat.SteerFloat)
+                if occupant==s.DriverHumanoid and now-s.InputAt<0.35 then
+                    speed,angle=Rules.Controls(s.InputThrottle,s.InputSteer)
                 end
                 for _,motor in ipairs(s.Motors) do motor.AngularVelocity=speed end
                 for _,servo in ipairs(s.Steering) do servo.TargetAngle=angle end

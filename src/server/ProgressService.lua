@@ -414,6 +414,13 @@ function ProgressService.Start()
 		local profile = leagueDirty[player] and DataService.Get(player)
 		leagueDirty[player] = nil
 		friendBonus[player] = nil
+		-- Auditoria G5: o cache de pares "a:b" crescia por toda a vida do servidor; remove os pares de quem sai.
+		local prefix, suffix = tostring(player.UserId) .. ":", ":" .. tostring(player.UserId)
+		for key in pairs(friendCache) do
+			if string.sub(key, 1, #prefix) == prefix or string.sub(key, -#suffix) == suffix then
+				friendCache[key] = nil
+			end
+		end
 		task.defer(refreshFriends) -- quem ficou pode ter perdido o amigo
 		if profile and profile.League.Week == ProgressRules.Week(os.time()) then
 			local store, points = leagueStore(profile.League.Week), profile.League.Points

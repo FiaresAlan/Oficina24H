@@ -106,7 +106,7 @@ local lastOutcomeQuery: {[number]: number} = {}
 local actionBudgets:{[number]:any}={}
 local snapshotBudgets:{[number]:any}={}
 local KNOWN_ACTIONS: {[string]: boolean} = {}
-for _, name in ipairs({ "ClaimWorkshop", "GenerateCustomer", "DeclineJob", "AcceptJob", "DiagnoseJob", "ExamineJob", "CompleteJob", "FinishRepair", "RepairAction", "CheckRepairResult", "RepairPrefs", "CancelRepair", "SkipOnboarding", "BuyEquipment", "SetPrice", "BuyPart", "Checkout", "HireNpc", "InviteWorker", "CompleteCollaborativeJob", "RespondInvite", "MoveBag", "UpgradeWorkshop", "ClaimDaily", "ClaimMission", "RedeemCode", "SetJobPriority", "ScheduleJob", "DiscountJob", "RequestJobSupplies", "ClearSupplyRequests", "SetStaffPolicy", "AssignStaffJob", "ClearStaffJob", "UsedMarket", "DriveCar", "QualityReview", "NegotiateFleet" }) do
+for _, name in ipairs({ "ClaimWorkshop", "GenerateCustomer", "DeclineJob", "AcceptJob", "DiagnoseJob", "ExamineJob", "CompleteJob", "FinishRepair", "RepairAction", "CheckRepairResult", "RepairPrefs", "CancelRepair", "SkipOnboarding", "BuyEquipment", "SetPrice", "BuyPart", "Checkout", "HireNpc", "InviteWorker", "CompleteCollaborativeJob", "RespondInvite", "MoveBag", "UpgradeWorkshop", "ClaimDaily", "ClaimMission", "RedeemCode", "SetJobPriority", "ScheduleJob", "DiscountJob", "RequestJobSupplies", "ClearSupplyRequests", "SetStaffPolicy", "AssignStaffJob", "ClearStaffJob", "UsedMarket", "DriveCar", "QualityReview", "NegotiateFleet", "SetAccessibility" }) do
     KNOWN_ACTIONS[name] = true
 end
 
@@ -377,6 +377,8 @@ actionEvent.OnServerEvent:Connect(function(player: Player, action: any, payload:
         success, message = WorkshopService.BuyEquipment(player, payload.EquipmentId)
     elseif action == "SetPrice" and type(payload.Multiplier) == "number" then
         success, message = WorkshopService.SetPrice(player, payload.Multiplier)
+    elseif action == "SetAccessibility" then
+        success, message = WorkshopService.SetAccessibility(player,payload.Key,payload.Value)
     elseif action == "NegotiateFleet" then
         success, message = WorkshopService.NegotiateFleet(player,payload.Action,payload.Mode)
     elseif action == "UsedMarket" then

@@ -88,8 +88,10 @@ function R.Controls(throttle: any, steer: any): (number, number)
     local gas=finite(throttle) and math.clamp(throttle,-1,1) or 0
     local turn=finite(steer) and math.clamp(steer,-1,1) or 0
     -- Ré limitada para manter controle, tecla S = freio antes de engatar ré.
-    return (gas<0 and gas*0.45 or gas)*R.MotorAngularSpeed,
-        turn*R.SteerAngle
+    -- Pivô da roda no eixo +X: ω positivo deslocaria o carro em +Z,
+    -- mas LookVector/frente é -Z. Inverter ambos motor e direção.
+    return -(gas<0 and gas*0.45 or gas)*R.MotorAngularSpeed,
+        -turn*R.SteerAngle
 end
 
 function R.CheckpointState(): any

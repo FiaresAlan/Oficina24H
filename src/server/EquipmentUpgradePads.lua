@@ -44,7 +44,7 @@ local function create(plot: Instance,id: string): BasePart
     pad.Parent=folder
     local billboard=Instance.new("BillboardGui")
     billboard.Name="Price"
-    billboard.Size=UDim2.fromOffset(235,100)
+    billboard.Size=UDim2.fromScale(5.4,2.2) -- V1 G4: letreiro em studs, sem sobrepor o vizinho
     billboard.StudsOffsetWorldSpace=Vector3.new(0,2.9,0)
     billboard.MaxDistance=35
     billboard.Parent=pad
@@ -148,7 +148,7 @@ function Pads.Sync(player: Player,owned: any,upgrades: any)
                         if not badge then
                             badge=Instance.new("BillboardGui")
                             badge.Name="UpgradeTier"
-                            badge.Size=UDim2.fromOffset(110,28)
+                            badge.Size=UDim2.fromScale(3.2,0.8) -- V1 G4: versão N acompanha a distância
                             badge.StudsOffsetWorldSpace=Vector3.new(0,3.5,0)
                             badge.MaxDistance=35
                             badge.Parent=anchor

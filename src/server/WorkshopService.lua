@@ -1399,68 +1399,33 @@ local function retryDelivery(entry: any)
 end
 
 -- Finaliza o minijogo: valida a sessão e os toques, recalcula a qualidade no servidor (6 fatores) e só então cobra peças e paga.
-function WorkshopService.FinishRepair(player: Player, jobId: string, presses: any)
-    local session = Repairs[player.UserId]
-    if not session or session.JobId ~= jobId then
-        -- A conclusão anterior pode ter sido paga, mas o ACK se perdeu.
-        -- Reenvie o MESMO comprovante; jamais chame as rotinas financeiras outra vez.
-        local token = type(presses) == "table" and presses.Token
-        if SettlementDeliveryRules.Matches(SettlingRepairs[player.UserId], jobId, token) then
-            return false, "Pagamento em processamento: aguardando salvamento dos perfis."
-        end
-        local receipt = RepairReceiptRules.Lookup(RepairReceipts[player.UserId], jobId, token, os.clock())
-            or DataService.GetRepairReceipt(player, jobId, token)
-        if receipt then
-            if eventSender then eventSender(player, "RepairDone", receipt) end
-            return true, "Entrega já concluída. Comprovante recuperado."
-        end
-        return false, "Nenhum reparo em andamento."
+-- Isolamento da liquidação V1: qualquer pagamento/XP/peças só ocorre
+-- aqui, UMA vez, por token de sessão validado. Reutilizado após review
+-- opcional sem repetir o minigame nem dar crédito via rota/colisão.
+local function settleEvaluatedRepair(player: Player,jobId: string,session:any,
+    result:any,job:any,defect:any,service:any,owner:Player,now:number): (boolean,string)
+    local function finishFailure(message: string): (boolean,string)
+        SettlingRepairs[player.UserId]=nil
+        VehicleService.SetRepairing(jobId,false)
+        return false,message
     end
-    -- Todo reparo exige o seu token (inclusive o antigo minijogo de timing).
-    -- Pacote atrasado de outro reparo jamais consome peças da sessão atual.
-    if not RepairSessionRules.MatchesFinish(session, jobId, presses) then
-        return false, "Identificador de sessão inválido."
+    -- Revalidate after the optional review interval, before any financial
+    -- mutation. Note: no proximity gate here because a driver returns to bay,
+    -- not necessarily to the engine bench; initial checkRepairable already
+    -- performed before the mechanical work was evaluated.
+    if Jobs[jobId]~=job or job.Status~="InProgress"
+        or player.Parent~=Players or owner.Parent~=Players
+        or not DataService.Get(player) or not DataService.Get(owner)
+        or not getWorkshop(owner)
+        or not CollaborationRules.IsAuthorized(job,player.UserId)
+        or not VehicleService.IsParked(jobId)
+        or V2DriveService.BusyJob(jobId) then
+        return finishFailure("OS ou motorista indisponível para a entrega validada.")
     end
-    Repairs[player.UserId] = nil -- sessão de uso único: reenviar não paga duas vezes
-    local now = os.clock()
-    SettlingRepairs[player.UserId] = { JobId = jobId, Token = session.Token, At = now }
-    local function finishFailure(message: string): (boolean, string)
-        SettlingRepairs[player.UserId] = nil
-        VehicleService.SetRepairing(jobId, false)
-        return false, message
-    end
-    if not RepairSessionRules.IsActive(session, now, RepairRules.MaxSessionSeconds) then
-        return finishFailure("O reparo demorou demais e foi cancelado.")
-    end
-    local elapsed = now - session.StartedAt
-    local ok, message, job, defect, service, owner = checkRepairable(player, jobId)
-    if not ok then
-        return finishFailure(message)
-    end
-    if not RepairPrepRules.Ready(job.DefectId, job.PreparationStep) then
-        return finishFailure("A preparação do veículo não foi concluída.")
-    end
-    local mods: RepairRules.Mods = {
-        Margin = math.max(0, DataService.GetSkillLevel(player, defect.Specialization) - defect.RequiredLevel),
-        EquipmentEfficiency = EquipmentUpgradeRules.Efficiency(defect.RequiredEquipment,
-            DataService.GetEquipmentLevel(owner :: Player, defect.RequiredEquipment)),
-        PartReliability = Catalog.AveragePartReliability(defect.Parts),
-        DiagnosisAttempts = job.DiagnoseAttempts or 1,
-    }
-    local result
-    if session.Plan.Kind == "Operations" then
-        local verifiedInput, reason = RepairActionRules.FinalInput(session.Plan, session.Progress)
-        if not verifiedInput then
-            return finishFailure(reason or "Ações do reparo incompletas.")
-        end
-        -- presses nunca é fonte de verdade em operações: só conta o estado observado no servidor.
-        result = RepairOperations.Evaluate(session.Plan, verifiedInput, elapsed, mods)
-    else
-        result = RepairRules.Evaluate(session.Plan, presses, elapsed, mods)
-    end
-    VehicleService.SetRepairing(jobId, false)
-    if not result.Valid then
-        return finishFailure("Reparo inválido (" .. tostring(result.Reason) .. ").")
+    local holding=SettlingRepairs[player.UserId]
+    if type(holding)~="table" or holding.JobId~=jobId
+        or holding.Token~=session.Token then
+        return finishFailure("Reserva da entrega expirada ou inválida.")
     end
     -- Evita reaplicar mesmo uma liquidação preservada de outra sessão de servidor.
     -- Essa checagem ocorre ANTES de retirar peças; cada token de operação é único.
@@ -1645,6 +1610,106 @@ function WorkshopService.FinishRepair(player: Player, jobId: string, presses: an
         .. (friend > 1 and ", bônus de amigo" or "") .. "), +" .. tostring(xp)
         .. " XP. Avaliação: " .. CustomerRules.StarsText(stars) .. " (" .. tostring(stars) .. ")"
         .. (bonus > 0 and (" Bônus do primeiro serviço: +" .. tostring(bonus) .. ".") or "")
+end
+
+function WorkshopService.FinishRepair(player: Player, jobId: string, presses: any)
+    local session = Repairs[player.UserId]
+    if not session or session.JobId ~= jobId then
+        -- A conclusão anterior pode ter sido paga, mas o ACK se perdeu.
+        -- Reenvie o MESMO comprovante; jamais chame as rotinas financeiras outra vez.
+        local token = type(presses) == "table" and presses.Token
+        if SettlementDeliveryRules.Matches(SettlingRepairs[player.UserId], jobId, token) then
+            return false, "Pagamento em processamento: aguardando salvamento dos perfis."
+        end
+        local receipt = RepairReceiptRules.Lookup(RepairReceipts[player.UserId], jobId, token, os.clock())
+            or DataService.GetRepairReceipt(player, jobId, token)
+        if receipt then
+            if eventSender then eventSender(player, "RepairDone", receipt) end
+            return true, "Entrega já concluída. Comprovante recuperado."
+        end
+        return false, "Nenhum reparo em andamento."
+    end
+    -- Todo reparo exige o seu token (inclusive o antigo minijogo de timing).
+    -- Pacote atrasado de outro reparo jamais consome peças da sessão atual.
+    if not RepairSessionRules.MatchesFinish(session, jobId, presses) then
+        return false, "Identificador de sessão inválido."
+    end
+    Repairs[player.UserId] = nil -- sessão de uso único: reenviar não paga duas vezes
+    local now = os.clock()
+    SettlingRepairs[player.UserId] = { JobId = jobId, Token = session.Token, At = now }
+    local function finishFailure(message: string): (boolean, string)
+        SettlingRepairs[player.UserId] = nil
+        VehicleService.SetRepairing(jobId, false)
+        return false, message
+    end
+    if not RepairSessionRules.IsActive(session, now, RepairRules.MaxSessionSeconds) then
+        return finishFailure("O reparo demorou demais e foi cancelado.")
+    end
+    local elapsed = now - session.StartedAt
+    local ok, message, job, defect, service, owner = checkRepairable(player, jobId)
+    if not ok then
+        return finishFailure(message)
+    end
+    if not RepairPrepRules.Ready(job.DefectId, job.PreparationStep) then
+        return finishFailure("A preparação do veículo não foi concluída.")
+    end
+    local mods: RepairRules.Mods = {
+        Margin = math.max(0, DataService.GetSkillLevel(player, defect.Specialization) - defect.RequiredLevel),
+        EquipmentEfficiency = EquipmentUpgradeRules.Efficiency(defect.RequiredEquipment,
+            DataService.GetEquipmentLevel(owner :: Player, defect.RequiredEquipment)),
+        PartReliability = Catalog.AveragePartReliability(defect.Parts),
+        DiagnosisAttempts = job.DiagnoseAttempts or 1,
+    }
+    local result
+    if session.Plan.Kind == "Operations" then
+        local verifiedInput, reason = RepairActionRules.FinalInput(session.Plan, session.Progress)
+        if not verifiedInput then
+            return finishFailure(reason or "Ações do reparo incompletas.")
+        end
+        -- presses nunca é fonte de verdade em operações: só conta o estado observado no servidor.
+        result = RepairOperations.Evaluate(session.Plan, verifiedInput, elapsed, mods)
+    else
+        result = RepairRules.Evaluate(session.Plan, presses, elapsed, mods)
+    end
+    VehicleService.SetRepairing(jobId, false)
+    if not result.Valid then
+        return finishFailure("Reparo inválido (" .. tostring(result.Reason) .. ").")
+    end
+    -- A V1 continua instantânea se os cenários V2 estiverem desligados.
+    -- Depois de homologar V2-11 no Studio, apenas OS previamente
+    -- sorteadas recebem revisão OPCIONAL antes de liquidar o pagamento.
+    local eligible=V2DriveScenarioRules.LiveEnabled
+        and V2QualityDriveRules.CanOffer(
+            job.V2DriveScenario,job.Diagnosed,
+            CollaborationRules.IsWorker(job,player.UserId),
+            employeeReserved(job),job.V2ReworkCount or 0,
+            job.Status=="Completed")
+        and not PendingQuality[player.UserId]
+        and not job.CollaboratorUserId
+        and player.UserId==job.OwnerUserId
+    if eligible then
+        local pending=V2QualityDriveRules.NewPending(jobId,session.Token,result.Quality,now)
+        if pending then
+            pending.Session=session
+            pending.Result=result
+            pending.Job=job
+            pending.Defect=defect
+            pending.Service=service
+            pending.Owner=owner
+            pending.FinalAt=now
+            PendingQuality[player.UserId]=pending
+            job.V2QualityReviewPending=true
+            job.AcceptedAt=os.time() -- evita expiração normal da OS durante o laudo
+            if VehicleService.IsParked(jobId) then
+                local car=VehicleService.DriveInfo(jobId)
+                if car and car:GetAttribute("V2SupportPlaced")==true then
+                    VehicleService.SetSupport(jobId,false)
+                end
+            end
+            return true,"Reparo mecânico validado; pagamento reservado e ainda NÃO creditado. Escolha teste de qualidade ou entrega sem test-drive na aba Ordens."
+        end
+    end
+    return settleEvaluatedRepair(player,jobId,session,result,job,defect,service,owner,now)
 end
 
 -- Atualiza a fachada conforme o total ganho; avisa o jogador quando a oficina evolui de tipo.

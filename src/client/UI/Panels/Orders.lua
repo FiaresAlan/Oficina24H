@@ -346,7 +346,7 @@ function Orders.new(parent: Instance)
                 Size = UDim2.new(1, 0, 0, 0),
             })
         end
-                -- V2-11: progresso consultivo da rota, sem recompensa ou
+        -- V2-11: progresso consultivo da rota, sem recompensa ou
         -- alteração de diagnóstico/avaliação de cliente.
         if type(job.Drive)=="table" then
             local drive=job.Drive
@@ -357,6 +357,41 @@ function Orders.new(parent: Instance)
                 19,{Font=Theme.FontSemi,TextColor3=Theme.Accent,
                     LayoutOrder=4,TextWrapped=true,
                     AutomaticSize=Enum.AutomaticSize.Y,
+                    Size=UDim2.new(1,0,0,0)})
+        end
+        if type(job.DriveScenario)=="table" then
+            local drivePlan=job.DriveScenario
+            if drivePlan.Offered then
+                HudParts.text(info,drivePlan.ConsultationReady
+                    and string.format(
+                        "TESTE DE DIAGNÓSTICO · rodagem opcional de ~%ds · volte para ver o laudo",
+                        drivePlan.TargetSeconds or 65)
+                    or "TESTE DE DIAGNÓSTICO DISPONÍVEL · converse com o cliente para abrir as hipóteses",
+                    19,{Font=Theme.FontSemi,TextColor3=Theme.Accent,
+                        LayoutOrder=4,TextWrapped=true,
+                        AutomaticSize=Enum.AutomaticSize.Y,
+                        Size=UDim2.new(1,0,0,0)})
+            elseif drivePlan.EvidenceReady then
+                HudParts.text(info,
+                    "SINTOMA REPRODUZIDO NA RUA · leia a evidência ao conversar com o cliente.",
+                    19,{Font=Theme.FontSemi,TextColor3=Theme.Accent,
+                        LayoutOrder=4,TextWrapped=true,AutomaticSize=Enum.AutomaticSize.Y,
+                        Size=UDim2.new(1,0,0,0)})
+            end
+        end
+        if type(job.QualityReview)=="table" then
+            local review=job.QualityReview
+            HudParts.text(info,string.format(
+                "PÓS-REPARO · %d%% qualidade · %s · sem custo adicional",
+                review.Quality or 0,
+                review.State=="Offer" and "CONFERÊNCIA OPCIONAL" or
+                    review.State=="Driving" and "TESTE EM RODAGEM" or
+                    review.State=="Approved" and "APROVADO" or
+                    review.State=="Rework" and "RETRABALHO RECOMENDADO" or
+                    "AGUARDANDO"),
+                20,{Font=Theme.FontSemi,TextColor3=review.State=="Rework"
+                    and Theme.Red or Theme.Accent,LayoutOrder=4,
+                    TextWrapped=true,AutomaticSize=Enum.AutomaticSize.Y,
                     Size=UDim2.new(1,0,0,0)})
         end
         local reception = job.Reception or {}
@@ -377,13 +412,70 @@ function Orders.new(parent: Instance)
             })
 		local actions = stack(content, 8, false, 3)
 		actions.Name = "Actions"
-		        if type(job.Drive)=="table" then
+		        local review=job.QualityReview
+        if type(review)=="table" then
+            -- A mecânica de reparo terminou, mas a V1 ainda NÃO cobrou
+            -- peças ou creditou dinheiro: dar ao jogador uma escolha real.
+            if review.State=="Offer" then
+                local inspect=PanelKit.button(actions,
+                    "VERIFICAR REPARO · TEST-DRIVE",
+                    "blue",Vector2.new(270,48),function()
+                        window.Close()
+                        Store.Act("DriveCar",{JobId=job.Id,Mode="Quality"})
+                    end)
+                inspect.LayoutOrder=-6
+                local skip=PanelKit.button(actions,
+                    "ENTREGAR SEM TESTE · SEM MULTA",
+                    "dark",Vector2.new(270,46),function()
+                        Store.Act("QualityReview",{JobId=job.Id,Operation="Skip"})
+                    end)
+                skip.LayoutOrder=-5
+            elseif review.State=="Driving" then
+                local back=PanelKit.button(actions,"DEVOLVER AO BOX",
+                    "orange",Vector2.new(240,48),function()
+                        Store.Act("DriveCar",{JobId=job.Id,Mode="Return"})
+                    end)
+                back.LayoutOrder=-6
+            elseif review.State=="Approved" or review.State=="Rework" then
+                if review.CanRedo then
+                    local redo=PanelKit.button(actions,
+                        "REFAZER REPARO · PEÇAS GRÁTIS",
+                        "orange",Vector2.new(270,48),function()
+                            Store.Act("QualityReview",{JobId=job.Id,Operation="Redo"})
+                        end)
+                    redo.LayoutOrder=-6
+                end
+                local finalize=PanelKit.button(actions,
+                    review.State=="Approved" and "APROVAR E ENTREGAR OS"
+                        or "ENTREGAR COM QUALIDADE ORIGINAL",
+                    "blue",Vector2.new(285,48),function()
+                        Store.Act("QualityReview",{JobId=job.Id,Operation="Finalize"})
+                    end)
+                finalize.LayoutOrder=-5
+            end
+        elseif type(job.Drive)=="table" then
             local drive=job.Drive
+            if type(job.DriveScenario)=="table" and job.DriveScenario.Offered then
+                local scenario=job.DriveScenario
+                local driveButton=PanelKit.button(actions,
+                    "OBSERVAR SINTOMA NA RUA",
+                    "blue",Vector2.new(260,48),function()
+                        if not scenario.ConsultationReady then
+                            Store.Message:Fire(
+                                "Converse primeiro com o cliente para abrir a investigação.",
+                                false,"")
+                            return
+                        end
+                        window.Close()
+                        Store.Act("DriveCar",{JobId=job.Id,Mode="Diagnosis"})
+                    end)
+                driveButton.LayoutOrder=-4
+            end
             local driveButton=PanelKit.button(actions,
                 drive.Active and "DEVOLVER CARRO AO BOX"
-                    or "DIRIGIR HATCH · TESTE PILOTO",
-                drive.Active and "orange" or "blue",
-                Vector2.new(240,48),function()
+                    or "DIRIGIR HATCH · TESTE LIVRE",
+                drive.Active and "orange" or "dark",
+                Vector2.new(255,46),function()
                     if drive.Active then
                         Store.Act("DriveCar",{JobId=job.Id,Mode="Return"})
                     else
@@ -532,6 +624,11 @@ function Orders.new(parent: Instance)
                 tostring(job.Mechanics and job.Mechanics.Ready),
                 tostring(job.Drive and job.Drive.Active),
                 tostring(job.Drive and job.Drive.Passed),
+                tostring(job.DriveScenario and job.DriveScenario.Offered),
+                tostring(job.DriveScenario and job.DriveScenario.ConsultationReady),
+                tostring(job.DriveScenario and job.DriveScenario.EvidenceReady),
+                tostring(job.QualityReview and job.QualityReview.State),
+                tostring(job.QualityReview and job.QualityReview.Quality),
                 tostring(job.Procedure and job.Procedure.Completed),
                 tostring(job.Procedure and job.Procedure.StepName),
                 tostring(job.EmployeeAssignedSlot),

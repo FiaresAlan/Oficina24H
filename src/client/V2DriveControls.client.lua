@@ -12,6 +12,8 @@ local player=Players.LocalPlayer
 local remotes=ReplicatedStorage:WaitForChild("OficinaRemotes")
 local driveInput=remotes:WaitForChild("DriveInput") :: RemoteEvent
 local Store=require(script.Parent.UI.Store)
+local SoundIds=require(ReplicatedStorage.Shared.SoundIds)
+local Haptics=game:GetService("HapticService")
 
 local currentSeat: VehicleSeat?=nil
 local currentJob: string?=nil
@@ -24,6 +26,8 @@ local prevFov: number?=nil
 local touchState={Forward=false,Backward=false,Left=false,Right=false}
 local touchPresses: {[InputObject]: string}={}
 local touchEndConnection: RBXScriptConnection?=nil
+local cueText=""
+local lastCueAt=-math.huge
 
 local function hudForDrive(): (ScreenGui,TextLabel)
     local gui=Instance.new("ScreenGui")
@@ -60,6 +64,7 @@ local function hudForDrive(): (ScreenGui,TextLabel)
 end
 
 local function stop()
+    cueText=""
     if inputConnection then inputConnection:Disconnect() end
     inputConnection=nil
     if touchEndConnection then touchEndConnection:Disconnect() end
@@ -223,8 +228,59 @@ local function start(seat: VehicleSeat)
         local routeDone=rig:GetAttribute("RouteDone")==true
         label.Text=string.format("HATCH PILOTO · %d studs/s\nCHECKPOINTS %d/4%s · VOLTAR: BOX",
             math.floor(studsPerSecond+0.5),passed,routeDone and " · ROTA OK" or "")
+        if cueText~="" and os.clock()-lastCueAt<8 then
+            label.Text=label.Text.."\nPAINEL: "..cueText
+        end
     end)
 end
+
+-- Evidência sensorial apenas APÓS telemetria aceita pelo servidor.
+-- Sinal multimodal: aviso textual legível, luz âmbar, som licenciado e
+-- vibração opcional. Nenhuma dessas saídas concede recompensa.
+Store.DriveCue.Event:Connect(function(payload: any)
+    if type(payload)~="table" or not currentSeat or not currentJob then return end
+    local seat=currentSeat
+    local text=payload.Text
+    if type(text)~="string" or #text>240 then return end
+    cueText=text
+    lastCueAt=os.clock()
+    local panel=hud and hud:FindFirstChild("DriveStatus")
+    if panel and panel:IsA("Frame") then
+        panel.Size=UDim2.new(0,330,0,126)
+        panel.BackgroundColor3=payload.Color=="Red"
+            and Color3.fromRGB(103,37,39) or Color3.fromRGB(102,73,30)
+        local readout=panel:FindFirstChild("SpeedAndCheckpoints")
+        if readout and readout:IsA("TextLabel") then readout.TextSize=16 end
+        task.delay(8,function()
+            if currentSeat==seat and panel.Parent then
+                panel.BackgroundColor3=Color3.fromRGB(20,30,42)
+                panel.Size=UDim2.new(0,280,0,72)
+            end
+        end)
+    end
+    local soundId=type(payload.Sound)=="string" and SoundIds[payload.Sound]
+    if type(soundId)=="string" and string.sub(soundId,1,13)=="rbxassetid://" then
+        local sound=Instance.new("Sound")
+        sound.Name="V2DriveSignalSfx"
+        sound.SoundId=soundId
+        sound.Volume=.3
+        sound.RollOffMaxDistance=24
+        sound.Parent=seat
+        sound:Play()
+        task.delay(2.5,function() sound:Destroy() end)
+    end
+    pcall(function()
+        if Haptics:IsMotorSupported(Enum.UserInputType.Gamepad1,
+            Enum.VibrationMotor.Small) then
+            Haptics:SetMotor(Enum.UserInputType.Gamepad1,
+                Enum.VibrationMotor.Small,.55)
+            task.delay(.32,function()
+                pcall(function() Haptics:SetMotor(Enum.UserInputType.Gamepad1,
+                    Enum.VibrationMotor.Small,0) end)
+            end)
+        end
+    end)
+end)
 
 local function listen(character: Model)
     if characterConnection then characterConnection:Disconnect() end

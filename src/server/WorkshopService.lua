@@ -1092,6 +1092,9 @@ function WorkshopService.SetRepairAssist(player: Player, value: boolean)
 end
 
 function WorkshopService.StartRepair(player: Player, jobId: string, assist: boolean?)
+    if V2DriveService.BusyJob(jobId) then
+        return false,"Não é permitido reparar enquanto o carro está em test-drive."
+    end
     if SettlingRepairs[player.UserId] then
         return false, "Há um pagamento anterior aguardando confirmação. Aguarde antes de iniciar outra OS."
     end
@@ -1754,6 +1757,9 @@ function WorkshopService.Checkout(player: Player, items: any)
 end
 
 function WorkshopService.InviteWorker(owner: Player, workerUserId: number, jobId: string, splitPercent: number)
+    if V2DriveService.BusyJob(jobId) then
+        return false,"O carro está em test-drive; devolva-o antes de convidar mecânico."
+    end
     local job = Jobs[jobId]
     if not job or job.OwnerUserId ~= owner.UserId or job.Status ~= "InProgress" then
         return false, "Ordem inválida para contratação."
@@ -1810,6 +1816,9 @@ function WorkshopService.RespondInvite(worker: Player, inviteId: string, accepte
     end
 
     local job = Jobs[invite.JobId]
+    if V2DriveService.BusyJob(invite.JobId) then
+        return false,"O carro está em condução; aguarde o retorno ao box."
+    end
     if not job or job.Status ~= "InProgress" or job.OwnerUserId ~= invite.OwnerUserId or not job.Diagnosed then
         invite.Status = "Expired"
         return false, "A ordem não está mais disponível."
@@ -1888,6 +1897,9 @@ local function confirmNpcSave(owner: Player, jobId: string, token: string, messa
 end
 
 function WorkshopService.HireNpc(player: Player, jobId: string)
+    if V2DriveService.BusyJob(jobId) then
+        return false,"Devolva o carro ao box antes de contratar um mecânico NPC."
+    end
     local job = Jobs[jobId]
     if not job or job.OwnerUserId ~= player.UserId or job.Status ~= "InProgress" then
         return false, "Ordem inválida."
@@ -2220,6 +2232,9 @@ end)
 -- Construtora do bairro: amplia o prédio para o próximo nível (WorkshopLevels.Check: moedas, nível, reputação, XP e
 -- equipamentos). Só com os boxes vazios (a obra não derruba carro de cliente) e estando na Construtora.
 function WorkshopService.UpgradeWorkshop(player: Player, confirm: boolean?)
+    if V2DriveService.BusyFor(player.UserId) then
+        return false,"Devolva o carro ao box antes de reconstruir a oficina."
+    end
     local profile = DataService.Get(player)
     local plot = PlotService.GetPlot(player)
     if not profile or not plot or not getWorkshop(player) then

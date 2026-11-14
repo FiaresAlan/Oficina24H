@@ -918,3 +918,10 @@ Detalhes em `docs/AUDITORIA_GERAL.md`. Resumo:
 - Recuperação C13 em sessão real: a OS travada foi paga no login seguinte (282 → 314, XP 30 → 60, claim 1 → 0), sem duplicar o dono.
 - E1 (contratado sai) e E2 (dono sai): sem pagamento indevido, ordem volta ao dono / cancelada, sem ordem fantasma. Reconexão idêntica 3 vezes. Servidor sem erros.
 - Não coberto: 2 servidores com a mesma conta, latência real e DataStore de produção.
+
+## 13/11/2026 — Homologação V1, rodada 4: G1 completo (assets, áudio, sprites, sockets)
+
+- Licenças não verificadas, a pedido do proprietário. Inventário do place contra `prop_ids.json` + `city_ids.json`: 81/81, 0 ausentes, 0 extras; 21/21 carros.
+- Áudio: 16/16 `SoundIds` carregam; em jogo todos ouvidos na fase certa (Hiss só após diagnóstico de motor, AirWrench só no reparo de pneu). Sprites do HUD 69/69. Conteúdo no cliente 3.923 + 124, 0 falhas.
+- Sockets: os 21 carros têm dimensões declaradas = reais e os 14 pontos a <= 0,6 stud da carroceria (deslocamentos pelas dimensões bastam).
+- Malha 1037633864 do `Veiculo_Picape_C1500` (não aprovada) trocada por bloco liso de mesmo tamanho/cor/posição, solda religada, sem upload. `RunAllTests` 2035/0. Place salvo (v103), nada publicado.

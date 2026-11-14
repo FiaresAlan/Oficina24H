@@ -36,4 +36,6 @@ Executado num **place de QA só com código** (paridade 144/144 com o repositór
 
 **Rodada 3 (G3, 2 clientes reais no Studio):** divisão 76 + 32 = 108, ataques recusados, recuperação C13 paga o contratado sozinha no login, saída de contratado e de dono sem pagamento indevido, reconexão idêntica. Um P1 de consistência corrigido (`WorkerSettlementProofRules` recusava ids negativos). **G3 homologado**; faltam G4 em aparelho físico e a decisão de publicar.
 
+**Rodada 4 (G1 completo):** inventário 81/81 contra os manifestos, 16/16 áudios carregando e ouvidos em jogo, 69/69 sprites, sockets/pontos dos 21 carros sobre a carroceria, peça quebrada do C1500 trocada por bloco liso (sem upload), `RunAllTests` 2035/0. **G1 homologado** (licenças fora do escopo a pedido do proprietário).
+
 **Estado anterior (C31):** G1–G5 ainda não homologados. Os assets estão baixados no computador, mas **não importados**; as novas suítes de Luau foram preparadas, **não executadas** no Studio. O checklist pode ter mais de 100 caixas abertas sem que sejam 100 fases sequenciais.

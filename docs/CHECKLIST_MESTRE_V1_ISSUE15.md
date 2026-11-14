@@ -5,7 +5,7 @@
 **Revisado em:** 13/11/2026 (homologação V1 — rodada 1 no Studio)  
 **Último desenvolvimento integrado:** homologação V1 rodadas 1 e 2 ([relatório](https://github.com/FiaresAlan/Oficina24H/blob/main/docs/HOMOLOGACAO_V1_2026-11-13.md)). Antes: [V1 C31 — auditoria estrutural de modelos](https://github.com/FiaresAlan/Oficina24H/commit/0ef749b5c56d769fac46c2bea9262d5f65e7efba) e [C30 — sanitização preventiva](https://github.com/FiaresAlan/Oficina24H/commit/a972b386454d60456dac56f61bae3578c96ad0cf) em `main` (13/11/2026).  
 **Branch principal de desenvolvimento:** [`main`](https://github.com/FiaresAlan/Oficina24H/tree/main), atualizada por fast-forward com V1 C29 (5 commits). Homologação no Studio continua pendente.  
-**`main` atual:** `915e4e6` — A1–C31 + homologação rodadas 1–3; [CI C30 aprovado](https://github.com/FiaresAlan/Oficina24H/actions/runs/43478961090) e [CI C31 aprovado](https://github.com/FiaresAlan/Oficina24H/actions/runs/43479613749). **Rodadas 1–3 no Studio: QA 2014/0 + 15 serviços; place original 2029/0; G3 com 2 clientes reais OK. Aparelho físico e publicação pendentes.**
+**`main`:** `128be45` + docs — A1–C31 + homologação 1–4; [CI C30 aprovado](https://github.com/FiaresAlan/Oficina24H/actions/runs/43478961090) e [CI C31 aprovado](https://github.com/FiaresAlan/Oficina24H/actions/runs/43479613749). **Rodadas 1–4 no Studio: place original `RunAllTests` 2035/0; G1, G2 e G3 homologados. Aparelho físico e publicação pendentes.**
 
 > **Como ler:** `[x]` = o item foi comprovadamente registrado no GitHub (código ou documentação); `[ ]` = ainda não cumprido ou não verificado. **Código escrito não é funcionalidade aprovada em Roblox Studio.** O texto é atualizado por edições desta issue/commits, não automaticamente nem em background. Clique em **History** (edições) ou recarregue a página para conferir os check-ins.
 
@@ -492,13 +492,13 @@ Os números 01–14 seguem o plano do Claude. Os códigos A1, A2, B1 etc. são *
 - [x] HUD: pads, METAS sobre o guia, toque < 44 px, guia vazando.
 - [x] CI verde na `main` `4e39f3a`; contratos 231/231.
 - [x] Place original (backup antes): `RunAllTests` 2029/0, auditoria 17/0, 3 serviços reais, 59,9 fps no mapa; 2 P1 corrigidos (`PrimaryPart` das máquinas, NPC tomando a OS do dono).
-- [x] Pacotes baixados conferidos: nada faltava no place, nenhum upload feito.
-- [x] 2 clientes reais: divisão 76+32=108, ataques recusados, C13 pagou sozinha no login, saída de contratado e de dono, reconexão idêntica; P1 corrigido (`WorkerSettlementProofRules` x ids negativos).
+- [x] Pacotes baixados conferidos: nada faltava, nenhum upload feito. **G1 completo (rodada 4):** inventário 81/81 (manifestos), áudio 16/16 ouvido em jogo, sprites 69/69, sockets/pontos dos 21 carros sobre a carroceria, malha quebrada do C1500 trocada por bloco liso; `RunAllTests` 2035/0.
+- [x] 2 clientes reais: divisão 76+32=108, ataques recusados, C13 pagou no login, saídas e reconexão OK; P1 corrigido (`WorkerSettlementProofRules` x ids negativos).
 - [ ] Celular e gamepad físicos, FPS real, StreamingEnabled.
-- [ ] Licenças e decisão de publicar.
+- [ ] Decisão de publicar (licenças: confirmadas pelo proprietário, não verificadas).
 
 ### Portões resumidos para encerrar a V1 (não substituir histórico; todos ainda pendentes)
-- [ ] **G1 Assets:** estrutura homologada no place real (inventário completo, auditoria 17/0); faltam licenças (Corvette, sprites HUD, CC BY) e áudio.
+- [x] **G1 Assets:** homologado no place real (inventário 81/81, auditoria 17/0, áudio 16/16, sprites 69/69, sockets OK). Licenças fora do escopo.
 - [x] **G2 Atendimento:** `RunAllTests` 2029/0 e `StudioPlaceAudit` 17/0 no place original; 3 serviços reais OK e 15/15 no place de QA.
 - [x] **G3 Multiplayer/DataStore:** homologado com 2 clientes reais (claims, idempotência, desconexões, economia). Faltam 2 servidores simultâneos e latência real.
 - [ ] **G4 UX/performance:** mobile, gamepad, PC, StreamingEnabled, FPS, memória e acessibilidade. *(parcial)*

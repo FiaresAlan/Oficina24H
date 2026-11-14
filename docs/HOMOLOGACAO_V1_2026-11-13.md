@@ -64,6 +64,25 @@ concordar e o teste padrão de 2 jogadores do Studio ficava inutilizado. Corrigi
 **Não coberto:** duas instâncias de **servidor** com a mesma conta (o Studio local não cria; a trava de sessão está em
 `PersistenceTest`, DataStore simulado com 2 servidores), latência real de rede e o DataStore de **produção**.
 
+## 1d. Rodada 4 — G1 completo no place original (assets, áudio, sprites, sockets)
+
+Licenças **não verificadas por decisão do proprietário** ("já fiz isto"); o resto do G1 foi executado em `Oficina24H_Teste`.
+
+| Verificação | Resultado |
+|---|---|
+| Inventário contra os manifestos (`pipeline/prop_ids.json` 57 + `city_ids.json` 24) | **81/81 nomes na pasta certa** (`Cenario`, `Equipamentos`, `Oficina`), 0 ausentes, 0 extras fora do manifesto |
+| Carros do catálogo | 21/21 em `Veiculos` |
+| Pacotes baixados (`assets/Assets v1 Baixados`) | nada faltava no place, **nenhuma malha enviada**; as 11 máquinas vêm do pacote CC0 "Car Repair Garage" e os `Cid_*` da cidade CGTrader |
+| **Áudio** (`SoundIds`) | **16/16 carregam** (7 efeitos, 3 ambientes, 6 músicas), durações reais de 1,7 s a 200 s |
+| Áudio em jogo (escutador no cliente durante atendimentos completos) | **todos os 16 ouvidos na hora certa**: motor ao estacionar, elevador e catraca no preparo/reparo, faíscas e zumbido no defeito elétrico, **Hiss só depois do diagnóstico de motor**, **AirWrench só no reparo de pneu**, 3 ambientes e música (vol. 0,18) |
+| **Sprites do HUD** (`HudAssets`) | **69/69 carregam** |
+| Conteúdo dos carros e máquinas no cliente em jogo | 3.923 + 124 conteúdos, **0 falhas** |
+| **Sockets dos 21 carros** (aviso "sem sockets nativos") | o jogo usa deslocamentos pelas dimensões; conferi cada carro: **dimensões declaradas = geometria real (0% de erro) em todos, centrados na `Raiz`, e os 14 pontos (9 de inspeção + 5 de preparo) caem a ≤ 0,6 stud da carroceria**. Sockets nativos continuam opcionais |
+| Peça quebrada do `Veiculo_Picape_C1500` | malha `1037633864` ("não aprovada para este solicitante", 1 de 97 peças, bloco cinza do cofre do motor) trocada por um bloco liso de mesmo tamanho, cor, material e posição, com a solda religada, na cópia de `ServerStorage` e na do bairro. Sem upload. Marcada com o atributo `SubstituiMesh` |
+| `RunAllTests` depois da troca | **PASSOU: 2035 OK, 0 falhas** |
+
+**Observação de comportamento (não é defeito, C17):** com 2 carros esperando, o mecânico NPC assume o carro novo assim que ele estaciona, antes de o dono falar com o cliente (a regra "ajuda imediata com 2 carros"). A proteção `OwnerTouchedAt` só vale depois do primeiro toque do dono.
+
 ## 2. Suítes automáticas
 
 | Execução | Resultado |
@@ -156,14 +175,14 @@ quadro 19 ms), 862 peças no Workspace. **Não representa o place real** (cidade
 
 | Portão | Situação | O que falta |
 |---|---|---|
-| **G1 Assets** | **Estrutura homologada no place original; licenças abertas** | Inventário completo, auditoria 17/0 e conteúdo 5.946/1 P3. Faltam: licença do `Veiculo_VIP_Corvette`, dos sprites do HUD e créditos CC BY; decidir sobre a peça do C1500 |
+| **G1 Assets** | **Homologado no place original** | Inventário 81/81, áudio 16/16 em jogo, sprites 69/69, sockets/pontos dos 21 carros OK, peça do C1500 resolvida. Licenças fora do escopo a pedido do proprietário |
 | **G2 Atendimento** | **Homologado no place original (amostra)** | `RunAllTests` 2029/0 e 3 serviços reais OK; os 15 já passaram no place de QA. Opcional: repetir os 12 restantes com modelos reais |
 | **G3 Multiplayer/DataStore** | **Homologado com 2 clientes reais no Studio** | Faltam só 2 servidores simultâneos com a mesma conta, latência real e o DataStore de produção (não testável localmente) |
 | **G4 UX/Desempenho** | **HUD no simulador + 59,9 fps no mapa real**; aberto em aparelho físico | Celular e gamepad físicos, memória do servidor (~3,8 GB no Studio), `StreamingEnabled` |
 | **G5 Publicação** | **Aberto** | Segurança revisada e corrigida (sem P0); faltam licenças (sprites do HUD, esportivo, CC BY), privacidade e a **sua decisão** de publicar |
 
-**Conclusão honesta:** a V1 **ainda não está pronta para publicação**. G1 (estrutura), G2 e G3 estão homologados no
-Studio; sobram G4 em aparelho físico e a **sua** decisão de publicar (licenças: confirmadas por você, não verifiquei).
+**Conclusão honesta:** a V1 **ainda não está pronta para publicação**. G1, G2 e G3 estão homologados no Studio;
+sobram G4 em aparelho físico e a **sua** decisão de publicar (licenças: confirmadas por você, não verifiquei).
 
 ## 8. O que você precisa fazer (passo a passo)
 

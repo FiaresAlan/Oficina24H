@@ -27,6 +27,9 @@ jobs:
       - name: Check catalogue, remotes and tests
         run: python3 tools/ci/verify_contracts.py
 
+      - name: Audit complete Luau module graph, tests and private server keys
+        run: python3 tools/ci/audit_repo_integrity.py
+
       - name: Validate fail-closed release gate (informational; never publishes)
         run: |
           python3 tools/ci/release_gate.py --self-test

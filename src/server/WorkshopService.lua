@@ -1711,6 +1711,12 @@ function WorkshopService.FinishRepair(player: Player, jobId: string, presses: an
             PendingQuality[player.UserId]=pending
             job.V2QualityReviewPending=true
             job.AcceptedAt=os.time() -- evita expiração normal da OS durante o laudo
+            if eventSender then
+                eventSender(player,"RepairQualityPending",{
+                    JobId=jobId,Token=session.Token,Quality=result.Quality,
+                    Message="Reparo validado. Avaliação de rodagem é opcional antes da entrega.",
+                })
+            end
             if VehicleService.IsParked(jobId) then
                 local car=VehicleService.DriveInfo(jobId)
                 if car and car:GetAttribute("V2SupportPlaced")==true then

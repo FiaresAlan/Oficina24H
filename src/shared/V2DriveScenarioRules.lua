@@ -124,10 +124,12 @@ function R.DiagnosticEvidence(plan:any,defect:any,outcome:any):any
         or not outcome.Complete or outcome.Reproduced~=true then return nil end
     local signal=R.Signals[defect]
     if not signal then return nil end
+    local elapsed=type(outcome.Elapsed)=="number"
+        and outcome.Elapsed==outcome.Elapsed and outcome.Elapsed or 0
     return {
         Id="DriveObservation",Name="Teste de rodagem",
         Text=signal.Cue,Family=signal.Family,
-        Time=math.floor(outcome.Elapsed or 0),
+        Time=math.max(0,math.floor(elapsed)),
     }
 end
 

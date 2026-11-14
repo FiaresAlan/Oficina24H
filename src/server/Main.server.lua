@@ -14,10 +14,18 @@ local RivalService = require(script.Parent.RivalService)
 local ProgressService = require(script.Parent.ProgressService)
 local ContractService = require(script.Parent.ContractService)
 local SnapshotCacheRules = require(ReplicatedStorage.Shared.SnapshotCacheRules)
+local RequestBudgetRules = require(ReplicatedStorage.Shared.RequestBudgetRules)
 local V2RemoteSecurityRules = require(ReplicatedStorage.Shared.V2RemoteSecurityRules)
 local V2NeighborhoodAssets = require(script.Parent.V2NeighborhoodAssets)
 
 local snapshotStates: { [number]: any } = {}
+-- V1 G5 + V2-15: limite global de remotes continua; este orçamento
+-- adicional impede reconstruções caras disparadas por várias invalidações.
+local REPAIR_ACTIONS_PER_SECOND=30
+local SNAPSHOT_BUILDS_PER_SECOND=8
+local repairActionBudget:{[number]:any}={}
+local snapshotBuildBudget:{[number]:any}={}
+local lastBuiltSnapshot:{[number]:any}={}
 local function invalidateSnapshot(userId: number)
     SnapshotCacheRules.Invalidate(snapshotStates, userId)
 end
@@ -88,6 +96,13 @@ if game:GetService("RunService"):IsStudio() then
             return ContractService.QaOfferNow(player)
         elseif command == "Dispatch" and type(arg) == "number" then
             return WorkshopService.DispatchCustomers(arg)
+        elseif command == "ForceJob" and type(arg) == "string" then
+            return WorkshopService._createJobForTesting(player,arg)
+                or "defeito inválido ou sem oficina"
+        elseif command == "SkillXP" and type(arg) == "table"
+            and type(arg.Spec) == "string" and type(arg.Amount) == "number" then
+            DataService.AddSkillXP(player,arg.Spec,arg.Amount)
+            return DataService.GetSkillLevel(player,arg.Spec)
         elseif command == "AgeJobs" then
             return WorkshopService._ageJobsForTesting(player.UserId, 1000)
         elseif command == "Profile" then
@@ -281,7 +296,14 @@ snapshotFunction.OnServerInvoke = function(player: Player)
     end
     -- C27: cada ação invalidada obriga uma montagem nova, sem segunda cópia velha.
     return SnapshotCacheRules.Get(snapshotStates, player.UserId, os.clock(), function()
-        return WorkshopService.GetSnapshot(player)
+        local previous=lastBuiltSnapshot[player.UserId]
+        if previous~=nil and not RequestBudgetRules.Take(snapshotBuildBudget,
+            player.UserId,os.clock(),SNAPSHOT_BUILDS_PER_SECOND) then
+            return previous -- manter a última montagem válida; nunca inventar um snapshot
+        end
+        local snapshot=WorkshopService.GetSnapshot(player)
+        lastBuiltSnapshot[player.UserId]=snapshot
+        return snapshot
     end)
 end
 
@@ -310,14 +332,18 @@ actionEvent.OnServerEvent:Connect(function(player: Player, action: any, payload:
     -- RepairAction tem confirmação de revisão e validação própria no WorkshopService.
     -- Não deixa o throttling genérico descartar silenciosamente um clique do jogador.
     if action == "RepairAction" then
+        if not RequestBudgetRules.Take(repairActionBudget,player.UserId,
+            os.clock(),REPAIR_ACTIONS_PER_SECOND) then return end
         local success, message, revision = false, "Comando inválido.", 0
         if type(payload.JobId) == "string" and type(payload.Command) == "table" then
             success, message, revision = WorkshopService.RepairAction(player, payload.JobId, payload.Token, payload.Command)
         end
         actionEvent:FireClient(player, "RepairActionAck", {
-            JobId = payload.JobId, Token = payload.Token, Accepted = success, Message = message,
-            Revision = revision,
-            RequestRevision = type(payload.Command) == "table" and payload.Command.Revision or nil,
+            JobId = RequestBudgetRules.EchoString(payload.JobId),
+            Token = RequestBudgetRules.EchoString(payload.Token),
+            Accepted = success, Message = message, Revision = revision,
+            RequestRevision = type(payload.Command) == "table"
+                and RequestBudgetRules.EchoNumber(payload.Command.Revision) or nil,
         })
         return
     end
@@ -456,6 +482,9 @@ Players.PlayerRemoving:Connect(function(player)
     lastOutcomeQuery[player.UserId] = nil
     actionBudgets[player.UserId]=nil
     snapshotBudgets[player.UserId]=nil
+    RequestBudgetRules.Clear(repairActionBudget,player.UserId)
+    RequestBudgetRules.Clear(snapshotBuildBudget,player.UserId)
+    lastBuiltSnapshot[player.UserId]=nil
     SnapshotCacheRules.Clear(snapshotStates, player.UserId)
     V2DriveService.CancelPlayer(player.UserId)
     WorkshopService.PlayerLeft(player.UserId)

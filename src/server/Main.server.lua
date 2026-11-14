@@ -14,6 +14,7 @@ local RivalService = require(script.Parent.RivalService)
 local ProgressService = require(script.Parent.ProgressService)
 local ContractService = require(script.Parent.ContractService)
 local SnapshotCacheRules = require(ReplicatedStorage.Shared.SnapshotCacheRules)
+local V2RemoteSecurityRules = require(ReplicatedStorage.Shared.V2RemoteSecurityRules)
 local V2NeighborhoodAssets = require(script.Parent.V2NeighborhoodAssets)
 
 local snapshotStates: { [number]: any } = {}
@@ -100,6 +101,10 @@ end
 -- Limitador por JOGADOR e por AÇÃO (uma ação rápida não descarta outra diferente). Só ações conhecidas entram na tabela.
 local lastActionAt: {[number]: {[string]: number}} = {}
 local lastOutcomeQuery: {[number]: number} = {}
+-- V2-15: orçamento TRANSVERSAL por jogador (não só por ação).
+-- Evita spam de 40 tipos de ações distintas e GetSnapshot a cada frame.
+local actionBudgets:{[number]:any}={}
+local snapshotBudgets:{[number]:any}={}
 local KNOWN_ACTIONS: {[string]: boolean} = {}
 for _, name in ipairs({ "ClaimWorkshop", "GenerateCustomer", "DeclineJob", "AcceptJob", "DiagnoseJob", "ExamineJob", "CompleteJob", "FinishRepair", "RepairAction", "CheckRepairResult", "RepairPrefs", "CancelRepair", "SkipOnboarding", "BuyEquipment", "SetPrice", "BuyPart", "Checkout", "HireNpc", "InviteWorker", "CompleteCollaborativeJob", "RespondInvite", "MoveBag", "UpgradeWorkshop", "ClaimDaily", "ClaimMission", "RedeemCode", "SetJobPriority", "ScheduleJob", "DiscountJob", "RequestJobSupplies", "ClearSupplyRequests", "SetStaffPolicy", "AssignStaffJob", "ClearStaffJob", "UsedMarket", "DriveCar", "QualityReview", "NegotiateFleet" }) do
     KNOWN_ACTIONS[name] = true
@@ -264,6 +269,12 @@ end)
 
 -- C27: cache de 0,4 s por jogador, invalidado por geração após ações. Sem segundo cache obsoleto.
 snapshotFunction.OnServerInvoke = function(player: Player)
+    local accepted,bucket=V2RemoteSecurityRules.ConsumeSnapshot(
+        snapshotBudgets[player.UserId],os.clock())
+    snapshotBudgets[player.UserId]=bucket
+    if not accepted then
+        return {Ready=false,Throttled=true} -- Store.Refresh ignora até próxima consulta
+    end
     local profile = DataService.Get(player)
     if not profile then
         return { Ready = false }
@@ -278,6 +289,15 @@ actionEvent.OnServerEvent:Connect(function(player: Player, action: any, payload:
     if type(action) ~= "string" or type(payload) ~= "table" then return end
 
     if not KNOWN_ACTIONS[action] then return end
+    -- Rejeitar árvores enormes, valores NaN/infinitos, Instances e ciclos
+    -- ANTES de qualquer alteração de moedas/OS/loja; a conta de nós
+    -- pára na entrada 121 sem percorrer conteúdo ilimitado.
+    local accepted,bucket=V2RemoteSecurityRules.ConsumeAction(
+        actionBudgets[player.UserId],os.clock())
+    actionBudgets[player.UserId]=bucket
+    if not accepted then return end
+    local valid=V2RemoteSecurityRules.PayloadValid(payload)
+    if not valid then return end
     if action == "CheckRepairResult" then
         -- Consulta somente leitura: nunca chama FinishRepair e não limpa o cache do perfil.
         local now = os.clock()
@@ -432,6 +452,8 @@ end
 Players.PlayerRemoving:Connect(function(player)
     lastActionAt[player.UserId] = nil
     lastOutcomeQuery[player.UserId] = nil
+    actionBudgets[player.UserId]=nil
+    snapshotBudgets[player.UserId]=nil
     SnapshotCacheRules.Clear(snapshotStates, player.UserId)
     V2DriveService.CancelPlayer(player.UserId)
     WorkshopService.PlayerLeft(player.UserId)

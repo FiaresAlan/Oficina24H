@@ -11,6 +11,7 @@ local ReplicatedStorage=game:GetService("ReplicatedStorage")
 local Rules=require(ReplicatedStorage.Shared.V2DriveRules)
 local ScenarioRules=require(ReplicatedStorage.Shared.V2DriveScenarioRules)
 local Safety=require(ReplicatedStorage.Shared.AssetSafetyRules)
+local VisualBudget=require(ReplicatedStorage.Shared.V2VisualBudgetRules)
 local Catalog=require(ReplicatedStorage.Shared.Catalog)
 local VehicleService=require(script.Parent.VehicleService)
 local PlotService=require(script.Parent.PlotService)
@@ -82,7 +83,8 @@ local function visualShell(rig: Model,car: Model,chassis: BasePart)
     local modelName=Catalog.VehicleModels[Rules.PilotVehicle]
     local template=vehicles and modelName and vehicles:FindFirstChild(modelName)
     local made=false
-    if template and template:IsA("Model") and template.Archivable then
+    local allowed=template and VisualBudget.PreflightTemplate(template,"Drive")
+    if template and allowed and template.Archivable then
         local model=template:Clone()
         Safety.StripScripts(model)
         local parts={}
@@ -98,7 +100,7 @@ local function visualShell(rig: Model,car: Model,chassis: BasePart)
         -- Limite físico mesmo diante de asset enorme do Creator Store:
         -- não gerar dezenas de massas/juntas no carro piloto.
         local size=model:GetExtentsSize()
-        if #parts>0 and #parts<=95
+        if #parts>0 and #parts<=VisualBudget.MaxDriveShellParts
             and size.X<50 and size.Y<25 and size.Z<60 then
             model.Name="VisualSanitizado"
             model:PivotTo(chassis.CFrame*CFrame.new(0,-3.3,0))
@@ -352,6 +354,11 @@ end
 function Service.Start(player: Player,jobId: string,context: any?): (boolean,string)
     if sessions[jobId] or byDriver[player.UserId] then
         return false,"Já há uma sessão de direção ativa."
+    end
+    local active=0
+    for _ in pairs(sessions) do active+=1 end
+    if not VisualBudget.CanStartDrive(active) then
+        return false,"Limite temporário de carros em teste no servidor; tente após a saída de outro motorista."
     end
     local car,bay=VehicleService.DriveInfo(jobId)
     if not car or not bay or not Rules.PilotEligible(Rules.PilotVehicle,

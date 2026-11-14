@@ -1774,10 +1774,13 @@ function WorkshopService.QualityReview(player: Player,jobId: any,
     -- nem pune por problema de rede. Após reprovação há escolha clara
     -- de retrabalho OU entrega com a qualidade original registrada.
     PendingQuality[player.UserId]=nil
-    job.V2QualityReviewPending=nil
+    -- Continuar bloqueando contratação e dispatcher enquanto a
+    -- liquidação V1 pode ceder execução em Save(worker)/Save(owner).
+    -- A bandeira só sai DEPOIS da rotina financeira terminar.
     local success,message=settleEvaluatedRepair(player,jobId,
         pending.Session,pending.Result,pending.Job,
         pending.Defect,pending.Service,pending.Owner,pending.FinalAt)
+    job.V2QualityReviewPending=nil
     if not success then
         -- Falha antes da cobrança libera o caminho de novo reparo;
         -- qualquer claim já criada continua coberta pelos comprovantes V1.
@@ -2478,6 +2481,9 @@ end)
 -- Construtora do bairro: amplia o prédio para o próximo nível (WorkshopLevels.Check: moedas, nível, reputação, XP e
 -- equipamentos). Só com os boxes vazios (a obra não derruba carro de cliente) e estando na Construtora.
 function WorkshopService.UpgradeWorkshop(player: Player, confirm: boolean?)
+    if PendingQuality[player.UserId] then
+        return false,"Finalize a conferência do reparo antes de reconstruir a oficina."
+    end
     if V2DriveService.BusyFor(player.UserId) then
         return false,"Devolva o carro ao box antes de reconstruir a oficina."
     end

@@ -94,6 +94,28 @@ function R.Controls(throttle: any, steer: any): (number, number)
         -turn*R.SteerAngle
 end
 
+-- Encerrar sessão quando perder o ocupante, respawn, rede ruim que
+-- impede assento, ou duração; independente de remotos ou Touched.
+function R.SessionViolation(now: any,started: any,
+    driverAvailable: any,hasCorrectSeat: any,
+    everSeated: any,seatLostAt: any): string?
+    if not finite(now) or not finite(started) or now<started then
+        return "Relógio de sessão inválido."
+    end
+    if not driverAvailable then return "Motorista indisponível." end
+    if now-started>R.MaximumSeconds then return "Limite do test-drive atingido." end
+    if not hasCorrectSeat then
+        if not everSeated and now-started>R.SeatGraceSeconds then
+            return "Motorista não conseguiu sentar."
+        end
+        if everSeated and finite(seatLostAt)
+            and now-seatLostAt>R.OutOfSeatGraceSeconds then
+            return "Motorista saiu do assento."
+        end
+    end
+    return nil
+end
+
 function R.CheckpointState(): any
     return {Index=1,Passed=0,LastAt=-math.huge,Done=false}
 end

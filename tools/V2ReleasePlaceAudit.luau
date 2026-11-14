@@ -58,14 +58,16 @@ else
 end
 local previews=ReplicatedStorage:FindFirstChild("V2PedestrianPreviews")
 if previews then
+    local safe=true
     for _,preview in ipairs(previews:GetDescendants()) do
-        check("preview ambiente sem Script/LocalScript/ModuleScript",not (
-            preview:IsA("Script") or preview:IsA("LocalScript")
-            or preview:IsA("ModuleScript")))
+        if preview:IsA("Script") or preview:IsA("LocalScript")
+            or preview:IsA("ModuleScript") then safe=false;break end
     end
+    check("preview ambiente sem Script/LocalScript/ModuleScript",safe)
 end
 local drive=Workspace:FindFirstChild("V2DriveCars")
 local rigs=0
+local visualSafe=true
 if drive then
     for _,m in ipairs(drive:GetChildren()) do
         if m:IsA("Model") and m:GetAttribute("V2Drive")==true then
@@ -74,13 +76,13 @@ if drive then
                 if part:IsA("BasePart") and part.Massless
                     and part.Name~="DriveChassis" then
                     -- Peças cosméticas não devem colidir nem gerar Touched.
-                    check("visual do Hatch não recebe colisão física direta",
-                        part.CanCollide==false and part.CanTouch==false)
+                    if part.CanCollide or part.CanTouch then visualSafe=false end
                 end
             end
         end
     end
 end
+check("visual do Hatch não recebe colisão física direta",visualSafe)
 check("orçamento de física servidor respeitado",
     rigs<=Budget.MaxConcurrentDriveRigs)
 local sounds=0

@@ -5,6 +5,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local DataService = require(script.Parent.DataService)
 local PlotService = require(script.Parent.PlotService)
 local VehicleService = require(script.Parent.VehicleService)
+local V2DriveService = require(script.Parent.V2DriveService)
 local EquipmentService = require(script.Parent.EquipmentService)
 local EquipmentUpgradePads = require(script.Parent.EquipmentUpgradePads)
 local WorkshopService = require(script.Parent.WorkshopService)
@@ -89,7 +90,7 @@ end
 local lastActionAt: {[number]: {[string]: number}} = {}
 local lastOutcomeQuery: {[number]: number} = {}
 local KNOWN_ACTIONS: {[string]: boolean} = {}
-for _, name in ipairs({ "ClaimWorkshop", "GenerateCustomer", "DeclineJob", "AcceptJob", "DiagnoseJob", "ExamineJob", "CompleteJob", "FinishRepair", "RepairAction", "CheckRepairResult", "RepairPrefs", "CancelRepair", "SkipOnboarding", "BuyEquipment", "SetPrice", "BuyPart", "Checkout", "HireNpc", "InviteWorker", "CompleteCollaborativeJob", "RespondInvite", "MoveBag", "UpgradeWorkshop", "ClaimDaily", "ClaimMission", "RedeemCode", "SetJobPriority", "ScheduleJob", "DiscountJob", "RequestJobSupplies", "ClearSupplyRequests", "SetStaffPolicy", "AssignStaffJob", "ClearStaffJob", "UsedMarket" }) do
+for _, name in ipairs({ "ClaimWorkshop", "GenerateCustomer", "DeclineJob", "AcceptJob", "DiagnoseJob", "ExamineJob", "CompleteJob", "FinishRepair", "RepairAction", "CheckRepairResult", "RepairPrefs", "CancelRepair", "SkipOnboarding", "BuyEquipment", "SetPrice", "BuyPart", "Checkout", "HireNpc", "InviteWorker", "CompleteCollaborativeJob", "RespondInvite", "MoveBag", "UpgradeWorkshop", "ClaimDaily", "ClaimMission", "RedeemCode", "SetJobPriority", "ScheduleJob", "DiscountJob", "RequestJobSupplies", "ClearSupplyRequests", "SetStaffPolicy", "AssignStaffJob", "ClearStaffJob", "UsedMarket", "DriveCar" }) do
     KNOWN_ACTIONS[name] = true
 end
 
@@ -200,6 +201,18 @@ local function onPrompt(player: Player, jobId: string, kind: string)
     sendResult(player, ok, message)
 end
 VehicleService.SetInteractionHandler(onPrompt)
+-- V2-11: placa física usa o servidor como network owner; cancelar ANTES
+-- de qualquer rotina de despawn ou saída do proprietário.
+VehicleService.SetDriveCancelHandler(function(jobId: string)
+    V2DriveService.CancelJob(jobId)
+end)
+V2DriveService.SetNotifier(function(player: Player,message: string,success: boolean)
+    if player.Parent == Players then
+        invalidateSnapshot(player.UserId)
+        actionEvent:FireClient(player,"Notice",{Message=message,Success=success})
+    end
+end)
+V2DriveService.StartHeartbeat()
 -- "Usar <equipamento>" na sala dos fundos (reparos que precisam de máquina).
 EquipmentService.SetUseHandler(function(player: Player, equipmentId: string, plot: Instance)
     local nowClock = os.clock()
@@ -324,6 +337,8 @@ actionEvent.OnServerEvent:Connect(function(player: Player, action: any, payload:
         success, message = WorkshopService.SetPrice(player, payload.Multiplier)
     elseif action == "UsedMarket" then
         success, message = WorkshopService.UsedMarketAction(player, payload.Operation, payload.Id, payload.Style)
+    elseif action == "DriveCar" then
+        success, message = WorkshopService.DriveCar(player,payload.JobId,payload.Mode)
     elseif action == "BuyPart" and type(payload.PartId) == "string" and type(payload.Quantity) == "number" then
         success, message = WorkshopService.BuyPart(player, payload.PartId, payload.Quantity)
     elseif action == "ClaimDaily" then
@@ -392,5 +407,6 @@ Players.PlayerRemoving:Connect(function(player)
     lastActionAt[player.UserId] = nil
     lastOutcomeQuery[player.UserId] = nil
     SnapshotCacheRules.Clear(snapshotStates, player.UserId)
+    V2DriveService.CancelPlayer(player.UserId)
     WorkshopService.PlayerLeft(player.UserId)
 end)

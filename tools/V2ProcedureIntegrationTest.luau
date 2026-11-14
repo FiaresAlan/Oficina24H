@@ -4,7 +4,7 @@ local Shared=game:GetService("ReplicatedStorage").Shared
 local Catalog=require(Shared.Catalog)
 local Physical=require(Shared.V2ServiceProcedureRules)
 local Parts=require(Shared.V2ComponentRules)
-local Operations=require(Shared.RepairOperations)
+local Operations=require(game:GetService("ServerScriptService").Server.RepairOperations)
 local RepairActions=require(Shared.RepairActionRules)
 local result={}
 local function check(name,valid)

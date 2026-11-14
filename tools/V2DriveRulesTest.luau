@@ -87,6 +87,23 @@ check("sequência real completa termina sem dinheiro",
     and state.Index==5 and state.Reward==nil)
 check("replay da rota completa não ganha nada",
     not R.Advance(state,coords,20,coords[4]) and state.Passed==4)
+check("sem ocupante no primeiro segundo, tolera inicialização de rede",
+    R.SessionViolation(1002,1000,true,false,false,nil)==nil)
+check("assento nunca adquirido encerra depois de 7 segundos",
+    R.SessionViolation(1008,1000,true,false,false,nil)~=nil)
+check("sair do carro por pouco tempo não cancela imediatamente",
+    R.SessionViolation(1021,1000,true,false,true,1020)==nil)
+check("abandono do assento por mais de 4 segundos recolhe carro",
+    R.SessionViolation(1025,1000,true,false,true,1020)~=nil)
+check("respawn ou desconexão cancela mesmo com assento replicado",
+    R.SessionViolation(1010,1000,false,true,true,nil)~=nil)
+check("timeout total encerra condução mesmo com cliente conectado",
+    R.SessionViolation(1151,1000,true,true,true,nil)~=nil)
+check("tempo NaN e relógio invertido falham fechado",
+    R.SessionViolation(0/0,1000,true,true,true,nil)~=nil
+    and R.SessionViolation(999,1000,true,true,true,nil)~=nil)
+check("rede atrasada ainda mantém sessão dentro do prazo breve",
+    R.SessionViolation(1004,1000,true,false,false,nil)==nil)
 check("configuração limita 150 segundos, velocidade e alcance",
     R.MaximumSeconds==150 and R.MaxSpeed<=55 and R.MaxRadius<=300)
 return table.concat(report,"\n")

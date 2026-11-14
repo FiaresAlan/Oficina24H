@@ -26,6 +26,8 @@ local V2SupplyRules = require(ReplicatedStorage.Shared.V2SupplyRules)
 local V2StaffRules = require(ReplicatedStorage.Shared.V2StaffRules)
 local V2FinancialRules = require(ReplicatedStorage.Shared.V2FinancialRules)
 local V2UsedMarketRules = require(ReplicatedStorage.Shared.V2UsedMarketRules)
+local V2FleetBusinessRules = require(ReplicatedStorage.Shared.V2FleetBusinessRules)
+local ContractRules = require(ReplicatedStorage.Shared.ContractRules)
 
 local DataService = {}
 
@@ -103,6 +105,7 @@ local function makeDefaultData(): any
 		Transactions = {},
         FinanceLedger = V2FinancialRules.New(Config.StartingCoins,os.time()), -- agregados desde a abertura
         UsedMarket = V2UsedMarketRules.New(), -- revenda isolada das vagas e do crédito de OS
+        FleetAccounts = V2FleetBusinessRules.NewAccounts(), -- V2-14: parceiros, provas de bônus e 20 contratos recentes
 		TotalEarned = 0,
 		PriceMultiplier = 1, -- preço da oficina em relação à tabela (0.7 a 1.5)
 		RatingCount = 0, -- avaliações recebidas dos clientes (1 a 5 estrelas)
@@ -337,6 +340,7 @@ local function reconcile(data: any): any
     -- V2-08: transações anteriores são limitadas a 50; migração
     -- conservadora marca o histórico como PARCIAL, sem inventar a vida toda.
     data.UsedMarket = V2UsedMarketRules.Sanitize(data.UsedMarket)
+    data.FleetAccounts = V2FleetBusinessRules.SanitizeAccounts(data.FleetAccounts)
     data.Transactions=V2FinancialRules.CleanTransactions(data.Transactions)
     if hadFinanceLedger then
         data.FinanceLedger=V2FinancialRules.Sanitize(data.FinanceLedger,data.Coins,os.time())
@@ -877,6 +881,48 @@ function DataService.AddReputation(player: Player, amount: number)
 	end
 	profile.Reputation = math.max(0, profile.Reputation + math.floor(amount))
 	Dirty[player.UserId] = true
+end
+
+-- V2-14: concessão/expiração de contrato no MESMO perfil. A chave
+-- persistida, saldo, reputação e histórico mudam sem yields, antes de Save.
+-- Não tenta prometer transação atômica entre contas nem salvar caso o
+-- DataStore esteja fora do ar; o session lock V1 continua valendo.
+function DataService.RecordFleetOutcomeOnce(player: Player,key: any,
+    company: any,result: any,record: any): (boolean,string)
+    local profile=Profiles[player.UserId]
+    if not profile or type(record)~="table" then
+        return false,"Perfil ou registro de contrato indisponível."
+    end
+    local partner=type(company)=="string" and ContractRules.ById[company]
+    if not partner then return false,"Parceiro desconhecido." end
+    local bonus=record.Bonus
+    local rep=record.Reputation
+    if type(bonus)~="number" or bonus~=bonus or bonus==math.huge
+        or bonus==-math.huge or bonus<0 or bonus>2000000
+        or bonus~=math.floor(bonus) or type(rep)~="number"
+        or rep~=rep or rep==math.huge or rep==-math.huge
+        or rep<0 or rep>100 or rep~=math.floor(rep)
+        or (result=="Expired" and (bonus~=0 or rep~=0)) then
+        return false,"Parâmetros financeiros inválidos."
+    end
+    profile.FleetAccounts=profile.FleetAccounts
+        or V2FleetBusinessRules.NewAccounts()
+    local accepted,reason=V2FleetBusinessRules.Record(profile.FleetAccounts,
+        key,company,result,record)
+    if not accepted then return false,reason end
+    if result=="Completed" then
+        -- O bônus de contrato é adicional à venda/reparo normal; nunca
+        -- toca RepairLedger nem recibos do trabalhador colaborativo.
+        DataService.AddCoins(player,bonus,"Contrato de frota: "..partner.Name)
+        DataService.AddReputation(player,rep)
+    end
+    Dirty[player.UserId]=true
+    return true,"Registrado no perfil."
+end
+
+function DataService.FleetAccountSummary(player: Player): any
+    local profile=Profiles[player.UserId]
+    return V2FleetBusinessRules.PublicAccounts(profile and profile.FleetAccounts)
 end
 
 function DataService.GrantEquipment(player: Player, equipmentId: string): boolean

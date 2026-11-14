@@ -1297,16 +1297,35 @@ check("V2-14: sucesso aceito só para contrato aberto + JobId único",
     and 'c.DoneJobs[jobId]=true' in fleet_service
     and 'c.Token~=token' in fleet_service
     and 'Service.Active(owner.UserId)' in fleet_service
-    and 'ContractService.FleetDone(entry.Owner,' in workshop
+    and 'completeFleetPostSave(entry.Owner,' in workshop
     and 'entry.FleetToken = job.Fleet' in workshop
     and 'if DataService.Save(player) then' in workshop)
 check("V2 audit: fleet payment comes after repair receipt Save, not inside rating",
     "entry.FleetMethod = delegated and" in workshop
-    and "ContractService.FleetDone(entry.Owner," in workshop
-    and "ContractService.FleetDone(owner,fleetToken,jobId," in workshop
+    and "completeFleetPostSave(entry.Owner," in workshop
+    and "completeFleetPostSave(owner,fleetToken,jobId," in workshop
     and "job.Price or service.Reward,\"Npc\"" in workshop
     and workshop.index("local stars = rateService(") < workshop.index("local function confirmNpcSave(")
     and "ContractService.FleetDone(owner,job.Fleet,job.Id" not in workshop)
+check("V1 G5: actions and snapshots hardened with independent budgets and bounded ACK",
+    "RequestBudgetRules.Take(repairActionBudget" in main_src
+    and "RequestBudgetRules.Take(snapshotBuildBudget" in main_src
+    and "RequestBudgetRules.EchoString(payload.JobId)" in main_src
+    and "RequestBudgetRules.EchoNumber(payload.Command.Revision)" in main_src
+    and "RequestBudgetRules.Clear(repairActionBudget" in main_src
+    and '"RequestBudgetRulesTest"' in runner
+    and (TOOLS/"RequestBudgetRulesTest.luau").is_file())
+check("V1 G2/G3/G4: V1 Studio fixes retained during V2 merge preparation",
+    "StaffAssignmentRules.OwnerIsWorking(" in workshop
+    and "job.OwnerTouchedAt=os.time()" in workshop
+    and "function WorkshopService._createJobForTesting" in workshop
+    and "if not nearStation(player, plot, \"Orders\")" in workshop
+    and "isApiAccessError(" in data_service
+    and "RealStore" in data_service
+    and "local EPSILON = 1e-3" in text(SHARED/"LocationRules.lua")
+    and "whole(v.OwnerUserId, -1e15, 1e15)" in text(SHARED/"WorkerSettlementProofRules.lua")
+    and "BillboardGui" in text(ROOT/"src"/"server"/"EquipmentUpgradePads.lua")
+    and "billboard.Size=UDim2.fromScale(5.4,2.2)" in text(ROOT/"src"/"server"/"EquipmentUpgradePads.lua"))
 check("V2-14: bônus de frota próprio e idempotente no mesmo perfil",
     'function DataService.RecordFleetOutcomeOnce(' in data_service
     and 'V2FleetBusinessRules.Record(profile.FleetAccounts' in data_service

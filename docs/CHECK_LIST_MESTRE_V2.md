@@ -1,6 +1,6 @@
 # CHECK_LIST_MESTRE_V2 — OFICINA 24H
 
-**Versão:** 2.3, 13/11/2026. **Situação:** engenharia V2-00–10 na PR #27, com pendência de lotes de fornecedor V2-08 e de integração com main/QA V1 e modelos/Studio; V2-11–16 planejadas. **Nenhuma homologação Studio presumida.**  
+**Versão:** 2.4, 13/11/2026. **Situação:** engenharia V2-00–11 na PR #27, com pendência de lotes de fornecedor V2-08 e de integração com main/QA V1 e modelos/Studio; V2-12–16 planejadas. **Nenhuma homologação Studio presumida.**  
 **Direção aprovada pelo proprietário:** híbrida — estilização legível do mundo + reparos visualmente mecânicos + gestão de negócio.  
 **Código base de referência:** main em C31 (`2690f082` antes dos commits exclusivamente documentais da V2). **Atenção:** o Claude Code está homologando/corrigindo a V1 em paralelo; sempre ler novo HEAD e reconciliar diffs antes de programar V2. Preservar Issue #15 V1 como histórico.  
 **Documentos de referência:** DIRECAO_JOGO_V2_2026-11-13.md, PESQUISA_MERCADO_V2_2026-11-13.md, AUDITORIA_V2_BASE_CODIGO_2026-11-13.md (auditoria histórica até C17), [GUIA_UNICO_ASSETS_V2.md](GUIA_UNICO_ASSETS_V2.md) e GUIA_UNICO_ASSETS_V1.md.
@@ -50,7 +50,7 @@ P0 = prioridade para o núcleo de lançamento. P1 = opcional condicionado a viab
 - [ ] **Merge na main:** depende de comparar, revisar e conciliar as correções V1 do Claude e refazer CI.
 - [ ] **Arte real:** revisar/importar os três modelos piloto, ajustar malhas móveis, pivôs, licença, áudio e LOD reais.
 - [ ] **Studio:** executar RunAllTests, V2PilotPlaceAudit, 15 serviços, multiplayer, mobile/PC/gamepad e verificar efeitos reais.
-- [ ] **V2-11–16 e lotes V2-08:** implementar somente após dependências, sem declarar V2 completa por CI verde.
+- [ ] **V2-12–16 e lotes V2-08:** implementar somente após dependências, sem declarar V2 completa por CI verde.
 
 **Portão:** código escrito e integrado em branch não equivale a jogo homologado. Não há publicação automática.
 
@@ -220,17 +220,24 @@ P0 = prioridade para o núcleo de lançamento. P1 = opcional condicionado a viab
 - [ ] [S] Homologar três veículos reais, malhas PBR, roteiro de 2 jogadores, tablet/celular/gamepad, relog, 15 OS e desempenho por lote no Roblox Studio.
 - [ ] [S] Confirmar que benefício de reputação pontual e catálogo cosmético não desviam o jogador das OS. Decidir manter/simplificar após beta.
 
-**Não confundir:** showroom físico decorativo e prévia 3D existem em código, mas não há condução física dos carros (V2-11) nem testes Studio concluídos. Materiais PBR podem precisar de `V2CosmeticRole` nos meshes importados.
+**Não confundir:** showroom físico decorativo e prévia 3D existem em código, mas a condução física piloto V2-11 permanece sem homologação real de direção nem testes Studio concluídos. Materiais PBR podem precisar de `V2CosmeticRole` nos meshes importados.
 
 ## V2-11 — Fundamentos do carro dirigido pelo jogador (P1)
-- [ ] [C] Um veículo piloto com assento real, direção/freio/câmera/controles; preservar caminhos NPC.
-- [ ] [C] Associar carro a uma OS, liberar apenas motorista autorizado e uma sessão por veículo.
-- [ ] [C] Devolver carro ao box após timeout, desconexão, colisão ou cancelamento.
-- [ ] [C] Servidor valida posição/velocidade/checkpoints e não confia no evento Touched do cliente para pagar.
-- [ ] [A] Testes de spam, fuga de rota, respawn, rede ruim, propriedade de física e duplicidade.
-- [ ] [S] Dirigir no bairro e voltar com 1–2 jogadores no Studio.
 
-**Gate obrigatório antes de V2-12.**
+**Engenharia na PR #27:** [documentação, contratos físicos, segurança e roteiro de QA](V2_FASE_11_DIRECAO.md). V2-11 não libera moeda/XP, diagnósticos nem recompensas de test-drive (reservados à V2-12/13).
+
+- [x] [C] Hatch piloto com **VehicleSeat real, chassi físico**, 4 rodas motorizadas (HingeConstraint), 2 servos de esterço, teclado/setas, gamepad, botões próprios de toque, câmera e HUD de checkpoints.
+- [x] [C] Carro da OS permanece no box, sem tocar no NPC/rota V1: original ancorado fica temporariamente invisível e sem colisão; clone seguro dirigível usa assets sanitizados ou fallback. Tudo é restaurado no CFrame do box, conservando flags originais, prompts e UID da OS.
+- [x] [C] Só o dono da OS ativa e Hatch piloto com componentes fechados, carro no chão, sem colaborador/NPC/minijogo ativo pode dirigir; uma sessão por jogador/OS, autorização de ocupante do assento no servidor.
+- [x] [C] Remote de input carrega só throttle/steer limitados e no máximo ~14 Hz, sem posição/velocidade enviadas pelo cliente; servidor é network owner de todas as peças, motor neutraliza input vencido.
+- [x] [C] Timeout 150 s, desconexão, morte/respawn, abandono do assento, capotamento, colisão frontal, queda e teleporte acionam rollback e cleanup. Despawn de OS cancela antes de remover carro/box.
+- [x] [C] Servidor valida velocidade/posição/distância/desnível e checkpoints em ordem a ~10 Hz, sem `Touched`/crédito/XP por movimento. Venda e recebimento de serviços só pelas rotas V1 existentes.
+- [x] [C] NPC avulso, convites/aceite de colaboração, StartRepair e upgrade de prédio bloqueados enquanto a OS estiver em condução, evitando liquidação com carro fora.
+- [x] [A] Suites de regressão escritas (`V2DriveRulesTest`, `V2DriveRigTest`, `V2DriveSuspensionTest`) e registradas no runner; CI de contratos e Rojo verde na branch após integrar núcleo V2-11. **Não executa scripts Luau no Studio.**
+- [ ] [S] Playtest Studio de dirigir/retornar com 1–2 jogadores; ajustar e homologar torque, física, câmera, toque, gamepad, latência, modelos importados e vias do mapa.
+- [ ] [S] Executar suites Luau em Edit e validar casos de usuário indevido, avatar morto, retorno, falhas de rede, espelhamento dos lotes, NPCs, 15 OS e desempenho.
+
+**Gate obrigatório antes de V2-12:** homologação física e segurança Studio. CI verde sozinho não autoriza integrar diagnósticos/receitas da V2-12.
 
 ## V2-12 — Test-drive para diagnóstico contextual (P1, FUTURO)
 - [ ] [C] Tabela de elegibilidade por sintoma/defeito (direção, freio, suspensão, motor, rodas).

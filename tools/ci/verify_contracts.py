@@ -1310,7 +1310,7 @@ check("V2-14: decisão de equipe/terceiro não duplica OS",
     and 'QualityReview' in workshop
     and 'StageWorkerClaim' in workshop)
 check("V2-14: falhas de prazo ou disconnect sem multa artificial",
-    'result=="Expired"' in fleet_rules
+    'result~="Expired"' in fleet_rules
     and 'completed and c.Offer.Coins or 0' in fleet_service
     and 'completed and c.Offer.Reputation or 0' in fleet_service
     and 'Sem multa' in fleet_service

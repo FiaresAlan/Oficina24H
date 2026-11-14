@@ -6,10 +6,10 @@ local Rules={}
 Rules.Categories={
     Service="Service",Inventory="Inventory",Payroll="Payroll",
     Marketing="Marketing",Equipment="Equipment",Building="Building",
-    Hiring="Hiring",Rewards="Rewards",Market="Market",Other="Other",
+    Hiring="Hiring",Rewards="Rewards",Market="Market",Fleet="Fleet",Other="Other",
 }
 Rules.CategoryOrder={"Service","Inventory","Payroll","Marketing",
-    "Equipment","Building","Hiring","Rewards","Market","Other"}
+    "Equipment","Building","Hiring","Rewards","Market","Fleet","Other"}
 Rules.MaxMoney=1000000000000
 Rules.MaxRecent=50
 Rules.MaxEntries=100000000
@@ -35,6 +35,7 @@ function Rules.Category(reason: any,delta: any): string
     if string.find(r,"^Salário dos funcionários") then return "Payroll" end
     if string.find(r,"^Publicidade:") then return "Marketing" end
     if string.find(r,"^Usados:") then return "Market" end
+    if string.find(r,"^Contrato de frota:") then return "Fleet" end
     if string.find(r,"^Melhoria:") or string.find(r,"^Compra:") then return "Equipment" end
     if string.find(r,"^Ampliação da oficina:") then return "Building" end
     if string.find(r,"^Contratação de mecânico") then return "Hiring" end
@@ -229,7 +230,7 @@ function Rules.Snapshot(book: any, profile: any,now: number,employeeSalary: numb
         local v=b.Groups[name]
         groups[name]={In=v.In,Out=v.Out}
     end
-    local operationIn=groups.Service.In
+    local operationIn=groups.Service.In+groups.Fleet.In
     local operationOut=groups.Inventory.Out+groups.Payroll.Out+groups.Marketing.Out
     local operatingCash=operationIn-operationOut
     local cashDelta=b.CashIn-b.CashOut
@@ -256,7 +257,8 @@ function Rules.Snapshot(book: any, profile: any,now: number,employeeSalary: numb
         Since=b.Since,LegacyWindow=b.LegacyWindow,TransactionsCount=b.Count,
         OpeningBalance=b.OpeningBalance,ReconciliationGap=reconciliationGap,
         CashIn=b.CashIn,CashOut=b.CashOut,CashDelta=cashDelta,
-        ServiceReceipts=operationIn,OperatingOut=operationOut,
+        ServiceReceipts=groups.Service.In,FleetReceipts=groups.Fleet.In,
+        OperatingIn=operationIn,OperatingOut=operationOut,
         OperatingCash=operatingCash,NonOperatingIn=b.CashIn-operationIn,
         NonOperatingOut=b.CashOut-operationOut,Groups=groups,
         Cash=available,StockReferenceValue=stockCost+bagCost,

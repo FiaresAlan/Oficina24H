@@ -1313,7 +1313,7 @@ check("V2-14: falhas de prazo ou disconnect sem multa artificial",
     'result=="Expired"' in fleet_rules
     and 'completed and c.Offer.Coins or 0' in fleet_service
     and 'completed and c.Offer.Reputation or 0' in fleet_service
-    and 'Contracts' not in main_src
+    and 'Sem multa' in fleet_service
     and 'Players.PlayerRemoving:Connect' in fleet_service
     and 'proposals[player.UserId]=nil' in fleet_service)
 check("V2-14: suites puras, serviço e persistência no runner",

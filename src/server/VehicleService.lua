@@ -70,6 +70,17 @@ local departing: { [Model]: { OwnerUserId: number, Bay: BasePart, Mark: string, 
 -- Quem usa o prompt é decidido pelo servidor (Triggered só dispara se o jogador estiver dentro da distância).
 local interactionHandler: ((Player, string, string) -> ())? = nil
 
+-- V2-11: somente o carro Hatch de uma OS pode ser suspenso temporariamente.
+-- Preserve exatamente as flags de todas as partes para voltar ao fluxo NPC
+-- quando a sessão física terminar. O carro da OS nunca deixa byJob/BayN.
+local drivePaused: { [string]: { Model: Model, Parts: { any }, OwnerId: number } } = {}
+local cancelDriveHandler: ((string) -> ())? = nil
+
+function VehicleService.SetDriveCancelHandler(handler: (string) -> ())
+    cancelDriveHandler = handler
+end
+
+
 function VehicleService.SetInteractionHandler(handler: (Player, string, string) -> ())
 	interactionHandler = handler
 end
@@ -633,6 +644,70 @@ function VehicleService.SetRepairing(jobId: string, on: boolean)
     end
 end
 
+-- Protocolo aditivo: render V1 some apenas durante a condução física.
+-- Guardar transparência e colisão de cada peça é necessário pois o Casco
+-- invisível possui CanCollide=true e os prompts foram criados no mesmo rig.
+function VehicleService.SuspendForDrive(jobId: string, userId: number): (Model?, BasePart?, string)
+    local car=byJob[jobId]
+    if not car or drivePaused[jobId] or car:GetAttribute("Estacionado")~=true
+        or car:GetAttribute("V2PilotId")~="Hatch"
+        or car:GetAttribute("OwnerUserId")~=userId
+        or car:GetAttribute("Reparando")==true
+        or car:GetAttribute("V2SupportPlaced")==true then
+        return nil,nil,"Veículo ocupado, levantado ou não disponível para direção."
+    end
+    local states=VehicleService.ComponentStates(jobId)
+    if not V2ComponentRules.MayDrive(states) then
+        return nil,nil,"Feche capô, portas e recolha as rodas antes de dirigir."
+    end
+    local bay=bayOf(car)
+    if not bay or not car.PrimaryPart then return nil,nil,"Box físico não localizado." end
+    local items={}
+    for _,p in ipairs(car:GetDescendants()) do
+        if p:IsA("BasePart") then
+            table.insert(items,{Part=p,Transparency=p.Transparency,
+                CanCollide=p.CanCollide,CanTouch=p.CanTouch,CanQuery=p.CanQuery})
+        end
+    end
+    drivePaused[jobId]={Model=car,Parts=items,OwnerId=userId}
+    car:SetAttribute("V2Driving",true)
+    car:SetAttribute("Estacionado",false)
+    applyStage(car)
+    for _,entry in ipairs(items) do
+        local p=entry.Part
+        p.Transparency=1
+        p.CanCollide=false
+        p.CanTouch=false
+        p.CanQuery=false
+    end
+    return car,bay,""
+end
+
+function VehicleService.ResumeFromDrive(jobId: string)
+    local paused=drivePaused[jobId]
+    drivePaused[jobId]=nil
+    if not paused then return end
+    local car=paused.Model
+    if not car.Parent then return end
+    for _,entry in ipairs(paused.Parts) do
+        local p=entry.Part
+        if p.Parent then
+            p.Transparency=entry.Transparency
+            p.CanCollide=entry.CanCollide
+            p.CanTouch=entry.CanTouch
+            p.CanQuery=entry.CanQuery
+        end
+    end
+    car:SetAttribute("V2Driving",false)
+    car:SetAttribute("Estacionado",true)
+    applyStage(car)
+end
+
+function VehicleService.DriveInfo(jobId: string): (Model?,BasePart?,boolean)
+    local car=byJob[jobId]
+    return car,(car and bayOf(car) or nil),drivePaused[jobId]~=nil
+end
+
 -- Distância do personagem até o veículo ESTACIONADO (usada também pelas ações vindas da UI).
 function VehicleService.IsNear(player: Player, jobId: string, maxDistance: number): boolean
 	local car = byJob[jobId]
@@ -863,6 +938,8 @@ end
 
 -- `instant` = some na hora (dono saiu). Senão o cliente volta ao volante, dá ré e vai embora pela rua.
 function VehicleService.Despawn(jobId: string, instant: boolean?)
+    if cancelDriveHandler then cancelDriveHandler(jobId) end
+    VehicleService.ResumeFromDrive(jobId)
 	local car = byJob[jobId]
 	if not car then
 		return

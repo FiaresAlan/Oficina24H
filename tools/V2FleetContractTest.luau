@@ -106,4 +106,44 @@ check("recusa de proposta não altera saldo/rep",
 check("idempotência registrada em contas privadas",
     Rules.HasCredit(data.Accounts,data.Accounts.Keys[1])
     and not Rules.HasCredit(data.Accounts,"fake"))
+-- V2-15: falha realista de Save DEPOIS da concessão do bônus.
+-- O servidor pode tentar novamente sem creditar duas vezes.
+check("QA gera novo contrato para simular falha de DataStore",
+    Contract.QaOfferNow(user) and Contract.Negotiate(user,"Accept","Standard"))
+local pendingContract=Contract.Active(user.UserId)
+local baselineCredits=data.Credits
+local baselineReputation=data.Reputation
+local baselineKeys=#data.Accounts.Keys
+local failOnce=true
+local oldSave=data.Save
+function data.Save(player)
+    if failOnce then
+        failOnce=false
+        return false
+    end
+    return oldSave(player)
+end
+for i=1,3 do
+    Contract.FleetDone(user,pendingContract.Token,
+        "pending-save-"..i,145,"Owner")
+end
+local pending=Contract.Snapshot(user.UserId)
+check("falha de Save NÃO anuncia sucesso nem libera contrato",
+    pending.PendingSettlement==true and pendingContract.Done==3
+    and data.Credits==baselineCredits+pendingContract.Offer.Coins
+    and data.Reputation==baselineReputation+pendingContract.Offer.Reputation
+    and #data.Accounts.Keys==baselineKeys+1)
+check("última OS não pode repetir crédito após Save falho",
+    not Contract.FleetDone(user,pendingContract.Token,
+        "pending-save-3",145,"Owner"))
+local retry=Contract.RetryPending(user)
+check("retry de Save confirma a prova financeira SEM novo prêmio",
+    retry==true and data.Credits==baselineCredits+pendingContract.Offer.Coins
+    and data.Reputation==baselineReputation+pendingContract.Offer.Reputation
+    and #data.Accounts.Keys==baselineKeys+1
+    and data.Accounts.Partners.taxi.Wins==2)
+check("sucesso comunicado somente após persistência",
+    Contract.Snapshot(user.UserId).Result.Success
+    and not Contract.RetryPending(user))
+data.Save=oldSave
 return table.concat(t,"\n")

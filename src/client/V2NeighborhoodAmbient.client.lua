@@ -8,6 +8,7 @@ local RunService=game:GetService("RunService")
 local UserInputService=game:GetService("UserInputService")
 local Workspace=game:GetService("Workspace")
 local Rules=require(ReplicatedStorage.Shared.V2NeighborhoodRules)
+local Budget=require(ReplicatedStorage.Shared.V2VisualBudgetRules)
 local Animations=require(ReplicatedStorage.Shared.NpcAnimations)
 local player=Players.LocalPlayer
 local ambient=Instance.new("Folder")
@@ -121,6 +122,7 @@ local function create(kind: string,seed: number): Actor?
     local list=templates[kind]
     if not list or #list==0 then return nil end
     local source=list[(seed%#list)+1]
+    if not Budget.PreflightTemplate(source,"Ambient") then return nil end
     local model=source:Clone()
     model.Name="V2Ambient_"..kind
     local root=model.PrimaryPart

@@ -56,6 +56,14 @@ local WorkerArchiveLastAt: { [number]: number } = {}
 local Store: any = nil
 local JobId: string = game.JobId ~= "" and game.JobId or "studio"
 local MemoryMode = false
+local RealStore: any = nil -- Store original: mock DataStore dos testes não entra no fallback
+local function isApiAccessError(message: any): boolean
+    local value=string.lower(tostring(message))
+    return string.find(value,"api services",1,true)~=nil
+        or string.find(value,"studio access",1,true)~=nil
+        or string.find(value,"publish this place",1,true)~=nil
+        or string.find(value,"403",1,true)~=nil
+end
 
 -- Inicialização do DataStore: falha em place não publicado. No Studio cai para modo memória (avisado).
 local function initStore()
@@ -65,6 +73,7 @@ local function initStore()
 	end)
 	if ok then
 		Store = result
+        RealStore = result
 		MemoryMode = false
 	else
 		Store = nil
@@ -1351,6 +1360,16 @@ function DataService.Load(player: Player)
 		task.wait(0.1) -- reentrada rápida: espera o salvamento anterior terminar (evita ler dado antigo)
 	end
 	local ok, result = acquire(userId)
+    if not ok and RunService:IsStudio() and Store==RealStore
+        and isApiAccessError(result) then
+        -- Roblox Studio: GetDataStore pode funcionar, mas UpdateAsync falha
+        -- sem Enable Studio Access to API Services. Não usar produção.
+        MemoryMode=true
+        Store=nil
+        warn("[DataService] Studio sem API Services, modo MEMÓRIA (sem Save real):",result)
+        Profiles[userId]=reconcile(nil)
+        return
+    end
 	if not ok then
 		warn("[DataService] Falha ao carregar dados de", userId, result)
 		player:Kick("Não foi possível carregar seus dados (" .. tostring(result) .. "). Tente entrar novamente.")

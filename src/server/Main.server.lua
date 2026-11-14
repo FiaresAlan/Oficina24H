@@ -101,7 +101,7 @@ end
 local lastActionAt: {[number]: {[string]: number}} = {}
 local lastOutcomeQuery: {[number]: number} = {}
 local KNOWN_ACTIONS: {[string]: boolean} = {}
-for _, name in ipairs({ "ClaimWorkshop", "GenerateCustomer", "DeclineJob", "AcceptJob", "DiagnoseJob", "ExamineJob", "CompleteJob", "FinishRepair", "RepairAction", "CheckRepairResult", "RepairPrefs", "CancelRepair", "SkipOnboarding", "BuyEquipment", "SetPrice", "BuyPart", "Checkout", "HireNpc", "InviteWorker", "CompleteCollaborativeJob", "RespondInvite", "MoveBag", "UpgradeWorkshop", "ClaimDaily", "ClaimMission", "RedeemCode", "SetJobPriority", "ScheduleJob", "DiscountJob", "RequestJobSupplies", "ClearSupplyRequests", "SetStaffPolicy", "AssignStaffJob", "ClearStaffJob", "UsedMarket", "DriveCar" }) do
+for _, name in ipairs({ "ClaimWorkshop", "GenerateCustomer", "DeclineJob", "AcceptJob", "DiagnoseJob", "ExamineJob", "CompleteJob", "FinishRepair", "RepairAction", "CheckRepairResult", "RepairPrefs", "CancelRepair", "SkipOnboarding", "BuyEquipment", "SetPrice", "BuyPart", "Checkout", "HireNpc", "InviteWorker", "CompleteCollaborativeJob", "RespondInvite", "MoveBag", "UpgradeWorkshop", "ClaimDaily", "ClaimMission", "RedeemCode", "SetJobPriority", "ScheduleJob", "DiscountJob", "RequestJobSupplies", "ClearSupplyRequests", "SetStaffPolicy", "AssignStaffJob", "ClearStaffJob", "UsedMarket", "DriveCar", "QualityReview" }) do
     KNOWN_ACTIONS[name] = true
 end
 
@@ -221,6 +221,17 @@ V2DriveService.SetNotifier(function(player: Player,message: string,success: bool
     if player.Parent == Players then
         invalidateSnapshot(player.UserId)
         actionEvent:FireClient(player,"Notice",{Message=message,Success=success})
+    end
+end)
+-- Resultado de direção só entra por callback do servidor, NUNCA por remoto.
+V2DriveService.SetDriveOutcomeHandler(function(driver: Player,jobId: string,outcome: any)
+    local ok,err=pcall(WorkshopService.OnDriveOutcome,driver,jobId,outcome)
+    if not ok then warn("[V2] encerramento de teste:",err) end
+    invalidateSnapshot(driver.UserId)
+end)
+V2DriveService.SetDriveCueHandler(function(driver: Player,payload: any)
+    if driver.Parent==Players then
+        actionEvent:FireClient(driver,"DriveCue",payload)
     end
 end)
 V2DriveService.StartHeartbeat()
@@ -350,6 +361,8 @@ actionEvent.OnServerEvent:Connect(function(player: Player, action: any, payload:
         success, message = WorkshopService.UsedMarketAction(player, payload.Operation, payload.Id, payload.Style)
     elseif action == "DriveCar" then
         success, message = WorkshopService.DriveCar(player,payload.JobId,payload.Mode)
+    elseif action == "QualityReview" then
+        success, message = WorkshopService.QualityReview(player,payload.JobId,payload.Operation)
     elseif action == "BuyPart" and type(payload.PartId) == "string" and type(payload.Quantity) == "number" then
         success, message = WorkshopService.BuyPart(player, payload.PartId, payload.Quantity)
     elseif action == "ClaimDaily" then

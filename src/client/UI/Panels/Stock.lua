@@ -233,9 +233,7 @@ function Stock.new(parent: Instance)
 				thumb.Position = UDim2.fromOffset(10, 10)
 				if entry.Qty == 0 and kind == "parts" then
 					for _, d in ipairs(thumb:GetDescendants()) do
-						if d:IsA("ImageLabel") then
-							d.ImageTransparency = 0.6
-						elseif d:IsA("ViewportFrame") then
+						if d:IsA("ImageLabel") or d:IsA("ViewportFrame") then
 							d.ImageTransparency = 0.6
 						end
 					end

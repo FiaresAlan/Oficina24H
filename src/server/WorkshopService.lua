@@ -72,6 +72,14 @@ local function nearShop(player: Player): boolean
     return LocationRules.IsNearBlock(shop.CFrame, shop.Size, hrp.Position, Config.ShopDistance)
 end
 local SHOP_FAR = "Vá até a Loja de Autopeças do bairro para comprar."
+-- Auditoria da main V1: ausência da TV/prateleira em produção não
+-- autoriza ações remotas sem presença física.
+local function nearStation(player: Player, plot: Instance?, kind: string): boolean
+    if not plot or not plot:FindFirstChild("Estacoes") then
+        return LocationRules.MissingBlockAllowed(RunService:IsStudio())
+    end
+    return StationService.IsNear(player, plot, kind)
+end
 
 local DataService: any
 local updatePriceBoard: (Player) -> () -- definido adiante; declarado aqui porque ClaimWorkshop o usa
@@ -913,7 +921,7 @@ function WorkshopService.AcceptJob(player: Player, jobId: string)
         return false, "O atendimento está agendado. Aguarde o horário reservado."
     end
     local plot = PlotService.GetPlot(player)
-    if plot and plot:FindFirstChild("Estacoes") and not StationService.IsNear(player, plot, "Orders") then
+    if not nearStation(player, plot, "Orders") then
         return false, "Aceite a ordem na TV de ordens, dentro da oficina."
     end
     -- O VehicleService assume o carro e o cliente da calçada (CustomerArrivalService.Claim) e entra na vaga.
@@ -1073,6 +1081,7 @@ function WorkshopService.DiagnoseJob(player: Player, jobId: string, choice: any?
     if job.Status ~= "InProgress" or job.AssignedWorkerUserId ~= player.UserId then
         return false, "Você não está responsável por esta ordem."
     end
+    job.OwnerTouchedAt=os.time() -- impede NPC automático de roubar OS ativa
     local nearCustomer = CustomerNpcService.IsNear(player, job.Id, Config.TalkDistance)
     local nearVehicle = VehicleService.IsNear(player, job.Id, Config.InteractDistance)
     if choice ~= nil and job.DiagnoseOptions then
@@ -1148,6 +1157,7 @@ function WorkshopService.ExamineJob(player: Player, jobId: string, examId: any)
     if not VehicleService.IsNearInspectionPoint(player, job.Id, examId) then
         return false, "Vá até o ponto de inspeção correspondente no carro. Procure o marcador iluminado."
     end
+    job.OwnerTouchedAt=os.time()
     job.DiagnoseExams = job.DiagnoseExams or {}
     job.DiagnoseExams[examId] = true
     VehicleService.MarkInspected(job.Id, examId)
@@ -1228,6 +1238,7 @@ function WorkshopService.PrepareRepairStep(player: Player, jobId: string, stepId
         return false, "Aproxime-se do componente indicado para trabalhar."
     end
     job.PreparationStep = nextStep
+    if player.UserId==job.OwnerUserId then job.OwnerTouchedAt=os.time() end
     VehicleService.SetRepairPrepProgress(job.Id, job.DefectId, nextStep)
     if RepairPrepRules.Ready(job.DefectId, nextStep) then
         return true, "Preparação concluída. Use a ferramenta no carro ou a máquina da oficina."
@@ -2225,7 +2236,7 @@ function WorkshopService.HireNpc(player: Player, jobId: string)
         return false, "Um profissional convidado já está nesta ordem."
     end
     local hirePlot = PlotService.GetPlot(player)
-    if hirePlot and hirePlot:FindFirstChild("Estacoes") and not StationService.IsNear(player, hirePlot, "Orders") then
+    if not nearStation(player, hirePlot, "Orders") then
         return false, "Chame o mecânico avulso pela TV de ordens, dentro da oficina."
     end
 
@@ -2537,7 +2548,7 @@ function WorkshopService.MoveBag(player: Player, partId: string, quantity: numbe
     if not getWorkshop(player) or not plot then
         return false, "Registre sua oficina primeiro."
     end
-    if plot:FindFirstChild("Estacoes") and not StationService.IsNear(player, plot, "Stock") then
+    if not nearStation(player, plot, "Stock") then
         return false, "Vá até a prateleira do estoque, dentro da oficina."
     end
     return DataService.MoveBag(player, partId, quantity, toBag)
@@ -3102,7 +3113,10 @@ local function staffTick()
                     and not (Repairs[userId] and Repairs[userId].JobId==jobId)
                     and not (RepairPrepRules.Requires(job.DefectId)
                         and (job.PreparationStep or 1)>1)
-                    and os.time()>=(job.EmployeeRetryAt or 0) then
+                    and os.time()>=(job.EmployeeRetryAt or 0)
+                    and (job.EmployeeAssignedSlot~=nil
+                        or not StaffAssignmentRules.OwnerIsWorking(
+                            job.OwnerTouchedAt,os.time())) then
                     local defect=Catalog.Defects[job.DefectId]
                     if defect then
                         local age=os.time()-(job.AcceptedAt or os.time())
@@ -3285,6 +3299,22 @@ end
 WorkshopService.RefreshPlotDisplays = refreshPlotDisplays
 syncStaffRef = syncStaff
 rankingEntriesRef = rankingEntries
+
+-- V1 G5: gerar uma OS com defeito conhecido sem RNG, apenas no Studio.
+-- Este método não é exposto como RemoteEvent no jogo publicado.
+function WorkshopService._createJobForTesting(player: Player, defectId: string): string?
+    if not RunService:IsStudio() then return nil end
+    local defect=Catalog.Defects[defectId]
+    if not defect or not getWorkshop(player) then return nil end
+    local job=createJob(player.UserId)
+    job.DefectId=defectId
+    job.ComplaintDefectId=defectId
+    job.ServiceId=defect.ServiceId
+    job.Complaint=defect.Complaint
+    job.Vip,job.Regular,job.Fleet=false,false,nil
+    job.Price=math.max(1,Catalog.Services[defect.ServiceId].Reward)
+    return job.Id
+end
 
 -- Somente QA no Studio (Main expõe via ServerStorage.QA): envelhece as ordens abertas do jogador para testar a expiração.
 function WorkshopService._ageJobsForTesting(userId: number, seconds: number): number

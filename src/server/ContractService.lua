@@ -135,7 +135,10 @@ end
 
 -- Chamada automática do ciclo: gera PROPOSTA, não força compromisso.
 function Service.Offer(player:Player):boolean
-    if contracts[player.UserId] or proposals[player.UserId] or not offerFor then return false end
+    if contracts[player.UserId] or proposals[player.UserId] or not offerFor
+        or (nextAt[player.UserId] and os.time()<nextAt[player.UserId]) then
+        return false
+    end
     local offer=offerFor(player)
     if not offer or not offer.Quote or not FleetRules.TermsFromQuote(
         offer,offer.Quote,"Standard") then
@@ -240,6 +243,7 @@ function Service.QaOfferNow(player:Player):boolean
     if not game:GetService("RunService"):IsStudio() then return false end
     proposals[player.UserId]=nil
     contracts[player.UserId]=nil
+    nextAt[player.UserId]=nil
     return Service.Offer(player)
 end
 

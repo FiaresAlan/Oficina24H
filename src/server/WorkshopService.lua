@@ -895,7 +895,9 @@ function WorkshopService.DriveCar(player: Player,jobId: any,mode: any): (boolean
     end
     if mode=="Return" then return V2DriveService.End(player,jobId) end
     local job=Jobs[jobId]
-    if not job then return false,"Ordem não encontrada." end
+    if not job or job.OwnerUserId~=player.UserId then
+        return false,"Ordem não encontrada ou não pertence a você."
+    end
     local car=VehicleService.DriveInfo(jobId)
     local _,pilot=VehicleService.ComponentStates(jobId)
     local character=player.Character

@@ -221,16 +221,9 @@ local function rateService(owner: Player, job: any, service: any, defect: any, e
     }
     local stars = CustomerRules.RateService(context, math.random)
     ProgressService.AddLeague(owner, ProgressRules.LeaguePoints(stars, quality, job.Vip == true)) -- liga semanal
-    if job.Fleet then
-        local executorMode=byNpc and
-            ((job.EmployeeAssignedSlot or job.V2EmployeeSlot) and "Staff" or "Npc")
-            or (executor and executor.UserId~=owner.UserId and "Collaborator"
-                or "Owner")
-        -- Chamada APÓS liquidação da OS; o prêmio da frota possui
-        -- ledger próprio e não se mistura ao repasse colaborativo.
-        ContractService.FleetDone(owner,job.Fleet,job.Id,
-            job.Price or service.Reward,executorMode)
-    end
+    -- V2-AUDIT: NÃO chamar FleetDone aqui: rateService roda antes do
+    -- Save/recibo da OS, e o bônus da frota executa outro Save com yield.
+    -- A notificação da frota só vem depois de persistDelivery/Save NPC.
     if stars == 5 and profile and job.CustomerName and job.CustomerGender and not job.Fleet then
         local found = nil
         for _, r in ipairs(profile.Regulars) do
@@ -1390,6 +1383,16 @@ local function confirmDelivery(entry: any)
     if SettlingRepairs[entry.WorkerUserId] ~= entry
         or not SettlementDeliveryRules.Ready(entry) then return false end
     SettlingRepairs[entry.WorkerUserId] = nil
+    -- Só registrar progresso da frota depois que os dois perfis da OS
+    -- estiverem confirmados no DataStore; um Save do bônus não pode
+    -- interromper a montagem de recibos, avaliação ou repartição.
+    if entry.FleetToken and entry.Owner.Parent == Players then
+        local ok,err=pcall(ContractService.FleetDone,entry.Owner,
+            entry.FleetToken,entry.JobId,entry.FleetGross,entry.FleetMethod)
+        if not ok then
+            warn("[WorkshopService] Falha na concessão posterior da frota:",err)
+        end
+    end
     if entry.Delegated and entry.Worker.Parent == Players then
         -- Prova do proprietário só é dispensável após a claim sumir da conta
         -- do contratado em um Save CONFIRMADO, não após um descarte em memória.
@@ -1653,6 +1656,9 @@ local function settleEvaluatedRepair(player: Player,jobId: string,session:any,
         end
         entry.Worker, entry.Owner = player, workshopOwner
         entry.Delegated, entry.Receipt = delegated, receiptPayload
+        entry.FleetToken = job.Fleet
+        entry.FleetGross = job.Price or service.Reward
+        entry.FleetMethod = delegated and "Collaborator" or "Owner"
         entry.WorkerPay, entry.XP, entry.Spec = actorPay, xp, defect.Specialization
         entry.ServiceName, entry.VehicleName = service.DisplayName, job.VehicleName
         entry.WorkerXpApplied = workerCredited
@@ -2162,7 +2168,8 @@ end
 
 -- A renda de um NPC não é anunciada como confirmada enquanto o perfil
 -- proprietário não for salvo. Repetir Save NUNCA reaplica peças ou moedas.
-local function confirmNpcSave(owner: Player, jobId: string, token: string, message: string, alreadyTried: boolean?)
+local function confirmNpcSave(owner: Player, jobId: string, token: string, message: string,
+    alreadyTried: boolean?, fleetToken: any?, fleetGross: number?, fleetMethod: string?)
     local key = tostring(owner.UserId) .. ":" .. jobId .. ":" .. token
     if NpcPendingSaves[key] then return end
     NpcPendingSaves[key] = true
@@ -2177,6 +2184,10 @@ local function confirmNpcSave(owner: Player, jobId: string, token: string, messa
             if owner.Parent ~= Players or not DataService.Get(owner) then break end
             if DataService.Save(owner) then
                 NpcPendingSaves[key] = nil
+                if fleetToken and owner.Parent == Players then
+                    ContractService.FleetDone(owner,fleetToken,jobId,
+                        fleetGross or 0,fleetMethod or "Npc")
+                end
                 if eventSender and owner.Parent == Players then
                     eventSender(owner, "Notice", { Message = message, Success = true })
                 end
@@ -2248,8 +2259,15 @@ function WorkshopService.HireNpc(player: Player, jobId: string)
     })
     local message = "Mecânico NPC concluiu o serviço. Custo: " .. tostring(npcCost)
         .. " moedas. Você não recebeu XP. Avaliação: " .. CustomerRules.StarsText(stars) .. " (" .. tostring(stars) .. ")"
-    if DataService.Save(player) then return true, message end
-    confirmNpcSave(player, job.Id, token, message, true)
+    if DataService.Save(player) then
+        if job.Fleet then
+            ContractService.FleetDone(player,job.Fleet,job.Id,
+                job.Price or service.Reward,"Npc")
+        end
+        return true, message
+    end
+    confirmNpcSave(player, job.Id, token, message, true,
+        job.Fleet,job.Price or service.Reward,"Npc")
     return false, "Serviço realizado; aguarde a confirmação do pagamento no DataStore."
 end
 
@@ -3027,7 +3045,8 @@ local function employeeWork(owner: Player, job: any, npc: Model)
     release(nil)
     confirmNpcSave(owner, job.Id, token, string.format(
         "Seu mecânico concluiu %s: +%d moedas (%s).",
-        service.DisplayName, price, CustomerRules.StarsText(stars)))
+        service.DisplayName, price, CustomerRules.StarsText(stars)),
+        false,job.Fleet,job.Price or service.Reward,"Staff")
 end
 
 local function staffTick()
